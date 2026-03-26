@@ -1,0 +1,138 @@
+# Category: Design & Creative (54 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills design
+
+label: "Design & Creative"
+
+frameworks:
+  - Design Thinking (5 stages)
+  - Double Diamond
+  - Atomic Design
+  - Design Sprint
+  - Material Design / Human Interface Guidelines
+  - WCAG 2.1 AA
+
+metrics:
+  - Task Completion Rate
+  - Time on Task
+  - Error Rate
+  - System Usability Scale (SUS)
+  - Accessibility Score
+  - Design System Adoption Rate
+
+best_practices:
+  - Start with user research, not aesthetics
+  - Maintain a living design system
+  - Test with 5 users to find 85% of usability issues
+  - Accessibility is not optional — design for it from day one
+  - Document design decisions and rationale
+
+skills:
+  - slug: accessibility-design-guide
+    title: "Accessibility Design Guide"
+  - slug: animation-brief
+    title: "Animation Brief"
+  - slug: art-direction-guide
+    title: "Art Direction Guide"
+  - slug: brand-application-guide
+    title: "Brand Application Guide"
+  - slug: brand-asset-library
+    title: "Brand Asset Library"
+  - slug: brand-guidelines-doc
+    title: "Brand Guidelines Doc"
+  - slug: brand-identity-system
+    title: "Brand Identity System"
+  - slug: campaign-creative-brief
+    title: "Campaign Creative Brief"
+  - slug: color-palette-guide
+    title: "Color Palette Guide"
+  - slug: component-library-spec
+    title: "Component Library Spec"
+  - slug: creative-brief
+    title: "Creative Brief"
+  - slug: creative-campaign-concept
+    title: "Creative Campaign Concept"
+  - slug: creative-review-checklist
+    title: "Creative Review Checklist"
+  - slug: data-visualization-guide
+    title: "Data Visualization Guide"
+  - slug: design-brief
+    title: "Design Brief"
+  - slug: design-critique-guide
+    title: "Design Critique Guide"
+  - slug: design-handoff
+    title: "Design Handoff"
+  - slug: design-sprint
+    title: "Design Sprint"
+  - slug: design-system
+    title: "Design System"
+  - slug: design-thinking-workshop
+    title: "Design Thinking Workshop"
+  - slug: design-tokens
+    title: "Design Tokens"
+  - slug: email-design-brief
+    title: "Email Design Brief"
+  - slug: icon-system
+    title: "Icon System"
+  - slug: ideation-session
+    title: "Ideation Session"
+  - slug: illustration-style-guide
+    title: "Illustration Style Guide"
+  - slug: inclusive-design-checklist
+    title: "Inclusive Design Checklist"
+  - slug: infographic-brief
+    title: "Infographic Brief"
+  - slug: information-architecture
+    title: "Information Architecture"
+  - slug: interaction-design-spec
+    title: "Interaction Design Spec"
+  - slug: landing-page-design-brief
+    title: "Landing Page Design Brief"
+  - slug: logo-brief
+    title: "Logo Brief"
+  - slug: mobile-design-guide
+    title: "Mobile Design Guide"
+  - slug: mood-board
+    title: "Mood Board"
+  - slug: packaging-design-brief
+    title: "Packaging Design Brief"
+  - slug: persona-ux
+    title: "Persona Ux"
+  - slug: photo-direction-brief
+    title: "Photo Direction Brief"
+  - slug: presentation-design-guide
+    title: "Presentation Design Guide"
+  - slug: print-design-brief
+    title: "Print Design Brief"
+  - slug: prototype-spec
+    title: "Prototype Spec"
+  - slug: responsive-design-spec
+    title: "Responsive Design Spec"
+  - slug: signage-brief
+    title: "Signage Brief"
+  - slug: social-media-design-brief
+    title: "Social Media Design Brief"
+  - slug: storyboard
+    title: "Storyboard"
+  - slug: style-tile
+    title: "Style Tile"
+  - slug: tablet-design-guide
+    title: "Tablet Design Guide"
+  - slug: typography-system
+    title: "Typography System"
+  - slug: usability-test
+    title: "Usability Test"
+  - slug: user-flow
+    title: "User Flow"
+  - slug: user-interview-ux
+    title: "User Interview Ux"
+  - slug: ux-research-plan
+    title: "Ux Research Plan"
+  - slug: video-direction-brief
+    title: "Video Direction Brief"
+  - slug: visual-direction
+    title: "Visual Direction"
+  - slug: wcag-audit
+    title: "Wcag Audit"
+  - slug: wireframe-spec
+    title: "Wireframe Spec"

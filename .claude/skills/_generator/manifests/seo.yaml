@@ -1,0 +1,144 @@
+# Category: SEO & Search (57 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills seo
+
+label: "SEO & Search"
+
+frameworks:
+  - Topical Authority
+  - E-E-A-T (Experience, Expertise, Authoritativeness, Trustworthiness)
+  - Search Intent Classification (Informational/Navigational/Transactional/Commercial)
+  - Pillar-Cluster Model
+  - Technical SEO Pyramid
+
+metrics:
+  - Organic Traffic
+  - Keyword Rankings
+  - Click-Through Rate
+  - Domain Authority
+  - Page Speed (Core Web Vitals)
+  - Crawl Budget
+  - Index Coverage
+
+best_practices:
+  - Target one primary keyword per page
+  - Title tags under 60 chars, meta descriptions 150-160 chars
+  - Internal link every 200-300 words
+  - Update content every 6-12 months
+  - Page load under 2.5 seconds (LCP)
+
+skills:
+  - slug: app-store-optimization
+    title: "App Store Optimization"
+  - slug: backlink-audit
+    title: "Backlink Audit"
+  - slug: broken-link-building
+    title: "Broken Link Building"
+  - slug: canonical-tag-strategy
+    title: "Canonical Tag Strategy"
+  - slug: category-page-optimization
+    title: "Category Page Optimization"
+  - slug: competitor-seo-analysis
+    title: "Competitor Seo Analysis"
+  - slug: content-decay-analysis
+    title: "Content Decay Analysis"
+  - slug: content-refresh-plan
+    title: "Content Refresh Plan"
+  - slug: content-seo-brief
+    title: "Content Seo Brief"
+  - slug: conversion-tracking-setup
+    title: "Conversion Tracking Setup"
+  - slug: core-web-vitals-fix
+    title: "Core Web Vitals Fix"
+  - slug: crawl-budget-optimization
+    title: "Crawl Budget Optimization"
+  - slug: digital-pr-plan
+    title: "Digital Pr Plan"
+  - slug: ecommerce-seo
+    title: "Ecommerce Seo"
+  - slug: featured-snippet-optimization
+    title: "Featured Snippet Optimization"
+  - slug: google-analytics-setup
+    title: "Google Analytics Setup"
+  - slug: google-business-profile
+    title: "Google Business Profile"
+  - slug: google-search-console-audit
+    title: "Google Search Console Audit"
+  - slug: guest-post-outreach
+    title: "Guest Post Outreach"
+  - slug: haro-response
+    title: "Haro Response"
+  - slug: header-tag-optimization
+    title: "Header Tag Optimization"
+  - slug: hreflang-setup
+    title: "Hreflang Setup"
+  - slug: image-alt-text-optimization
+    title: "Image Alt Text Optimization"
+  - slug: internal-linking-strategy
+    title: "Internal Linking Strategy"
+  - slug: international-seo
+    title: "International Seo"
+  - slug: keyword-clustering
+    title: "Keyword Clustering"
+  - slug: keyword-gap-analysis
+    title: "Keyword Gap Analysis"
+  - slug: keyword-research
+    title: "Keyword Research"
+  - slug: link-building-strategy
+    title: "Link Building Strategy"
+  - slug: local-citation-building
+    title: "Local Citation Building"
+  - slug: local-keyword-strategy
+    title: "Local Keyword Strategy"
+  - slug: local-link-building
+    title: "Local Link Building"
+  - slug: local-seo-audit
+    title: "Local Seo Audit"
+  - slug: long-tail-keyword-finder
+    title: "Long Tail Keyword Finder"
+  - slug: meta-description-optimization
+    title: "Meta Description Optimization"
+  - slug: meta-title-optimization
+    title: "Meta Title Optimization"
+  - slug: multilingual-seo-strategy
+    title: "Multilingual Seo Strategy"
+  - slug: on-page-seo-audit
+    title: "On Page Seo Audit"
+  - slug: podcast-seo
+    title: "Podcast Seo"
+  - slug: product-page-seo
+    title: "Product Page Seo"
+  - slug: question-keyword-research
+    title: "Question Keyword Research"
+  - slug: redirect-map
+    title: "Redirect Map"
+  - slug: review-generation-plan
+    title: "Review Generation Plan"
+  - slug: robots-txt-optimization
+    title: "Robots Txt Optimization"
+  - slug: schema-markup-generator
+    title: "Schema Markup Generator"
+  - slug: search-intent-analysis
+    title: "Search Intent Analysis"
+  - slug: seo-content-audit
+    title: "Seo Content Audit"
+  - slug: seo-content-outline
+    title: "Seo Content Outline"
+  - slug: seo-forecast
+    title: "Seo Forecast"
+  - slug: seo-reporting-dashboard
+    title: "Seo Reporting Dashboard"
+  - slug: seo-roadmap
+    title: "Seo Roadmap"
+  - slug: serp-analysis
+    title: "Serp Analysis"
+  - slug: site-speed-analysis
+    title: "Site Speed Analysis"
+  - slug: technical-seo-audit
+    title: "Technical Seo Audit"
+  - slug: topical-authority-map
+    title: "Topical Authority Map"
+  - slug: xml-sitemap-optimization
+    title: "Xml Sitemap Optimization"
+  - slug: youtube-seo
+    title: "Youtube Seo"

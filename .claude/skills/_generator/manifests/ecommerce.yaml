@@ -1,0 +1,138 @@
+# Category: E-commerce (54 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills ecommerce
+
+label: "E-commerce"
+
+frameworks:
+  - Conversion Rate Optimization (CRO)
+  - RFM Segmentation
+  - Customer Lifetime Value Model
+  - Merchandising Calendar
+  - Inventory Planning (ABC Analysis)
+
+metrics:
+  - Conversion Rate (benchmark: 2-4%)
+  - Average Order Value
+  - Cart Abandonment Rate (benchmark: 70%)
+  - Customer Acquisition Cost
+  - Customer Lifetime Value
+  - Return Rate
+  - Inventory Turnover
+
+best_practices:
+  - Optimize for mobile first (60%+ of traffic)
+  - Reduce checkout steps (3 max)
+  - Show social proof near buy buttons
+  - Free shipping threshold above AOV
+  - Abandoned cart emails within 1 hour
+
+skills:
+  - slug: amazon-listing
+    title: "Amazon Listing"
+  - slug: amazon-ppc-strategy
+    title: "Amazon Ppc Strategy"
+  - slug: black-friday-strategy
+    title: "Black Friday Strategy"
+  - slug: bundle-strategy
+    title: "Bundle Strategy"
+  - slug: cart-abandonment-analysis
+    title: "Cart Abandonment Analysis"
+  - slug: category-taxonomy
+    title: "Category Taxonomy"
+  - slug: checkout-optimization
+    title: "Checkout Optimization"
+  - slug: collection-page-design
+    title: "Collection Page Design"
+  - slug: conversion-rate-audit
+    title: "Conversion Rate Audit"
+  - slug: cross-border-ecommerce
+    title: "Cross Border Ecommerce"
+  - slug: customer-acquisition-cost
+    title: "Customer Acquisition Cost"
+  - slug: customer-lifetime-value
+    title: "Customer Lifetime Value"
+  - slug: customer-review-strategy
+    title: "Customer Review Strategy"
+  - slug: customer-segmentation-ecom
+    title: "Customer Segmentation Ecom"
+  - slug: dead-stock-analysis
+    title: "Dead Stock Analysis"
+  - slug: dropshipping-setup
+    title: "Dropshipping Setup"
+  - slug: dynamic-pricing-model
+    title: "Dynamic Pricing Model"
+  - slug: ecommerce-analytics
+    title: "Ecommerce Analytics"
+  - slug: email-marketing-ecom
+    title: "Email Marketing Ecom"
+  - slug: etsy-listing
+    title: "Etsy Listing"
+  - slug: flash-sale-plan
+    title: "Flash Sale Plan"
+  - slug: fulfillment-optimization
+    title: "Fulfillment Optimization"
+  - slug: inventory-forecasting
+    title: "Inventory Forecasting"
+  - slug: landing-page-optimization
+    title: "Landing Page Optimization"
+  - slug: localization-checklist
+    title: "Localization Checklist"
+  - slug: loyalty-program-design
+    title: "Loyalty Program Design"
+  - slug: marketplace-strategy
+    title: "Marketplace Strategy"
+  - slug: multi-currency-strategy
+    title: "Multi Currency Strategy"
+  - slug: personalization-strategy
+    title: "Personalization Strategy"
+  - slug: pricing-strategy-ecom
+    title: "Pricing Strategy Ecom"
+  - slug: product-description-writer
+    title: "Product Description Writer"
+  - slug: product-listing
+    title: "Product Listing"
+  - slug: product-page-optimization
+    title: "Product Page Optimization"
+  - slug: product-performance-analysis
+    title: "Product Performance Analysis"
+  - slug: product-photography-brief
+    title: "Product Photography Brief"
+  - slug: product-title-optimization
+    title: "Product Title Optimization"
+  - slug: product-video-brief
+    title: "Product Video Brief"
+  - slug: push-notification-strategy
+    title: "Push Notification Strategy"
+  - slug: recommendation-engine
+    title: "Recommendation Engine"
+  - slug: returns-policy-optimization
+    title: "Returns Policy Optimization"
+  - slug: review-response-template
+    title: "Review Response Template"
+  - slug: sales-report
+    title: "Sales Report"
+  - slug: seasonal-planning
+    title: "Seasonal Planning"
+  - slug: shipping-strategy
+    title: "Shipping Strategy"
+  - slug: shopify-optimization
+    title: "Shopify Optimization"
+  - slug: sms-marketing-ecom
+    title: "Sms Marketing Ecom"
+  - slug: social-proof-strategy
+    title: "Social Proof Strategy"
+  - slug: stock-level-optimization
+    title: "Stock Level Optimization"
+  - slug: subscription-model
+    title: "Subscription Model"
+  - slug: supplier-evaluation
+    title: "Supplier Evaluation"
+  - slug: unit-economics-ecom
+    title: "Unit Economics Ecom"
+  - slug: vip-program
+    title: "Vip Program"
+  - slug: wholesale-strategy
+    title: "Wholesale Strategy"
+  - slug: woocommerce-setup
+    title: "Woocommerce Setup"

@@ -1,0 +1,150 @@
+# Category: Startup & Entrepreneurship (60 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills startup
+
+label: "Startup & Entrepreneurship"
+
+frameworks:
+  - Lean Startup
+  - Business Model Canvas
+  - Lean Canvas
+  - Product-Market Fit Engine
+  - Venture Capital Method
+  - TAM/SAM/SOM
+
+metrics:
+  - Monthly Burn Rate
+  - Runway (months)
+  - MoM Growth Rate
+  - CAC/LTV Ratio (target: 1:3+)
+  - Activation Rate
+  - Sean Ellis Test (40%+ very disappointed)
+
+best_practices:
+  - Talk to 100 potential customers before building
+  - Default alive vs default dead — know your status
+  - Focus on one metric per stage
+  - 18 months runway minimum after raising
+  - Weekly team updates, monthly investor updates
+
+skills:
+  - slug: accelerator-application
+    title: "Accelerator Application"
+  - slug: acquisition-prep
+    title: "Acquisition Prep"
+  - slug: advisory-board-setup
+    title: "Advisory Board Setup"
+  - slug: board-deck
+    title: "Board Deck"
+  - slug: bootstrap-plan
+    title: "Bootstrap Plan"
+  - slug: brand-name-generator
+    title: "Brand Name Generator"
+  - slug: build-measure-learn
+    title: "Build Measure Learn"
+  - slug: business-model-canvas
+    title: "Business Model Canvas"
+  - slug: business-plan
+    title: "Business Plan"
+  - slug: cap-table-management
+    title: "Cap Table Management"
+  - slug: co-founder-agreement
+    title: "Co Founder Agreement"
+  - slug: competitive-landscape
+    title: "Competitive Landscape"
+  - slug: culture-code
+    title: "Culture Code"
+  - slug: customer-discovery
+    title: "Customer Discovery"
+  - slug: data-room-setup
+    title: "Data Room Setup"
+  - slug: defensibility-assessment
+    title: "Defensibility Assessment"
+  - slug: distribution-strategy
+    title: "Distribution Strategy"
+  - slug: domain-name-strategy
+    title: "Domain Name Strategy"
+  - slug: due-diligence-prep
+    title: "Due Diligence Prep"
+  - slug: equity-split
+    title: "Equity Split"
+  - slug: exit-strategy
+    title: "Exit Strategy"
+  - slug: fundraising-strategy
+    title: "Fundraising Strategy"
+  - slug: growth-experiment-design
+    title: "Growth Experiment Design"
+  - slug: growth-metrics
+    title: "Growth Metrics"
+  - slug: growth-strategy
+    title: "Growth Strategy"
+  - slug: hiring-first-ten
+    title: "Hiring First Ten"
+  - slug: incorporation-guide
+    title: "Incorporation Guide"
+  - slug: investor-outreach
+    title: "Investor Outreach"
+  - slug: investor-pitch-script
+    title: "Investor Pitch Script"
+  - slug: investor-target-list
+    title: "Investor Target List"
+  - slug: investor-update-template
+    title: "Investor Update Template"
+  - slug: ipo-readiness
+    title: "Ipo Readiness"
+  - slug: kill-criteria
+    title: "Kill Criteria"
+  - slug: lean-canvas
+    title: "Lean Canvas"
+  - slug: market-validation
+    title: "Market Validation"
+  - slug: marketplace-launch
+    title: "Marketplace Launch"
+  - slug: mentor-outreach
+    title: "Mentor Outreach"
+  - slug: moat-analysis
+    title: "Moat Analysis"
+  - slug: monetization-strategy
+    title: "Monetization Strategy"
+  - slug: mvp-definition
+    title: "Mvp Definition"
+  - slug: mvp-feature-list
+    title: "Mvp Feature List"
+  - slug: one-page-memo
+    title: "One Page Memo"
+  - slug: partnership-strategy-startup
+    title: "Partnership Strategy Startup"
+  - slug: pitch-deck
+    title: "Pitch Deck"
+  - slug: pivot-assessment
+    title: "Pivot Assessment"
+  - slug: pivot-plan
+    title: "Pivot Plan"
+  - slug: pmf-survey
+    title: "Pmf Survey"
+  - slug: pricing-experiment
+    title: "Pricing Experiment"
+  - slug: problem-validation
+    title: "Problem Validation"
+  - slug: product-market-fit
+    title: "Product Market Fit"
+  - slug: remote-startup-playbook
+    title: "Remote Startup Playbook"
+  - slug: retention-analysis-startup
+    title: "Retention Analysis Startup"
+  - slug: revenue-model-design
+    title: "Revenue Model Design"
+  - slug: side-project-validation
+    title: "Side Project Validation"
+  - slug: solopreneur-playbook
+    title: "Solopreneur Playbook"
+  - slug: startup-legal-checklist
+    title: "Startup Legal Checklist"
+  - slug: startup-metrics-dashboard
+    title: "Startup Metrics Dashboard"
+  - slug: team-building
+    title: "Team Building"
+  - slug: term-sheet-negotiation
+    title: "Term Sheet Negotiation"
+  - slug: trademark-search
+    title: "Trademark Search"

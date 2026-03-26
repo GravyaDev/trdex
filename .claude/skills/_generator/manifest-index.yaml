@@ -1,0 +1,37 @@
+# Skill Category Index
+# First file to read when looking for a skill category.
+# Each entry points to manifests/<slug>.yaml for the full skill list.
+# To add a new category: add entry here + create manifests/<slug>.yaml
+
+categories:
+  agriculture:       "Agriculture & Farming — crop planning, farm budgets, soil management"
+  ai-automation:     "AI & Automation — prompt engineering, workflow automation, AI strategy"
+  construction:      "Construction & Trades — project estimation, safety plans, contractor management"
+  consulting:        "Consulting & Strategy — frameworks, client proposals, strategy documents"
+  content:           "Content & Copywriting — blog posts, copy, editorial calendars, brand voice"
+  customer-success:  "Customer Success & Support — onboarding, churn, NPS, support workflows"
+  data:              "Data & Analytics — dashboards, reports, data pipelines, KPI frameworks"
+  design:            "Design & Creative — UX audits, design systems, creative briefs"
+  development:       "Software Development — architecture, code review, APIs, testing"
+  ecommerce:         "E-commerce — product listings, conversion, inventory, marketplace strategy"
+  education:         "Education & Training — curriculum, lesson plans, assessments, LMS"
+  email:             "Email Marketing — campaigns, sequences, deliverability, A/B testing"
+  energy:            "Energy & Sustainability — audits, carbon footprint, renewable plans"
+  finance:           "Finance & Accounting — budgets, forecasts, investor decks, financial models"
+  fitness-wellness:  "Fitness & Wellness — training plans, nutrition, coaching programs"
+  food-beverage:     "Food & Beverage — menu engineering, catering, restaurant operations"
+  healthcare:        "Healthcare — clinical workflows, patient education, compliance"
+  hr:                "HR & People — hiring, onboarding, performance reviews, org design"
+  legal:             "Legal & Compliance — contracts, policies, risk assessments, GDPR"
+  marketing:         "Marketing & Advertising — campaigns, funnels, brand strategy, GTM"
+  media:             "Media & Publishing — editorial, production, distribution, monetisation"
+  nonprofit:         "Nonprofit & Social Impact — grant writing, impact reports, fundraising"
+  operations:        "Operations & Project Management — SOPs, OKRs, process improvement"
+  product:           "Product Management — roadmaps, PRDs, discovery, prioritisation"
+  productivity:      "Personal Productivity — GTD, time blocking, habit systems, focus"
+  real-estate:       "Real Estate — listings, investment analysis, property management"
+  sales:             "Sales & Revenue — prospecting, proposals, pipeline, forecasting"
+  seo:               "SEO & Search — keyword research, audits, link building, content optimisation"
+  social-media:      "Social Media — strategy, content calendars, community, analytics"
+  startup:           "Startup & Entrepreneurship — pitch decks, MVP, fundraising, growth"
+  travel:            "Travel & Hospitality — itineraries, hotel ops, guest experience"

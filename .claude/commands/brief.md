@@ -66,6 +66,17 @@ If relevant:
 - **Data:** What data is needed, where it comes from, how it's stored
 - **Constraints:** Performance requirements, security needs, compliance
 
+### Step 4b: Scenario stress-test
+
+After writing user stories, invoke:
+
+```
+/autoresearch:scenario --domain product --depth shallow --focus failures
+Scenario: [the core use case from Step 3]
+```
+
+Add any discovered edge cases, failure modes, or missing acceptance criteria directly into the relevant user stories before proceeding.
+
 ### Step 5: Risks and mitigations
 
 Identify the top 3-5 risks:

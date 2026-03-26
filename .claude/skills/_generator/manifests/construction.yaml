@@ -1,0 +1,113 @@
+# Category: Construction & Trades (42 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills construction
+
+label: "Construction & Trades"
+
+frameworks:
+  - Critical Path Method
+  - Work Breakdown Structure
+  - Earned Value Management
+  - BIM (Building Information Modeling)
+  - Lean Construction
+
+metrics:
+  - Schedule Variance
+  - Cost Variance
+  - Safety Incident Rate
+  - Rework Rate
+  - Change Order Frequency
+  - Client Satisfaction Score
+
+best_practices:
+  - Detailed scope before pricing
+  - Daily safety briefings
+  - 10% contingency on all estimates
+  - Document changes in writing immediately
+  - Progress photos daily for accountability
+
+skills:
+  - slug: apprenticeship-program
+    title: "Apprenticeship Program"
+  - slug: as-built-documentation
+    title: "As Built Documentation"
+  - slug: bid-submission
+    title: "Bid Submission"
+  - slug: budget-tracking-construction
+    title: "Budget Tracking Construction"
+  - slug: change-order
+    title: "Change Order"
+  - slug: client-update-construction
+    title: "Client Update Construction"
+  - slug: code-compliance
+    title: "Code Compliance"
+  - slug: completion-certificate
+    title: "Completion Certificate"
+  - slug: cost-variance-analysis
+    title: "Cost Variance Analysis"
+  - slug: critical-path
+    title: "Critical Path"
+  - slug: employee-certification-tracker
+    title: "Employee Certification Tracker"
+  - slug: environmental-assessment
+    title: "Environmental Assessment"
+  - slug: equipment-maintenance
+    title: "Equipment Maintenance"
+  - slug: fleet-management
+    title: "Fleet Management"
+  - slug: gantt-chart-construction
+    title: "Gantt Chart Construction"
+  - slug: incident-report
+    title: "Incident Report"
+  - slug: inspection-checklist
+    title: "Inspection Checklist"
+  - slug: labor-estimate
+    title: "Labor Estimate"
+  - slug: maintenance-manual
+    title: "Maintenance Manual"
+  - slug: marketing-construction
+    title: "Marketing Construction"
+  - slug: material-takeoff
+    title: "Material Takeoff"
+  - slug: payment-application
+    title: "Payment Application"
+  - slug: permit-checklist
+    title: "Permit Checklist"
+  - slug: portfolio-showcase
+    title: "Portfolio Showcase"
+  - slug: progress-report-construction
+    title: "Progress Report Construction"
+  - slug: project-estimate
+    title: "Project Estimate"
+  - slug: project-proposal-construction
+    title: "Project Proposal Construction"
+  - slug: project-schedule
+    title: "Project Schedule"
+  - slug: punch-list
+    title: "Punch List"
+  - slug: quality-control-construction
+    title: "Quality Control Construction"
+  - slug: referral-strategy-construction
+    title: "Referral Strategy Construction"
+  - slug: safety-plan
+    title: "Safety Plan"
+  - slug: safety-training
+    title: "Safety Training"
+  - slug: scope-of-work-construction
+    title: "Scope Of Work Construction"
+  - slug: site-assessment
+    title: "Site Assessment"
+  - slug: soil-report-summary
+    title: "Soil Report Summary"
+  - slug: subcontractor-agreement
+    title: "Subcontractor Agreement"
+  - slug: subcontractor-evaluation
+    title: "Subcontractor Evaluation"
+  - slug: tool-inventory
+    title: "Tool Inventory"
+  - slug: toolbox-talk
+    title: "Toolbox Talk"
+  - slug: warranty-document
+    title: "Warranty Document"
+  - slug: zoning-analysis
+    title: "Zoning Analysis"

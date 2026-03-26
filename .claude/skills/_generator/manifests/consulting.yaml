@@ -1,0 +1,138 @@
+# Category: Consulting & Strategy (54 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills consulting
+
+label: "Consulting & Strategy"
+
+frameworks:
+  - MECE (Mutually Exclusive, Collectively Exhaustive)
+  - Pyramid Principle
+  - Issue Tree
+  - Hypothesis-Driven Problem Solving
+  - 7S Framework
+  - Value Chain Analysis
+
+metrics:
+  - Utilization Rate
+  - Realization Rate
+  - Client Satisfaction Score
+  - Repeat Business Rate
+  - Revenue Per Consultant
+  - Project Margin
+
+best_practices:
+  - Always start with the answer (Pyramid Principle)
+  - One clear recommendation per deliverable
+  - Quantify impact in client terms ($, %, time)
+  - Weekly status updates without being asked
+  - Build internal champions at every level
+
+skills:
+  - slug: 100-day-plan
+    title: "100 Day Plan"
+  - slug: benchmarking-study
+    title: "Benchmarking Study"
+  - slug: board-presentation
+    title: "Board Presentation"
+  - slug: build-vs-buy
+    title: "Build Vs Buy"
+  - slug: capability-building
+    title: "Capability Building"
+  - slug: change-readiness
+    title: "Change Readiness"
+  - slug: client-discovery-workshop
+    title: "Client Discovery Workshop"
+  - slug: client-proposal
+    title: "Client Proposal"
+  - slug: core-competency-analysis
+    title: "Core Competency Analysis"
+  - slug: cost-optimization
+    title: "Cost Optimization"
+  - slug: culture-assessment
+    title: "Culture Assessment"
+  - slug: current-state-assessment
+    title: "Current State Assessment"
+  - slug: customer-experience-audit
+    title: "Customer Experience Audit"
+  - slug: digital-transformation-plan
+    title: "Digital Transformation Plan"
+  - slug: disruption-analysis
+    title: "Disruption Analysis"
+  - slug: diversification-analysis
+    title: "Diversification Analysis"
+  - slug: due-diligence-commercial
+    title: "Due Diligence Commercial"
+  - slug: engagement-letter
+    title: "Engagement Letter"
+  - slug: executive-presentation
+    title: "Executive Presentation"
+  - slug: expansion-strategy
+    title: "Expansion Strategy"
+  - slug: gap-analysis
+    title: "Gap Analysis"
+  - slug: implementation-roadmap
+    title: "Implementation Roadmap"
+  - slug: industry-analysis
+    title: "Industry Analysis"
+  - slug: innovation-strategy
+    title: "Innovation Strategy"
+  - slug: integration-planning
+    title: "Integration Planning"
+  - slug: journey-mapping
+    title: "Journey Mapping"
+  - slug: knowledge-management
+    title: "Knowledge Management"
+  - slug: lean-assessment
+    title: "Lean Assessment"
+  - slug: market-entry-strategy
+    title: "Market Entry Strategy"
+  - slug: market-landscape
+    title: "Market Landscape"
+  - slug: maturity-model
+    title: "Maturity Model"
+  - slug: operating-model
+    title: "Operating Model"
+  - slug: organizational-assessment
+    title: "Organizational Assessment"
+  - slug: pestel-analysis
+    title: "Pestel Analysis"
+  - slug: porters-five-forces
+    title: "Porters Five Forces"
+  - slug: post-merger-integration
+    title: "Post Merger Integration"
+  - slug: process-improvement
+    title: "Process Improvement"
+  - slug: recommendation-deck
+    title: "Recommendation Deck"
+  - slug: red-team-exercise
+    title: "Red Team Exercise"
+  - slug: scenario-planning-consulting
+    title: "Scenario Planning Consulting"
+  - slug: scope-of-work
+    title: "Scope Of Work"
+  - slug: service-design
+    title: "Service Design"
+  - slug: shared-services
+    title: "Shared Services"
+  - slug: six-sigma-project
+    title: "Six Sigma Project"
+  - slug: stakeholder-interview-guide
+    title: "Stakeholder Interview Guide"
+  - slug: strategy-framework
+    title: "Strategy Framework"
+  - slug: swot-analysis
+    title: "Swot Analysis"
+  - slug: talent-strategy
+    title: "Talent Strategy"
+  - slug: technology-assessment
+    title: "Technology Assessment"
+  - slug: transformation-roadmap
+    title: "Transformation Roadmap"
+  - slug: trend-analysis-consulting
+    title: "Trend Analysis Consulting"
+  - slug: value-chain-analysis
+    title: "Value Chain Analysis"
+  - slug: vendor-selection
+    title: "Vendor Selection"
+  - slug: war-gaming
+    title: "War Gaming"

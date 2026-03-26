@@ -44,6 +44,16 @@ From the session context and git history, list:
 - **Gotchas:** Non-obvious things that will trip someone up
 - **Dependencies:** External people, services, or events this work depends on
 
+### Step 4b: Pre-handoff ship check
+
+Before writing the handoff document, invoke:
+
+```
+/autoresearch:ship --type code-pr --dry-run --checklist-only
+```
+
+Any CRITICAL blockers go into the handoff under **Blocked Items**. Warnings go under **Risks**. This ensures the recipient knows exactly what's safe to pick up and what needs attention first.
+
 ### Step 5: Write the handoff
 
 Save to `handoffs/handoff-[date]-[time].md`:

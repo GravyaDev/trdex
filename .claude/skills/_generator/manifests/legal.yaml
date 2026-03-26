@@ -1,0 +1,137 @@
+# Category: Legal & Compliance (54 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills legal
+
+label: "Legal & Compliance"
+
+frameworks:
+  - Contract Lifecycle Management
+  - Risk Assessment Matrix
+  - Compliance Framework
+  - Data Protection by Design
+  - Three Lines of Defense
+
+metrics:
+  - Contract Cycle Time
+  - Compliance Score
+  - Open Risk Items
+  - Policy Acknowledgment Rate
+  - Incident Response Time
+
+best_practices:
+  - Always include limitation of liability
+  - Define all key terms in a definitions section
+  - Use plain language wherever possible
+  - Version control all legal documents
+  - Review and update policies annually
+  - DISCLAIMER: Skills provide templates and frameworks only — always have a qualified attorney review before use
+
+skills:
+  - slug: acceptable-use-policy
+    title: "Acceptable Use Policy"
+  - slug: annual-report-compliance
+    title: "Annual Report Compliance"
+  - slug: anti-bribery-policy
+    title: "Anti Bribery Policy"
+  - slug: audit-response
+    title: "Audit Response"
+  - slug: board-resolution
+    title: "Board Resolution"
+  - slug: breach-notification
+    title: "Breach Notification"
+  - slug: bylaws-template
+    title: "Bylaws Template"
+  - slug: ccpa-compliance-checklist
+    title: "Ccpa Compliance Checklist"
+  - slug: cease-and-desist
+    title: "Cease And Desist"
+  - slug: code-of-conduct
+    title: "Code Of Conduct"
+  - slug: compliance-program
+    title: "Compliance Program"
+  - slug: compliance-training-outline
+    title: "Compliance Training Outline"
+  - slug: conflict-of-interest-policy
+    title: "Conflict Of Interest Policy"
+  - slug: consent-resolution
+    title: "Consent Resolution"
+  - slug: contractor-agreement
+    title: "Contractor Agreement"
+  - slug: cookie-policy
+    title: "Cookie Policy"
+  - slug: copyright-notice
+    title: "Copyright Notice"
+  - slug: data-processing-agreement
+    title: "Data Processing Agreement"
+  - slug: data-retention-policy
+    title: "Data Retention Policy"
+  - slug: demand-letter
+    title: "Demand Letter"
+  - slug: dmca-policy
+    title: "Dmca Policy"
+  - slug: dpia-template
+    title: "Dpia Template"
+  - slug: employment-agreement
+    title: "Employment Agreement"
+  - slug: gdpr-compliance-audit
+    title: "Gdpr Compliance Audit"
+  - slug: gdpr-data-mapping
+    title: "Gdpr Data Mapping"
+  - slug: incident-response-plan
+    title: "Incident Response Plan"
+  - slug: insider-trading-policy
+    title: "Insider Trading Policy"
+  - slug: insurance-review
+    title: "Insurance Review"
+  - slug: ip-assignment-agreement
+    title: "Ip Assignment Agreement"
+  - slug: joint-venture-agreement
+    title: "Joint Venture Agreement"
+  - slug: lease-review-checklist
+    title: "Lease Review Checklist"
+  - slug: licensing-agreement
+    title: "Licensing Agreement"
+  - slug: litigation-hold
+    title: "Litigation Hold"
+  - slug: meeting-minutes
+    title: "Meeting Minutes"
+  - slug: mou-template
+    title: "Mou Template"
+  - slug: nda-generator
+    title: "Nda Generator"
+  - slug: offer-letter
+    title: "Offer Letter"
+  - slug: operating-agreement
+    title: "Operating Agreement"
+  - slug: partnership-agreement
+    title: "Partnership Agreement"
+  - slug: patent-prior-art-search
+    title: "Patent Prior Art Search"
+  - slug: privacy-policy
+    title: "Privacy Policy"
+  - slug: refund-policy
+    title: "Refund Policy"
+  - slug: regulatory-change-tracker
+    title: "Regulatory Change Tracker"
+  - slug: regulatory-filing-checklist
+    title: "Regulatory Filing Checklist"
+  - slug: risk-assessment
+    title: "Risk Assessment"
+  - slug: service-agreement
+    title: "Service Agreement"
+  - slug: settlement-agreement
+    title: "Settlement Agreement"
+  - slug: shareholder-agreement
+    title: "Shareholder Agreement"
+  - slug: shipping-policy
+    title: "Shipping Policy"
+  - slug: termination-letter
+    title: "Termination Letter"
+  - slug: terms-of-service
+    title: "Terms Of Service"
+  - slug: trademark-filing-guide
+    title: "Trademark Filing Guide"
+  - slug: vendor-contract-review
+    title: "Vendor Contract Review"
+  - slug: whistleblower-policy
+    title: "Whistleblower Policy"

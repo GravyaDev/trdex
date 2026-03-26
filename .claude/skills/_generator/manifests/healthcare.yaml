@@ -1,0 +1,126 @@
+# Category: Healthcare (48 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills healthcare
+
+label: "Healthcare"
+
+frameworks:
+  - HIPAA Compliance Framework
+  - Patient-Centered Medical Home
+  - Plan-Do-Study-Act (PDSA) Cycle
+  - HCAHPS Framework
+  - Value-Based Care Model
+
+metrics:
+  - Patient Satisfaction Score
+  - Wait Time
+  - No-Show Rate
+  - Patient Retention
+  - Revenue Per Visit
+  - Claim Denial Rate
+  - Readmission Rate
+
+best_practices:
+  - HIPAA compliance in every patient communication
+  - Appointment reminders 48 hours and 2 hours before
+  - Document within 24 hours of encounter
+  - Follow up on abnormal results within 48 hours
+  - DISCLAIMER: Skills provide operational templates — not medical advice
+
+skills:
+  - slug: appointment-reminder
+    title: "Appointment Reminder"
+  - slug: billing-audit
+    title: "Billing Audit"
+  - slug: breach-response
+    title: "Breach Response"
+  - slug: care-coordination
+    title: "Care Coordination"
+  - slug: care-plan
+    title: "Care Plan"
+  - slug: chronic-disease-management
+    title: "Chronic Disease Management"
+  - slug: clinical-trial-recruitment
+    title: "Clinical Trial Recruitment"
+  - slug: coding-accuracy
+    title: "Coding Accuracy"
+  - slug: condition-explainer
+    title: "Condition Explainer"
+  - slug: consent-form
+    title: "Consent Form"
+  - slug: corporate-wellness
+    title: "Corporate Wellness"
+  - slug: credentialing-checklist
+    title: "Credentialing Checklist"
+  - slug: discharge-instructions
+    title: "Discharge Instructions"
+  - slug: follow-up-message
+    title: "Follow Up Message"
+  - slug: health-content-article
+    title: "Health Content Article"
+  - slug: hipaa-compliance-checklist
+    title: "Hipaa Compliance Checklist"
+  - slug: infection-control
+    title: "Infection Control"
+  - slug: informed-consent
+    title: "Informed Consent"
+  - slug: insurance-verification
+    title: "Insurance Verification"
+  - slug: medical-history-form
+    title: "Medical History Form"
+  - slug: mental-health-resources-health
+    title: "Mental Health Resources Health"
+  - slug: online-reputation-management
+    title: "Online Reputation Management"
+  - slug: patient-acquisition
+    title: "Patient Acquisition"
+  - slug: patient-communication
+    title: "Patient Communication"
+  - slug: patient-education-material
+    title: "Patient Education Material"
+  - slug: patient-intake-form
+    title: "Patient Intake Form"
+  - slug: patient-portal-guide
+    title: "Patient Portal Guide"
+  - slug: patient-satisfaction-survey
+    title: "Patient Satisfaction Survey"
+  - slug: population-health-report
+    title: "Population Health Report"
+  - slug: practice-dashboard
+    title: "Practice Dashboard"
+  - slug: practice-marketing-plan
+    title: "Practice Marketing Plan"
+  - slug: preventive-care-plan
+    title: "Preventive Care Plan"
+  - slug: privacy-notice
+    title: "Privacy Notice"
+  - slug: provider-enrollment
+    title: "Provider Enrollment"
+  - slug: quality-metrics
+    title: "Quality Metrics"
+  - slug: referral-management
+    title: "Referral Management"
+  - slug: referral-program-health
+    title: "Referral Program Health"
+  - slug: research-protocol-summary
+    title: "Research Protocol Summary"
+  - slug: revenue-cycle-optimization
+    title: "Revenue Cycle Optimization"
+  - slug: review-response-healthcare
+    title: "Review Response Healthcare"
+  - slug: safety-protocol
+    title: "Safety Protocol"
+  - slug: staff-training-healthcare
+    title: "Staff Training Healthcare"
+  - slug: telehealth-setup
+    title: "Telehealth Setup"
+  - slug: testimonial-request-health
+    title: "Testimonial Request Health"
+  - slug: transition-of-care
+    title: "Transition Of Care"
+  - slug: treatment-plan-template
+    title: "Treatment Plan Template"
+  - slug: virtual-visit-guide
+    title: "Virtual Visit Guide"
+  - slug: wellness-program
+    title: "Wellness Program"

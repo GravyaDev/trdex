@@ -1,0 +1,132 @@
+# Category: Education & Training (51 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills education
+
+label: "Education & Training"
+
+frameworks:
+  - Bloom's Taxonomy
+  - ADDIE (Analyze, Design, Develop, Implement, Evaluate)
+  - Kirkpatrick Four Levels
+  - Backwards Design
+  - Universal Design for Learning
+  - Spaced Repetition
+
+metrics:
+  - Completion Rate
+  - Assessment Scores
+  - Knowledge Retention
+  - Learner Satisfaction
+  - Time to Competency
+  - Application Rate (on-the-job)
+
+best_practices:
+  - Start with learning objectives (what will they DO)
+  - Chunk content into 5-7 minute segments
+  - Mix modalities (read, watch, do, discuss)
+  - Assessment aligned to objectives
+  - Follow up at 30, 60, 90 days for retention
+
+skills:
+  - slug: assessment-design
+    title: "Assessment Design"
+  - slug: badge-system
+    title: "Badge System"
+  - slug: case-study-teaching
+    title: "Case Study Teaching"
+  - slug: certification-program-design
+    title: "Certification Program Design"
+  - slug: coaching-program
+    title: "Coaching Program"
+  - slug: cohort-based-course
+    title: "Cohort Based Course"
+  - slug: competency-framework
+    title: "Competency Framework"
+  - slug: compliance-training
+    title: "Compliance Training"
+  - slug: content-accessibility
+    title: "Content Accessibility"
+  - slug: corporate-training-plan
+    title: "Corporate Training Plan"
+  - slug: course-evaluation
+    title: "Course Evaluation"
+  - slug: course-marketing-plan
+    title: "Course Marketing Plan"
+  - slug: course-outline
+    title: "Course Outline"
+  - slug: credentialing-framework
+    title: "Credentialing Framework"
+  - slug: curriculum-design
+    title: "Curriculum Design"
+  - slug: customer-service-training
+    title: "Customer Service Training"
+  - slug: educational-content-review
+    title: "Educational Content Review"
+  - slug: exam-prep
+    title: "Exam Prep"
+  - slug: leadership-development
+    title: "Leadership Development"
+  - slug: learning-analytics
+    title: "Learning Analytics"
+  - slug: learning-objectives
+    title: "Learning Objectives"
+  - slug: learning-path
+    title: "Learning Path"
+  - slug: lesson-plan
+    title: "Lesson Plan"
+  - slug: live-session-plan
+    title: "Live Session Plan"
+  - slug: lms-content-plan
+    title: "Lms Content Plan"
+  - slug: management-training
+    title: "Management Training"
+  - slug: mentorship-program
+    title: "Mentorship Program"
+  - slug: microlearning-design
+    title: "Microlearning Design"
+  - slug: module-design
+    title: "Module Design"
+  - slug: office-hours-structure
+    title: "Office Hours Structure"
+  - slug: onboarding-training
+    title: "Onboarding Training"
+  - slug: online-course-launch
+    title: "Online Course Launch"
+  - slug: peer-learning-program
+    title: "Peer Learning Program"
+  - slug: quiz-generator
+    title: "Quiz Generator"
+  - slug: role-play-scenario-edu
+    title: "Role Play Scenario Edu"
+  - slug: rubric-creator
+    title: "Rubric Creator"
+  - slug: sales-training
+    title: "Sales Training"
+  - slug: scorm-module-spec
+    title: "Scorm Module Spec"
+  - slug: simulation-design
+    title: "Simulation Design"
+  - slug: skills-gap-analysis
+    title: "Skills Gap Analysis"
+  - slug: soft-skills-training
+    title: "Soft Skills Training"
+  - slug: student-feedback-survey
+    title: "Student Feedback Survey"
+  - slug: student-onboarding
+    title: "Student Onboarding"
+  - slug: study-guide
+    title: "Study Guide"
+  - slug: technical-training
+    title: "Technical Training"
+  - slug: training-needs-assessment
+    title: "Training Needs Assessment"
+  - slug: tutoring-guide
+    title: "Tutoring Guide"
+  - slug: universal-design
+    title: "Universal Design"
+  - slug: workshop-design
+    title: "Workshop Design"
+  - slug: workshop-facilitator-guide
+    title: "Workshop Facilitator Guide"
+  - slug: workshop-materials
+    title: "Workshop Materials"

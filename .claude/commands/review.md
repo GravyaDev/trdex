@@ -31,12 +31,11 @@ Read all files in scope. For large diffs, focus on:
 
 Spawn parallel review agents:
 
-**Agent 1 — Security review:**
-- Input validation (SQL injection, XSS, command injection)
-- Authentication / authorisation gaps
-- Secrets or credentials in code
-- Unsafe dependencies
-- OWASP Top 10 checklist
+**Agent 1 — Security review (via autoresearch:security):**
+
+Invoke `/autoresearch:security --diff --depth standard` on the scoped files.
+This runs STRIDE threat modeling + OWASP Top 10 + red-team with 4 adversarial personas.
+Collect findings and include them in the final review report.
 
 **Agent 2 — Performance review:**
 - N+1 queries or unnecessary database calls
@@ -52,6 +51,16 @@ Spawn parallel review agents:
 - Are there circular dependencies?
 - Is the abstraction level appropriate? (over-engineered or under-abstracted)
 - Will this be easy to test, debug, and maintain?
+
+### Step 3b: Predict (architecture + future risk)
+
+After the parallel agents complete, invoke:
+
+```
+/autoresearch:predict --scope [reviewed files] --depth standard
+```
+
+Runs 5 expert personas (Architect, Security Analyst, Performance Engineer, Reliability Engineer, Devil's Advocate) to surface risks the parallel agents might have missed. Merge the top findings into the review report.
 
 ### Step 4: Compile findings
 

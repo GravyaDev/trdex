@@ -1,0 +1,125 @@
+# Category: Nonprofit & Social Impact (48 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills nonprofit
+
+label: "Nonprofit & Social Impact"
+
+frameworks:
+  - Theory of Change
+  - Logic Model
+  - Fundraising Pyramid
+  - Donor Lifecycle
+  - Impact Measurement Framework
+
+metrics:
+  - Donor Retention Rate
+  - Cost Per Dollar Raised
+  - Program Efficiency Ratio
+  - Impact per Dollar
+  - Volunteer Retention Rate
+  - Grant Success Rate
+
+best_practices:
+  - Thank donors within 48 hours
+  - Report impact, not just activities
+  - Diversify funding sources (no single source > 30%)
+  - Board members should give or get
+  - Overhead ratio is not a measure of effectiveness
+
+skills:
+  - slug: 990-prep
+    title: "990 Prep"
+  - slug: advocacy-campaign
+    title: "Advocacy Campaign"
+  - slug: annual-appeal
+    title: "Annual Appeal"
+  - slug: annual-report-nonprofit
+    title: "Annual Report Nonprofit"
+  - slug: auction-planning
+    title: "Auction Planning"
+  - slug: audit-prep-nonprofit
+    title: "Audit Prep Nonprofit"
+  - slug: board-meeting-agenda
+    title: "Board Meeting Agenda"
+  - slug: board-orientation
+    title: "Board Orientation"
+  - slug: board-recruitment
+    title: "Board Recruitment"
+  - slug: case-for-support
+    title: "Case For Support"
+  - slug: cause-marketing
+    title: "Cause Marketing"
+  - slug: compliance-nonprofit
+    title: "Compliance Nonprofit"
+  - slug: conflict-of-interest
+    title: "Conflict Of Interest"
+  - slug: corporate-partnership
+    title: "Corporate Partnership"
+  - slug: corporate-sponsorship
+    title: "Corporate Sponsorship"
+  - slug: crowdfunding-campaign
+    title: "Crowdfunding Campaign"
+  - slug: donation-thank-you
+    title: "Donation Thank You"
+  - slug: donor-cultivation
+    title: "Donor Cultivation"
+  - slug: donor-retention
+    title: "Donor Retention"
+  - slug: donor-segmentation
+    title: "Donor Segmentation"
+  - slug: event-fundraiser
+    title: "Event Fundraiser"
+  - slug: financial-report-nonprofit
+    title: "Financial Report Nonprofit"
+  - slug: fundraising-email
+    title: "Fundraising Email"
+  - slug: fundraising-plan
+    title: "Fundraising Plan"
+  - slug: gala-planning
+    title: "Gala Planning"
+  - slug: gift-acceptance-policy
+    title: "Gift Acceptance Policy"
+  - slug: giving-tuesday
+    title: "Giving Tuesday"
+  - slug: grant-budget
+    title: "Grant Budget"
+  - slug: grant-proposal
+    title: "Grant Proposal"
+  - slug: grant-research
+    title: "Grant Research"
+  - slug: grassroots-mobilization
+    title: "Grassroots Mobilization"
+  - slug: impact-report
+    title: "Impact Report"
+  - slug: lapsed-donor-reactivation
+    title: "Lapsed Donor Reactivation"
+  - slug: logic-model
+    title: "Logic Model"
+  - slug: major-gift-strategy
+    title: "Major Gift Strategy"
+  - slug: needs-assessment
+    title: "Needs Assessment"
+  - slug: nonprofit-marketing-plan
+    title: "Nonprofit Marketing Plan"
+  - slug: outcomes-framework
+    title: "Outcomes Framework"
+  - slug: peer-to-peer-fundraising
+    title: "Peer To Peer Fundraising"
+  - slug: policy-brief
+    title: "Policy Brief"
+  - slug: program-design
+    title: "Program Design"
+  - slug: program-evaluation
+    title: "Program Evaluation"
+  - slug: storytelling-nonprofit
+    title: "Storytelling Nonprofit"
+  - slug: strategic-plan-nonprofit
+    title: "Strategic Plan Nonprofit"
+  - slug: theory-of-change
+    title: "Theory Of Change"
+  - slug: volunteer-onboarding
+    title: "Volunteer Onboarding"
+  - slug: volunteer-recognition
+    title: "Volunteer Recognition"
+  - slug: volunteer-recruitment
+    title: "Volunteer Recruitment"

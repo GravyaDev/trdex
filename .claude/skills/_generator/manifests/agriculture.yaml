@@ -1,0 +1,119 @@
+# Category: Agriculture & Farming (45 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills agriculture
+
+label: "Agriculture & Farming"
+
+frameworks:
+  - Integrated Pest Management (IPM)
+  - Regenerative Agriculture
+  - Precision Agriculture
+  - Farm Financial Benchmarking
+  - Good Agricultural Practices (GAP)
+
+metrics:
+  - Yield Per Acre
+  - Cost Per Unit Produced
+  - Soil Health Score
+  - Water Use Efficiency
+  - Input Cost Ratio
+  - Net Farm Income
+
+best_practices:
+  - Soil test annually before planting
+  - Crop rotation minimum 3-year cycle
+  - Records for every field, every season
+  - Market before you plant — know your buyer
+  - Invest in soil health for long-term yields
+
+skills:
+  - slug: animal-welfare-audit
+    title: "Animal Welfare Audit"
+  - slug: breeding-plan
+    title: "Breeding Plan"
+  - slug: carbon-footprint
+    title: "Carbon Footprint"
+  - slug: conservation-plan
+    title: "Conservation Plan"
+  - slug: cost-per-acre
+    title: "Cost Per Acre"
+  - slug: crop-plan
+    title: "Crop Plan"
+  - slug: csa-program
+    title: "Csa Program"
+  - slug: direct-to-consumer
+    title: "Direct To Consumer"
+  - slug: disaster-preparedness-farm
+    title: "Disaster Preparedness Farm"
+  - slug: equipment-maintenance-farm
+    title: "Equipment Maintenance Farm"
+  - slug: equipment-roi
+    title: "Equipment Roi"
+  - slug: farm-budget
+    title: "Farm Budget"
+  - slug: farm-business-plan
+    title: "Farm Business Plan"
+  - slug: farm-marketing
+    title: "Farm Marketing"
+  - slug: farmers-market-plan
+    title: "Farmers Market Plan"
+  - slug: feed-management
+    title: "Feed Management"
+  - slug: fertilizer-plan
+    title: "Fertilizer Plan"
+  - slug: grant-application-agriculture
+    title: "Grant Application Agriculture"
+  - slug: harvest-plan
+    title: "Harvest Plan"
+  - slug: health-protocol-livestock
+    title: "Health Protocol Livestock"
+  - slug: insurance-review-farm
+    title: "Insurance Review Farm"
+  - slug: integrated-pest-management
+    title: "Integrated Pest Management"
+  - slug: irrigation-schedule
+    title: "Irrigation Schedule"
+  - slug: labor-management-farm
+    title: "Labor Management Farm"
+  - slug: land-acquisition
+    title: "Land Acquisition"
+  - slug: lease-negotiation-farm
+    title: "Lease Negotiation Farm"
+  - slug: livestock-management
+    title: "Livestock Management"
+  - slug: organic-certification
+    title: "Organic Certification"
+  - slug: pasture-rotation
+    title: "Pasture Rotation"
+  - slug: pest-management
+    title: "Pest Management"
+  - slug: planting-schedule
+    title: "Planting Schedule"
+  - slug: post-harvest-handling
+    title: "Post Harvest Handling"
+  - slug: profit-analysis-farm
+    title: "Profit Analysis Farm"
+  - slug: regenerative-practices
+    title: "Regenerative Practices"
+  - slug: seasonal-hiring
+    title: "Seasonal Hiring"
+  - slug: soil-analysis-plan
+    title: "Soil Analysis Plan"
+  - slug: storage-plan
+    title: "Storage Plan"
+  - slug: subsidy-tracker
+    title: "Subsidy Tracker"
+  - slug: succession-planning-farm
+    title: "Succession Planning Farm"
+  - slug: sustainability-report-farm
+    title: "Sustainability Report Farm"
+  - slug: technology-adoption
+    title: "Technology Adoption"
+  - slug: value-added-product
+    title: "Value Added Product"
+  - slug: weather-contingency
+    title: "Weather Contingency"
+  - slug: wholesale-channel
+    title: "Wholesale Channel"
+  - slug: worker-safety-farm
+    title: "Worker Safety Farm"

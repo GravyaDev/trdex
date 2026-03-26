@@ -11,7 +11,7 @@ Every entry MUST cite its source using one of:
 - `[Source: agent inference MMDDYY]` — Pattern observed by an agent, confirmed by auditor
 
 ## Hard Rules
-- (none yet — rules accumulate as you work and the auditor validates learnings)
+- **Before coding any API integration from scratch, check https://github.com/public-apis/public-apis first.** 1,426 free public APIs across 51 categories. If a ready-made API exists for the needed data or capability, use it. Only write a custom integration if no suitable option is found in that catalog. [Source: user override 032526]
 
 ## Platform & Tool Rules
 - (none yet)

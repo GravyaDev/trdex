@@ -46,6 +46,19 @@ Expected: [what should happen]
 Break this down. What am I missing?
 ```
 
+### Step 3b: Escalate to autonomous debug (circular debugging only)
+
+If the block is classified as **Circular debugging** (same error 3+ times) AND the unsticker's suggestion doesn't immediately resolve it, escalate:
+
+```
+/autoresearch:debug
+Scope: [files involved in the loop]
+Symptom: [exact error, verbatim]
+Iterations: 15
+```
+
+This runs the full scientific method loop — binary search, differential debug, trace execution — until root cause is found. Resume from its findings.
+
 ### Step 4: Execute the suggestion
 
 Take the unsticker's top recommendation and try it immediately.

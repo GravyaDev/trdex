@@ -62,6 +62,26 @@ Agent(auditor): Review today's work in Daily Notes/MMDDYY.md. Check:
 Tier: T1 (quick scan). Report findings.
 ```
 
+### Step 6b: Security scan (if code was changed today)
+
+Check `git diff --stat HEAD~1..HEAD`. If any source code files were modified today, invoke:
+
+```
+/autoresearch:security --diff --depth shallow
+```
+
+This scans only today's diff — fast STRIDE + OWASP pass. If findings are CRITICAL or HIGH, add to incident log and create a corrective task on the Task Board.
+
+### Step 6c: Documentation update (Fridays only)
+
+If today is Friday, invoke:
+
+```
+/autoresearch:learn --mode update --depth quick
+```
+
+Keeps project docs in sync with the week's changes. Output goes to the daily note.
+
 ### Step 7: Review incident log
 
 Read `.claude/logs/incident-log.md`. Summarize any notable events.

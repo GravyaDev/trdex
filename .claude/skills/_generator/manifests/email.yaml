@@ -1,0 +1,131 @@
+# Category: Email Marketing (51 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills email
+
+label: "Email Marketing"
+
+frameworks:
+  - Welcome → Nurture → Convert → Retain lifecycle
+  - Segmentation Ladder
+  - RFM (Recency, Frequency, Monetary)
+  - Progressive Profiling
+  - Behavioral Triggers
+
+metrics:
+  - Open Rate (benchmark: 20-25%)
+  - Click Rate (benchmark: 2-5%)
+  - Conversion Rate
+  - Unsubscribe Rate (keep under 0.5%)
+  - Deliverability Rate (target: 95%+)
+  - Revenue Per Email
+
+best_practices:
+  - Subject lines under 50 characters
+  - Preview text is your second headline — never waste it
+  - One primary CTA per email
+  - Send time optimization by timezone
+  - Clean list quarterly (remove 6-month inactive)
+
+skills:
+  - slug: announcement-email
+    title: "Announcement Email"
+  - slug: browse-abandonment-sequence
+    title: "Browse Abandonment Sequence"
+  - slug: can-spam-checklist
+    title: "Can Spam Checklist"
+  - slug: cart-abandonment-sequence
+    title: "Cart Abandonment Sequence"
+  - slug: cold-outreach-email
+    title: "Cold Outreach Email"
+  - slug: confirmation-email
+    title: "Confirmation Email"
+  - slug: deliverability-audit
+    title: "Deliverability Audit"
+  - slug: domain-reputation-fix
+    title: "Domain Reputation Fix"
+  - slug: email-ab-test-plan
+    title: "Email Ab Test Plan"
+  - slug: email-analytics-dashboard
+    title: "Email Analytics Dashboard"
+  - slug: email-automation-workflow
+    title: "Email Automation Workflow"
+  - slug: email-benchmark-analysis
+    title: "Email Benchmark Analysis"
+  - slug: email-compliance-audit
+    title: "Email Compliance Audit"
+  - slug: email-optimization-audit
+    title: "Email Optimization Audit"
+  - slug: email-reporting-template
+    title: "Email Reporting Template"
+  - slug: email-segmentation-strategy
+    title: "Email Segmentation Strategy"
+  - slug: email-subject-line-testing
+    title: "Email Subject Line Testing"
+  - slug: email-template-design-brief
+    title: "Email Template Design Brief"
+  - slug: event-invitation-email
+    title: "Event Invitation Email"
+  - slug: feature-launch-email
+    title: "Feature Launch Email"
+  - slug: flash-sale-email
+    title: "Flash Sale Email"
+  - slug: gdpr-email-checklist
+    title: "Gdpr Email Checklist"
+  - slug: html-email-spec
+    title: "Html Email Spec"
+  - slug: launch-sequence
+    title: "Launch Sequence"
+  - slug: lifecycle-email-strategy
+    title: "Lifecycle Email Strategy"
+  - slug: list-cleaning-plan
+    title: "List Cleaning Plan"
+  - slug: newsletter-editorial-calendar
+    title: "Newsletter Editorial Calendar"
+  - slug: newsletter-growth-strategy
+    title: "Newsletter Growth Strategy"
+  - slug: newsletter-template
+    title: "Newsletter Template"
+  - slug: nurture-sequence
+    title: "Nurture Sequence"
+  - slug: onboarding-sequence
+    title: "Onboarding Sequence"
+  - slug: partnership-outreach-email
+    title: "Partnership Outreach Email"
+  - slug: password-reset-email
+    title: "Password Reset Email"
+  - slug: plain-text-email
+    title: "Plain Text Email"
+  - slug: post-event-follow-up
+    title: "Post Event Follow Up"
+  - slug: post-purchase-sequence
+    title: "Post Purchase Sequence"
+  - slug: pr-outreach-email
+    title: "Pr Outreach Email"
+  - slug: product-update-email
+    title: "Product Update Email"
+  - slug: promotional-email
+    title: "Promotional Email"
+  - slug: re-engagement-sequence
+    title: "Re Engagement Sequence"
+  - slug: referral-sequence
+    title: "Referral Sequence"
+  - slug: review-request-sequence
+    title: "Review Request Sequence"
+  - slug: seasonal-email
+    title: "Seasonal Email"
+  - slug: subscriber-scoring
+    title: "Subscriber Scoring"
+  - slug: sunset-sequence
+    title: "Sunset Sequence"
+  - slug: transactional-email-copy
+    title: "Transactional Email Copy"
+  - slug: trigger-email-map
+    title: "Trigger Email Map"
+  - slug: warm-up-plan
+    title: "Warm Up Plan"
+  - slug: webinar-reminder-sequence
+    title: "Webinar Reminder Sequence"
+  - slug: welcome-sequence
+    title: "Welcome Sequence"
+  - slug: win-back-sequence
+    title: "Win Back Sequence"

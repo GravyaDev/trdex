@@ -1,0 +1,126 @@
+# Category: Customer Success & Support (48 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills customer-success
+
+label: "Customer Success & Support"
+
+frameworks:
+  - Customer Health Score
+  - Customer Maturity Model
+  - TSIA Framework
+  - Gainsight Playbooks
+  - Customer Lifecycle
+
+metrics:
+  - Net Revenue Retention
+  - Gross Revenue Retention
+  - Customer Health Score
+  - Time to First Value
+  - Expansion Revenue
+  - NPS/CSAT/CES
+  - Logo Churn Rate
+
+best_practices:
+  - Proactive outreach when health score drops
+  - QBRs with strategic accounts quarterly
+  - Onboarding complete within 30 days
+  - Document every customer interaction
+  - Celebrate customer wins publicly
+
+skills:
+  - slug: advocacy-program
+    title: "Advocacy Program"
+  - slug: ai-support-setup
+    title: "Ai Support Setup"
+  - slug: beta-tester-program
+    title: "Beta Tester Program"
+  - slug: certification-program
+    title: "Certification Program"
+  - slug: champion-program
+    title: "Champion Program"
+  - slug: chatbot-conversation-design
+    title: "Chatbot Conversation Design"
+  - slug: chatbot-decision-tree
+    title: "Chatbot Decision Tree"
+  - slug: churn-prevention-playbook
+    title: "Churn Prevention Playbook"
+  - slug: churn-risk-analysis
+    title: "Churn Risk Analysis"
+  - slug: community-management
+    title: "Community Management"
+  - slug: cs-cadence-plan
+    title: "Cs Cadence Plan"
+  - slug: csat-survey
+    title: "Csat Survey"
+  - slug: customer-advisory-board
+    title: "Customer Advisory Board"
+  - slug: customer-communication-plan
+    title: "Customer Communication Plan"
+  - slug: customer-effort-score
+    title: "Customer Effort Score"
+  - slug: customer-feedback-loop
+    title: "Customer Feedback Loop"
+  - slug: customer-health-score
+    title: "Customer Health Score"
+  - slug: customer-journey-optimization
+    title: "Customer Journey Optimization"
+  - slug: customer-onboarding-plan
+    title: "Customer Onboarding Plan"
+  - slug: customer-success-playbook
+    title: "Customer Success Playbook"
+  - slug: customer-training-plan
+    title: "Customer Training Plan"
+  - slug: customer-welcome-kit
+    title: "Customer Welcome Kit"
+  - slug: escalation-procedure
+    title: "Escalation Procedure"
+  - slug: expansion-playbook
+    title: "Expansion Playbook"
+  - slug: experience-mapping
+    title: "Experience Mapping"
+  - slug: feature-announcement
+    title: "Feature Announcement"
+  - slug: feedback-categorization
+    title: "Feedback Categorization"
+  - slug: forum-moderation-guide
+    title: "Forum Moderation Guide"
+  - slug: friction-point-analysis
+    title: "Friction Point Analysis"
+  - slug: help-center-structure
+    title: "Help Center Structure"
+  - slug: implementation-plan
+    title: "Implementation Plan"
+  - slug: knowledge-base-article-support
+    title: "Knowledge Base Article Support"
+  - slug: nps-survey-design
+    title: "Nps Survey Design"
+  - slug: outage-communication
+    title: "Outage Communication"
+  - slug: qbr-template
+    title: "Qbr Template"
+  - slug: quality-assurance-support
+    title: "Quality Assurance Support"
+  - slug: renewal-playbook
+    title: "Renewal Playbook"
+  - slug: response-time-analysis
+    title: "Response Time Analysis"
+  - slug: self-service-strategy
+    title: "Self Service Strategy"
+  - slug: sla-definition
+    title: "Sla Definition"
+  - slug: support-metrics-dashboard
+    title: "Support Metrics Dashboard"
+  - slug: support-retrospective
+    title: "Support Retrospective"
+  - slug: support-team-training
+    title: "Support Team Training"
+  - slug: support-ticket-template
+    title: "Support Ticket Template"
+  - slug: tier-support-guide
+    title: "Tier Support Guide"
+  - slug: user-group-plan
+    title: "User Group Plan"
+  - slug: voice-of-customer
+    title: "Voice Of Customer"
+  - slug: webinar-series
+    title: "Webinar Series"
