@@ -147,4 +147,4 @@ Re-download from your purchase link, or run `npx create-claudify update` if you 
 
 ---
 
-**Need help?** hello@claudify.tech
+**Need help?** Open an issue on [GitHub](https://github.com/GravyaDev/claudify/issues)

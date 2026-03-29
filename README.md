@@ -329,7 +329,7 @@ Claudify ships with two MCP servers pre-configured in `.mcp.json`:
 
 ## 📬 Support
 
-**Email:** hello@claudify.tech
+Open an issue on [GitHub](https://github.com/GravyaDev/claudify/issues)
 
 ---
 
