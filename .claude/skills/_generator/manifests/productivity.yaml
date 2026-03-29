@@ -1,0 +1,145 @@
+# Category: Personal Productivity (57 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills productivity
+
+label: "Personal Productivity"
+
+frameworks:
+  - Getting Things Done (GTD)
+  - Eisenhower Matrix
+  - Pomodoro Technique
+  - Time Blocking
+  - Weekly Review
+  - SMART Goals
+  - Deep Work
+
+metrics:
+  - Tasks Completed
+  - Deep Work Hours
+  - Meeting Load (%)
+  - Goal Progress
+  - Energy Level
+  - Decision Quality
+
+best_practices:
+  - Most important task first, before email
+  - Batch similar tasks together
+  - 2-minute rule: if it takes less, do it now
+  - Calendar audit monthly — eliminate 20% of meetings
+  - Weekly review on Friday, weekly plan on Sunday/Monday
+
+skills:
+  - slug: annual-goals
+    title: "Annual Goals"
+  - slug: bio-writer
+    title: "Bio Writer"
+  - slug: book-summary
+    title: "Book Summary"
+  - slug: boundary-setting
+    title: "Boundary Setting"
+  - slug: burnout-prevention
+    title: "Burnout Prevention"
+  - slug: career-development
+    title: "Career Development"
+  - slug: career-pivot-plan
+    title: "Career Pivot Plan"
+  - slug: consulting-rate-calculator
+    title: "Consulting Rate Calculator"
+  - slug: cover-letter
+    title: "Cover Letter"
+  - slug: daily-planning
+    title: "Daily Planning"
+  - slug: decision-matrix
+    title: "Decision Matrix"
+  - slug: deep-work-blocks
+    title: "Deep Work Blocks"
+  - slug: delegation-plan
+    title: "Delegation Plan"
+  - slug: eisenhower-matrix
+    title: "Eisenhower Matrix"
+  - slug: email-management
+    title: "Email Management"
+  - slug: email-template-library
+    title: "Email Template Library"
+  - slug: energy-management
+    title: "Energy Management"
+  - slug: follow-up-system
+    title: "Follow Up System"
+  - slug: freelance-proposal
+    title: "Freelance Proposal"
+  - slug: goal-setting-okr
+    title: "Goal Setting Okr"
+  - slug: gratitude-practice
+    title: "Gratitude Practice"
+  - slug: habit-stack-design
+    title: "Habit Stack Design"
+  - slug: habit-tracker
+    title: "Habit Tracker"
+  - slug: inbox-zero-plan
+    title: "Inbox Zero Plan"
+  - slug: journal-prompts
+    title: "Journal Prompts"
+  - slug: learning-plan
+    title: "Learning Plan"
+  - slug: linkedin-profile-rewrite
+    title: "Linkedin Profile Rewrite"
+  - slug: linkedin-recommendation
+    title: "Linkedin Recommendation"
+  - slug: meeting-agenda-personal
+    title: "Meeting Agenda Personal"
+  - slug: meeting-notes-summary
+    title: "Meeting Notes Summary"
+  - slug: meeting-optimizer
+    title: "Meeting Optimizer"
+  - slug: mit-method
+    title: "Mit Method"
+  - slug: networking-strategy
+    title: "Networking Strategy"
+  - slug: outsourcing-evaluation
+    title: "Outsourcing Evaluation"
+  - slug: peak-performance-schedule
+    title: "Peak Performance Schedule"
+  - slug: personal-brand-audit
+    title: "Personal Brand Audit"
+  - slug: presentation-outline
+    title: "Presentation Outline"
+  - slug: priority-matrix
+    title: "Priority Matrix"
+  - slug: project-breakdown
+    title: "Project Breakdown"
+  - slug: pros-cons-analysis
+    title: "Pros Cons Analysis"
+  - slug: public-speaking-prep
+    title: "Public Speaking Prep"
+  - slug: quarterly-goals
+    title: "Quarterly Goals"
+  - slug: reflection-framework
+    title: "Reflection Framework"
+  - slug: relationship-management
+    title: "Relationship Management"
+  - slug: resume-writer
+    title: "Resume Writer"
+  - slug: routine-optimizer
+    title: "Routine Optimizer"
+  - slug: salary-negotiation
+    title: "Salary Negotiation"
+  - slug: side-project-plan
+    title: "Side Project Plan"
+  - slug: skill-acquisition-plan
+    title: "Skill Acquisition Plan"
+  - slug: storytelling-framework
+    title: "Storytelling Framework"
+  - slug: task-decomposition
+    title: "Task Decomposition"
+  - slug: time-blocking
+    title: "Time Blocking"
+  - slug: virtual-assistant-brief
+    title: "Virtual Assistant Brief"
+  - slug: weekly-review
+    title: "Weekly Review"
+  - slug: weighted-scoring
+    title: "Weighted Scoring"
+  - slug: work-breakdown-structure
+    title: "Work Breakdown Structure"
+  - slug: work-life-audit
+    title: "Work Life Audit"

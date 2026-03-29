@@ -1,0 +1,143 @@
+# Category: Data & Analytics (57 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills data
+
+label: "Data & Analytics"
+
+frameworks:
+  - CRISP-DM
+  - Kimball Dimensional Modeling
+  - Data Mesh
+  - Data Vault
+  - Metrics Layer
+
+metrics:
+  - Data Quality Score
+  - Query Performance
+  - Dashboard Load Time
+  - Data Freshness
+  - Coverage Rate
+  - Anomaly Detection Rate
+
+best_practices:
+  - Define metrics before building dashboards
+  - One source of truth per metric
+  - Document all transformations and business logic
+  - Test data pipelines like you test code
+  - Archive raw data, transform in layers
+
+skills:
+  - slug: ab-test-analysis
+    title: "Ab Test Analysis"
+  - slug: analytics-implementation-plan
+    title: "Analytics Implementation Plan"
+  - slug: attribution-analysis
+    title: "Attribution Analysis"
+  - slug: benchmark-analysis
+    title: "Benchmark Analysis"
+  - slug: chart-selection-guide
+    title: "Chart Selection Guide"
+  - slug: clustering-analysis
+    title: "Clustering Analysis"
+  - slug: cohort-analysis
+    title: "Cohort Analysis"
+  - slug: competitive-data-analysis
+    title: "Competitive Data Analysis"
+  - slug: customer-segmentation
+    title: "Customer Segmentation"
+  - slug: dashboard-design
+    title: "Dashboard Design"
+  - slug: data-access-control
+    title: "Data Access Control"
+  - slug: data-analysis-plan
+    title: "Data Analysis Plan"
+  - slug: data-catalog
+    title: "Data Catalog"
+  - slug: data-cleaning-plan
+    title: "Data Cleaning Plan"
+  - slug: data-dictionary
+    title: "Data Dictionary"
+  - slug: data-driven-recommendation
+    title: "Data Driven Recommendation"
+  - slug: data-governance-policy
+    title: "Data Governance Policy"
+  - slug: data-mart-design
+    title: "Data Mart Design"
+  - slug: data-privacy-impact
+    title: "Data Privacy Impact"
+  - slug: data-quality-audit
+    title: "Data Quality Audit"
+  - slug: data-storytelling
+    title: "Data Storytelling"
+  - slug: data-validation
+    title: "Data Validation"
+  - slug: data-visualization
+    title: "Data Visualization"
+  - slug: data-warehouse-schema
+    title: "Data Warehouse Schema"
+  - slug: database-performance
+    title: "Database Performance"
+  - slug: etl-pipeline-design
+    title: "Etl Pipeline Design"
+  - slug: event-taxonomy
+    title: "Event Taxonomy"
+  - slug: executive-dashboard
+    title: "Executive Dashboard"
+  - slug: experiment-results
+    title: "Experiment Results"
+  - slug: exploratory-data-analysis
+    title: "Exploratory Data Analysis"
+  - slug: forecasting-model
+    title: "Forecasting Model"
+  - slug: funnel-analysis
+    title: "Funnel Analysis"
+  - slug: incrementality-test
+    title: "Incrementality Test"
+  - slug: industry-data-report
+    title: "Industry Data Report"
+  - slug: infographic-spec
+    title: "Infographic Spec"
+  - slug: insight-presentation
+    title: "Insight Presentation"
+  - slug: kpi-dashboard
+    title: "Kpi Dashboard"
+  - slug: marketing-mix-model
+    title: "Marketing Mix Model"
+  - slug: metadata-management
+    title: "Metadata Management"
+  - slug: ml-experiment-plan
+    title: "Ml Experiment Plan"
+  - slug: model-evaluation
+    title: "Model Evaluation"
+  - slug: monthly-report
+    title: "Monthly Report"
+  - slug: nps-analysis
+    title: "Nps Analysis"
+  - slug: predictive-model-spec
+    title: "Predictive Model Spec"
+  - slug: query-optimization
+    title: "Query Optimization"
+  - slug: report-template
+    title: "Report Template"
+  - slug: retention-analysis
+    title: "Retention Analysis"
+  - slug: rfm-analysis
+    title: "Rfm Analysis"
+  - slug: sql-query-builder
+    title: "Sql Query Builder"
+  - slug: statistical-analysis
+    title: "Statistical Analysis"
+  - slug: statistical-significance
+    title: "Statistical Significance"
+  - slug: survey-analysis
+    title: "Survey Analysis"
+  - slug: survey-design
+    title: "Survey Design"
+  - slug: time-series-analysis
+    title: "Time Series Analysis"
+  - slug: tracking-plan
+    title: "Tracking Plan"
+  - slug: trend-analysis
+    title: "Trend Analysis"
+  - slug: weekly-report
+    title: "Weekly Report"

@@ -51,6 +51,16 @@ Structure the pricing:
 
 For each option, list: total price, payment schedule, what's included, what's not.
 
+### Step 4b: Multi-persona risk analysis
+
+Before writing terms, invoke:
+
+```
+/autoresearch:predict --scope [proposal scope and deliverables] --depth standard --adversarial
+```
+
+The 5 expert personas (Architect, Security Analyst, Performance Engineer, Reliability Engineer, Devil's Advocate) will surface risks the client hasn't thought of. Merge the top findings into the Risks section of the proposal.
+
 ### Step 5: Terms
 
 Standard terms to include:

@@ -1,0 +1,138 @@
+# Category: Travel & Hospitality (54 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills travel
+
+label: "Travel & Hospitality"
+
+frameworks:
+  - Guest Journey Mapping
+  - Revenue Management (RevPAR)
+  - Service Blueprint
+  - Experience Economy Framework
+  - Sustainable Tourism Framework
+
+metrics:
+  - RevPAR
+  - Occupancy Rate
+  - ADR (Average Daily Rate)
+  - Guest Satisfaction Score
+  - Online Review Score
+  - Repeat Guest Rate
+  - Booking Lead Time
+
+best_practices:
+  - Respond to reviews within 24 hours
+  - Personalize guest experience with pre-stay surveys
+  - Dynamic pricing based on demand signals
+  - Train staff on service recovery (LEARN model)
+  - Sustainability credentials increasingly drive booking decisions
+
+skills:
+  - slug: accommodation-comparison
+    title: "Accommodation Comparison"
+  - slug: activity-planner
+    title: "Activity Planner"
+  - slug: adventure-travel-plan
+    title: "Adventure Travel Plan"
+  - slug: airbnb-listing
+    title: "Airbnb Listing"
+  - slug: bleisure-guide
+    title: "Bleisure Guide"
+  - slug: budget-travel-guide
+    title: "Budget Travel Guide"
+  - slug: catering-menu
+    title: "Catering Menu"
+  - slug: conference-planning
+    title: "Conference Planning"
+  - slug: corporate-travel-policy
+    title: "Corporate Travel Policy"
+  - slug: cost-comparison
+    title: "Cost Comparison"
+  - slug: crisis-management-hospitality
+    title: "Crisis Management Hospitality"
+  - slug: day-by-day-itinerary
+    title: "Day By Day Itinerary"
+  - slug: destination-guide
+    title: "Destination Guide"
+  - slug: destination-marketing
+    title: "Destination Marketing"
+  - slug: dining-guide
+    title: "Dining Guide"
+  - slug: dynamic-pricing-hospitality
+    title: "Dynamic Pricing Hospitality"
+  - slug: eco-tourism-guide
+    title: "Eco Tourism Guide"
+  - slug: emergency-procedure
+    title: "Emergency Procedure"
+  - slug: event-planning-venue
+    title: "Event Planning Venue"
+  - slug: excursion-brief
+    title: "Excursion Brief"
+  - slug: family-vacation-planner
+    title: "Family Vacation Planner"
+  - slug: food-tour-plan
+    title: "Food Tour Plan"
+  - slug: front-desk-procedure
+    title: "Front Desk Procedure"
+  - slug: group-travel-plan
+    title: "Group Travel Plan"
+  - slug: guest-experience-audit
+    title: "Guest Experience Audit"
+  - slug: guest-feedback-analysis
+    title: "Guest Feedback Analysis"
+  - slug: guest-persona
+    title: "Guest Persona"
+  - slug: health-safety-protocol
+    title: "Health Safety Protocol"
+  - slug: honeymoon-planner
+    title: "Honeymoon Planner"
+  - slug: hotel-operations-sop
+    title: "Hotel Operations Sop"
+  - slug: hotel-review
+    title: "Hotel Review"
+  - slug: housekeeping-checklist
+    title: "Housekeeping Checklist"
+  - slug: itinerary-planner
+    title: "Itinerary Planner"
+  - slug: loyalty-program-hospitality
+    title: "Loyalty Program Hospitality"
+  - slug: luxury-travel-concierge
+    title: "Luxury Travel Concierge"
+  - slug: multi-city-itinerary
+    title: "Multi City Itinerary"
+  - slug: occupancy-optimization
+    title: "Occupancy Optimization"
+  - slug: packing-checklist
+    title: "Packing Checklist"
+  - slug: responsible-travel
+    title: "Responsible Travel"
+  - slug: restaurant-recommendation
+    title: "Restaurant Recommendation"
+  - slug: revenue-management
+    title: "Revenue Management"
+  - slug: seasonal-promotion
+    title: "Seasonal Promotion"
+  - slug: service-recovery
+    title: "Service Recovery"
+  - slug: solo-travel-guide
+    title: "Solo Travel Guide"
+  - slug: sustainability-plan-travel
+    title: "Sustainability Plan Travel"
+  - slug: tour-guide-script
+    title: "Tour Guide Script"
+  - slug: tourism-marketing
+    title: "Tourism Marketing"
+  - slug: travel-blog-post
+    title: "Travel Blog Post"
+  - slug: travel-budget-calculator
+    title: "Travel Budget Calculator"
+  - slug: travel-document-checklist
+    title: "Travel Document Checklist"
+  - slug: travel-photography-guide
+    title: "Travel Photography Guide"
+  - slug: travel-savings-plan
+    title: "Travel Savings Plan"
+  - slug: upsell-strategy-hospitality
+    title: "Upsell Strategy Hospitality"
+  - slug: visa-requirements
+    title: "Visa Requirements"

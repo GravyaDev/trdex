@@ -1,0 +1,120 @@
+# Category: Media & Publishing (45 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills media
+
+label: "Media & Publishing"
+
+frameworks:
+  - Editorial Calendar
+  - Content Flywheel
+  - PESO Model (Paid, Earned, Shared, Owned)
+  - Audience Development Funnel
+  - Monetization Ladder
+
+metrics:
+  - Unique Visitors
+  - Page Views
+  - Time on Site
+  - Subscriber Growth
+  - Revenue Per User
+  - Content Velocity
+  - Engagement Rate
+
+best_practices:
+  - Publish consistently — frequency beats quality for growth
+  - Headline is 80% of the battle
+  - Build email list from day one
+  - Diversify revenue (ads + subscriptions + events + products)
+  - Fact-check everything before publishing
+
+skills:
+  - slug: advertising-rate-card
+    title: "Advertising Rate Card"
+  - slug: article-outline
+    title: "Article Outline"
+  - slug: audience-growth-strategy
+    title: "Audience Growth Strategy"
+  - slug: audience-insights
+    title: "Audience Insights"
+  - slug: book-outline
+    title: "Book Outline"
+  - slug: book-proposal
+    title: "Book Proposal"
+  - slug: breaking-news-protocol
+    title: "Breaking News Protocol"
+  - slug: chapter-outline
+    title: "Chapter Outline"
+  - slug: content-analytics-report
+    title: "Content Analytics Report"
+  - slug: content-distribution
+    title: "Content Distribution"
+  - slug: content-licensing
+    title: "Content Licensing"
+  - slug: content-performance
+    title: "Content Performance"
+  - slug: content-strategy-media
+    title: "Content Strategy Media"
+  - slug: content-syndication
+    title: "Content Syndication"
+  - slug: contributor-guidelines
+    title: "Contributor Guidelines"
+  - slug: correction-policy
+    title: "Correction Policy"
+  - slug: cross-promotion
+    title: "Cross Promotion"
+  - slug: editorial-calendar
+    title: "Editorial Calendar"
+  - slug: editorial-guidelines
+    title: "Editorial Guidelines"
+  - slug: editorial-style-guide
+    title: "Editorial Style Guide"
+  - slug: fact-checking-process
+    title: "Fact Checking Process"
+  - slug: feature-article
+    title: "Feature Article"
+  - slug: freelancer-brief
+    title: "Freelancer Brief"
+  - slug: interview-prep
+    title: "Interview Prep"
+  - slug: interview-questions
+    title: "Interview Questions"
+  - slug: interview-transcript
+    title: "Interview Transcript"
+  - slug: investigative-piece
+    title: "Investigative Piece"
+  - slug: live-blog
+    title: "Live Blog"
+  - slug: live-event-coverage
+    title: "Live Event Coverage"
+  - slug: media-kit-creator
+    title: "Media Kit Creator"
+  - slug: newsletter-growth
+    title: "Newsletter Growth"
+  - slug: newsletter-launch
+    title: "Newsletter Launch"
+  - slug: newsletter-monetization
+    title: "Newsletter Monetization"
+  - slug: paywall-strategy
+    title: "Paywall Strategy"
+  - slug: podcast-format-design
+    title: "Podcast Format Design"
+  - slug: podcast-launch-plan
+    title: "Podcast Launch Plan"
+  - slug: podcast-monetization
+    title: "Podcast Monetization"
+  - slug: republishing-strategy
+    title: "Republishing Strategy"
+  - slug: social-media-promotion
+    title: "Social Media Promotion"
+  - slug: sponsorship-deck
+    title: "Sponsorship Deck"
+  - slug: submission-review
+    title: "Submission Review"
+  - slug: subscriber-acquisition
+    title: "Subscriber Acquisition"
+  - slug: video-editing-brief
+    title: "Video Editing Brief"
+  - slug: video-production-brief
+    title: "Video Production Brief"
+  - slug: youtube-channel-plan
+    title: "Youtube Channel Plan"

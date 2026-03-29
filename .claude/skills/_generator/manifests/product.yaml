@@ -1,0 +1,159 @@
+# Category: Product Management (63 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills product
+
+label: "Product Management"
+
+frameworks:
+  - Jobs To Be Done
+  - Kano Model
+  - RICE Scoring
+  - MoSCoW Prioritization
+  - Double Diamond
+  - Build-Measure-Learn
+  - Product-Led Growth
+  - AARRR (Pirate Metrics)
+
+metrics:
+  - Activation Rate
+  - Feature Adoption
+  - Daily/Monthly Active Users
+  - Retention (D1/D7/D30)
+  - Net Revenue Retention
+  - Time to Value
+  - Customer Effort Score
+
+best_practices:
+  - Talk to 5 users before building anything
+  - One metric that matters per quarter
+  - Ship small and iterate — 2-week max cycles
+  - Always define success criteria before building
+  - Kill features that less than 10% of users use
+
+skills:
+  - slug: ab-test-plan
+    title: "Ab Test Plan"
+  - slug: acceptance-criteria
+    title: "Acceptance Criteria"
+  - slug: activation-checklist
+    title: "Activation Checklist"
+  - slug: aha-moment-analysis
+    title: "Aha Moment Analysis"
+  - slug: analytics-implementation
+    title: "Analytics Implementation"
+  - slug: api-product-design
+    title: "Api Product Design"
+  - slug: beta-program-plan
+    title: "Beta Program Plan"
+  - slug: board-product-update
+    title: "Board Product Update"
+  - slug: bug-triage
+    title: "Bug Triage"
+  - slug: changelog-writer
+    title: "Changelog Writer"
+  - slug: competitive-product-analysis
+    title: "Competitive Product Analysis"
+  - slug: data-taxonomy
+    title: "Data Taxonomy"
+  - slug: deprecation-plan
+    title: "Deprecation Plan"
+  - slug: early-adopter-strategy
+    title: "Early Adopter Strategy"
+  - slug: ecosystem-map
+    title: "Ecosystem Map"
+  - slug: empathy-map
+    title: "Empathy Map"
+  - slug: event-tracking-plan
+    title: "Event Tracking Plan"
+  - slug: experiment-design
+    title: "Experiment Design"
+  - slug: faq-builder
+    title: "Faq Builder"
+  - slug: feature-comparison-matrix
+    title: "Feature Comparison Matrix"
+  - slug: feature-flag-strategy
+    title: "Feature Flag Strategy"
+  - slug: feature-prioritization
+    title: "Feature Prioritization"
+  - slug: feature-request-triage
+    title: "Feature Request Triage"
+  - slug: feature-roadmap
+    title: "Feature Roadmap"
+  - slug: feedback-taxonomy
+    title: "Feedback Taxonomy"
+  - slug: freemium-strategy
+    title: "Freemium Strategy"
+  - slug: impact-effort-matrix
+    title: "Impact Effort Matrix"
+  - slug: job-to-be-done
+    title: "Job To Be Done"
+  - slug: knowledge-base-article
+    title: "Knowledge Base Article"
+  - slug: migration-plan
+    title: "Migration Plan"
+  - slug: north-star-metric
+    title: "North Star Metric"
+  - slug: persona-creation
+    title: "Persona Creation"
+  - slug: pirate-metrics
+    title: "Pirate Metrics"
+  - slug: platform-strategy
+    title: "Platform Strategy"
+  - slug: positioning-map
+    title: "Positioning Map"
+  - slug: prd-writer
+    title: "Prd Writer"
+  - slug: pricing-model
+    title: "Pricing Model"
+  - slug: product-brief
+    title: "Product Brief"
+  - slug: product-council-deck
+    title: "Product Council Deck"
+  - slug: product-documentation
+    title: "Product Documentation"
+  - slug: product-health-check
+    title: "Product Health Check"
+  - slug: product-launch-brief
+    title: "Product Launch Brief"
+  - slug: product-metrics-framework
+    title: "Product Metrics Framework"
+  - slug: product-onboarding-flow
+    title: "Product Onboarding Flow"
+  - slug: product-one-pager
+    title: "Product One Pager"
+  - slug: product-principles
+    title: "Product Principles"
+  - slug: product-retrospective
+    title: "Product Retrospective"
+  - slug: product-review
+    title: "Product Review"
+  - slug: product-roadmap
+    title: "Product Roadmap"
+  - slug: product-strategy
+    title: "Product Strategy"
+  - slug: product-vision
+    title: "Product Vision"
+  - slug: release-notes-writer
+    title: "Release Notes Writer"
+  - slug: release-planning
+    title: "Release Planning"
+  - slug: rice-scoring
+    title: "Rice Scoring"
+  - slug: stakeholder-update
+    title: "Stakeholder Update"
+  - slug: technical-debt-prioritization
+    title: "Technical Debt Prioritization"
+  - slug: technology-roadmap
+    title: "Technology Roadmap"
+  - slug: trial-optimization
+    title: "Trial Optimization"
+  - slug: usability-test-plan
+    title: "Usability Test Plan"
+  - slug: user-interview-guide
+    title: "User Interview Guide"
+  - slug: user-journey-map
+    title: "User Journey Map"
+  - slug: user-research-plan
+    title: "User Research Plan"
+  - slug: user-story
+    title: "User Story"

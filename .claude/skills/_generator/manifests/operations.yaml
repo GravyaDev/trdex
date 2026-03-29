@@ -1,0 +1,153 @@
+# Category: Operations & Project Management (60 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills operations
+
+label: "Operations & Project Management"
+
+frameworks:
+  - Lean
+  - Six Sigma (DMAIC)
+  - Agile/Scrum
+  - Kanban
+  - OKRs
+  - RACI Matrix
+  - Theory of Constraints
+  - Kaizen
+
+metrics:
+  - Cycle Time
+  - Throughput
+  - Utilization Rate
+  - Error Rate
+  - On-Time Delivery
+  - Process Compliance
+  - Cost Per Unit
+
+best_practices:
+  - Document the process before optimizing it
+  - Measure baseline before making changes
+  - Automate repeatable tasks (ROI > 3 months)
+  - Review SOPs quarterly
+  - Single owner for every process
+
+skills:
+  - slug: action-item-tracker
+    title: "Action Item Tracker"
+  - slug: automation-opportunity-audit
+    title: "Automation Opportunity Audit"
+  - slug: bottleneck-analysis
+    title: "Bottleneck Analysis"
+  - slug: business-continuity-plan
+    title: "Business Continuity Plan"
+  - slug: capacity-planning
+    title: "Capacity Planning"
+  - slug: change-management-plan
+    title: "Change Management Plan"
+  - slug: communication-plan
+    title: "Communication Plan"
+  - slug: contingency-plan
+    title: "Contingency Plan"
+  - slug: cross-functional-alignment
+    title: "Cross Functional Alignment"
+  - slug: decision-log
+    title: "Decision Log"
+  - slug: defect-tracking
+    title: "Defect Tracking"
+  - slug: delegation-framework
+    title: "Delegation Framework"
+  - slug: disaster-recovery-plan
+    title: "Disaster Recovery Plan"
+  - slug: efficiency-audit
+    title: "Efficiency Audit"
+  - slug: executive-summary
+    title: "Executive Summary"
+  - slug: goal-setting-workshop
+    title: "Goal Setting Workshop"
+  - slug: handover-document
+    title: "Handover Document"
+  - slug: incident-management
+    title: "Incident Management"
+  - slug: inventory-management
+    title: "Inventory Management"
+  - slug: kanban-board-setup
+    title: "Kanban Board Setup"
+  - slug: kpi-definition
+    title: "Kpi Definition"
+  - slug: lean-six-sigma
+    title: "Lean Six Sigma"
+  - slug: lessons-learned
+    title: "Lessons Learned"
+  - slug: logistics-planning
+    title: "Logistics Planning"
+  - slug: meeting-agenda
+    title: "Meeting Agenda"
+  - slug: meeting-notes
+    title: "Meeting Notes"
+  - slug: offboarding-checklist
+    title: "Offboarding Checklist"
+  - slug: okr-framework
+    title: "Okr Framework"
+  - slug: onboarding-checklist
+    title: "Onboarding Checklist"
+  - slug: operating-rhythm
+    title: "Operating Rhythm"
+  - slug: post-mortem
+    title: "Post Mortem"
+  - slug: process-map
+    title: "Process Map"
+  - slug: process-optimization
+    title: "Process Optimization"
+  - slug: progress-dashboard
+    title: "Progress Dashboard"
+  - slug: project-charter
+    title: "Project Charter"
+  - slug: project-plan
+    title: "Project Plan"
+  - slug: project-timeline
+    title: "Project Timeline"
+  - slug: quality-assurance-plan
+    title: "Quality Assurance Plan"
+  - slug: quality-checklist
+    title: "Quality Checklist"
+  - slug: raci-matrix
+    title: "Raci Matrix"
+  - slug: resource-allocation
+    title: "Resource Allocation"
+  - slug: responsibility-assignment
+    title: "Responsibility Assignment"
+  - slug: risk-mitigation-plan
+    title: "Risk Mitigation Plan"
+  - slug: risk-register
+    title: "Risk Register"
+  - slug: sop-writer
+    title: "Sop Writer"
+  - slug: sprint-planning
+    title: "Sprint Planning"
+  - slug: sprint-retrospective
+    title: "Sprint Retrospective"
+  - slug: sprint-review
+    title: "Sprint Review"
+  - slug: stakeholder-analysis
+    title: "Stakeholder Analysis"
+  - slug: status-report
+    title: "Status Report"
+  - slug: supply-chain-optimization
+    title: "Supply Chain Optimization"
+  - slug: team-charter
+    title: "Team Charter"
+  - slug: tech-stack-review
+    title: "Tech Stack Review"
+  - slug: time-tracking-analysis
+    title: "Time Tracking Analysis"
+  - slug: tool-evaluation
+    title: "Tool Evaluation"
+  - slug: vendor-evaluation
+    title: "Vendor Evaluation"
+  - slug: vendor-onboarding
+    title: "Vendor Onboarding"
+  - slug: vendor-scorecard
+    title: "Vendor Scorecard"
+  - slug: workflow-design
+    title: "Workflow Design"
+  - slug: workload-balancing
+    title: "Workload Balancing"

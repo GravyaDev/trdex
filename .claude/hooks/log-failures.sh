@@ -1,17 +1,25 @@
 #!/bin/bash
-# PostToolUseFailure hook — categorizes and logs tool failures.
+# PostToolUse hook — logs tool failures to incident log.
 # Categories: BUILD, API, FILESYSTEM, NETWORK, PERMISSION, OTHER
 # Severities: CRITICAL, ERROR, WARN, INFO
 
 INPUT=$(cat)
-TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty')
-ERROR=$(echo "$INPUT" | jq -r '.error // .tool_result // empty' | head -5)
+TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
+# Claude Code may pass error in different fields depending on version
+ERROR=$(echo "$INPUT" | jq -r '.error_message // .error // .tool_result // empty' 2>/dev/null | head -5)
 TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
 LOG_DIR="$CLAUDE_PROJECT_DIR/.claude/logs"
 FAILURE_LOG="$LOG_DIR/failure-log.md"
 INCIDENT_LOG="$LOG_DIR/incident-log.md"
 
 mkdir -p "$LOG_DIR"
+
+# Skip entirely if both TOOL and ERROR are empty (hook fired spuriously)
+if [ -z "$TOOL" ] && [ -z "$ERROR" ]; then
+  # Write raw input to a debug file for investigation, then exit silently
+  echo "[$TIMESTAMP] empty input: $(echo "$INPUT" | head -c 200)" >> "$LOG_DIR/hook-debug.log"
+  exit 0
+fi
 
 # Categorize the failure
 CATEGORY="OTHER"

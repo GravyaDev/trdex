@@ -100,6 +100,16 @@ Sort every change into:
 **Risk:** [any breaking changes or migration needs — or "None"]
 ```
 
+### Step 4b: Ship validation (dry run)
+
+Before saving, invoke:
+
+```
+/autoresearch:ship --type code-release --dry-run --target [version]
+```
+
+Runs the 8-phase shipping checklist without actually deploying. Any CRITICAL blockers must be resolved before proceeding. Warnings are logged in the release notes under a "Known Issues" section.
+
 ### Step 5: Save and output
 
 Save to `releases/[version]-release-notes.md` with all three versions.

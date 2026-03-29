@@ -1,0 +1,145 @@
+# Category: HR & People (57 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills hr
+
+label: "HR & People"
+
+frameworks:
+  - Competency Model
+  - OKRs for People
+  - 9-Box Grid
+  - Employee Lifecycle
+  - Employer Value Proposition
+  - Total Rewards
+
+metrics:
+  - Time to Fill
+  - Quality of Hire
+  - Employee Engagement Score
+  - Attrition Rate
+  - Offer Acceptance Rate
+  - Training Completion Rate
+  - Internal Mobility Rate
+
+best_practices:
+  - Structured interviews with scorecards reduce bias
+  - Respond to candidates within 48 hours
+  - 30-60-90 day plans for every new hire
+  - Regular 1:1s (weekly or biweekly)
+  - Exit interviews for every departure
+
+skills:
+  - slug: 30-60-90-plan
+    title: "30 60 90 Plan"
+  - slug: all-hands-agenda
+    title: "All Hands Agenda"
+  - slug: attrition-analysis
+    title: "Attrition Analysis"
+  - slug: benefits-comparison
+    title: "Benefits Comparison"
+  - slug: buddy-system-guide
+    title: "Buddy System Guide"
+  - slug: candidate-evaluation
+    title: "Candidate Evaluation"
+  - slug: career-development-plan
+    title: "Career Development Plan"
+  - slug: coaching-conversation
+    title: "Coaching Conversation"
+  - slug: compensation-review
+    title: "Compensation Review"
+  - slug: conflict-resolution
+    title: "Conflict Resolution"
+  - slug: contractor-management
+    title: "Contractor Management"
+  - slug: culture-deck
+    title: "Culture Deck"
+  - slug: culture-values-definition
+    title: "Culture Values Definition"
+  - slug: dei-metrics
+    title: "Dei Metrics"
+  - slug: dei-strategy
+    title: "Dei Strategy"
+  - slug: employee-engagement-survey
+    title: "Employee Engagement Survey"
+  - slug: employee-handbook
+    title: "Employee Handbook"
+  - slug: employer-brand
+    title: "Employer Brand"
+  - slug: exit-interview
+    title: "Exit Interview"
+  - slug: feedback-framework
+    title: "Feedback Framework"
+  - slug: grievance-procedure
+    title: "Grievance Procedure"
+  - slug: hiring-plan
+    title: "Hiring Plan"
+  - slug: hr-dashboard
+    title: "Hr Dashboard"
+  - slug: hybrid-work-policy
+    title: "Hybrid Work Policy"
+  - slug: inclusive-hiring-guide
+    title: "Inclusive Hiring Guide"
+  - slug: individual-development-plan
+    title: "Individual Development Plan"
+  - slug: interview-question-bank
+    title: "Interview Question Bank"
+  - slug: interview-scorecard
+    title: "Interview Scorecard"
+  - slug: job-description
+    title: "Job Description"
+  - slug: job-posting-optimization
+    title: "Job Posting Optimization"
+  - slug: mediation-guide
+    title: "Mediation Guide"
+  - slug: mental-health-resources
+    title: "Mental Health Resources"
+  - slug: offer-negotiation-guide
+    title: "Offer Negotiation Guide"
+  - slug: offsite-planning
+    title: "Offsite Planning"
+  - slug: onboarding-program
+    title: "Onboarding Program"
+  - slug: organizational-design
+    title: "Organizational Design"
+  - slug: peer-review-template
+    title: "Peer Review Template"
+  - slug: people-analytics
+    title: "People Analytics"
+  - slug: performance-review
+    title: "Performance Review"
+  - slug: pip-plan
+    title: "Pip Plan"
+  - slug: pulse-survey
+    title: "Pulse Survey"
+  - slug: recognition-program
+    title: "Recognition Program"
+  - slug: reference-check-guide
+    title: "Reference Check Guide"
+  - slug: remote-work-policy
+    title: "Remote Work Policy"
+  - slug: role-definition
+    title: "Role Definition"
+  - slug: salary-negotiation-guide
+    title: "Salary Negotiation Guide"
+  - slug: self-assessment
+    title: "Self Assessment"
+  - slug: structured-interview-guide
+    title: "Structured Interview Guide"
+  - slug: succession-planning
+    title: "Succession Planning"
+  - slug: team-building-activity
+    title: "Team Building Activity"
+  - slug: team-structure
+    title: "Team Structure"
+  - slug: temp-to-perm-process
+    title: "Temp To Perm Process"
+  - slug: training-needs-analysis
+    title: "Training Needs Analysis"
+  - slug: training-program-design
+    title: "Training Program Design"
+  - slug: wellness-program
+    title: "Wellness Program"
+  - slug: workforce-planning
+    title: "Workforce Planning"
+  - slug: workshop-facilitator-guide
+    title: "Workshop Facilitator Guide"

@@ -51,6 +51,18 @@ Check for:
 Report findings as PASS/WARN/FAIL with specific file:line references.
 ```
 
+### Step 3b: Deep scenario coverage (T3 and T4 only)
+
+For T3 (weekly review) and T4 (monthly/system), after the auditor completes, invoke:
+
+```
+/autoresearch:scenario --domain software --depth standard --focus edge-cases
+Scope: [audit target]
+```
+
+Generates edge cases, failure modes, and derivative scenarios that pure code review misses.
+Add any unhandled scenario findings to the Task Board as new tasks.
+
 ### Step 4: Process results
 
 - **PASS**: Log success, note any suggestions

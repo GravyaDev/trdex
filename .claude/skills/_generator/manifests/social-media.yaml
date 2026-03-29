@@ -1,0 +1,169 @@
+# Category: Social Media (69 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills social-media
+
+label: "Social Media"
+
+frameworks:
+  - Content Pillars (3-5 themes)
+  - Hero/Hub/Hygiene
+  - 80/20 Rule (value/promotion)
+  - Platform-native content
+  - Community-Led Growth
+
+metrics:
+  - Engagement Rate
+  - Reach
+  - Impressions
+  - Follower Growth Rate
+  - Click-Through Rate
+  - Share Rate
+  - Save Rate
+  - Story Completion Rate
+
+best_practices:
+  - Post when your audience is online (check analytics)
+  - Respond to comments within 1 hour
+  - Repurpose one piece of content across 5+ formats
+  - Use platform-native features (polls, stickers, carousels)
+  - Hook in first 3 seconds (video) or first line (text)
+
+skills:
+  - slug: bluesky-post
+    title: "Bluesky Post"
+  - slug: brand-ambassador-program
+    title: "Brand Ambassador Program"
+  - slug: community-guidelines
+    title: "Community Guidelines"
+  - slug: creator-partnership
+    title: "Creator Partnership"
+  - slug: cross-platform-strategy
+    title: "Cross Platform Strategy"
+  - slug: employee-advocacy-program
+    title: "Employee Advocacy Program"
+  - slug: engagement-rate-analysis
+    title: "Engagement Rate Analysis"
+  - slug: executive-social-strategy
+    title: "Executive Social Strategy"
+  - slug: facebook-event-promotion
+    title: "Facebook Event Promotion"
+  - slug: facebook-group-strategy
+    title: "Facebook Group Strategy"
+  - slug: facebook-post
+    title: "Facebook Post"
+  - slug: follower-growth-strategy
+    title: "Follower Growth Strategy"
+  - slug: influencer-collaboration-brief
+    title: "Influencer Collaboration Brief"
+  - slug: instagram-bio-optimization
+    title: "Instagram Bio Optimization"
+  - slug: instagram-carousel
+    title: "Instagram Carousel"
+  - slug: instagram-hashtag-strategy
+    title: "Instagram Hashtag Strategy"
+  - slug: instagram-post
+    title: "Instagram Post"
+  - slug: instagram-reel-script
+    title: "Instagram Reel Script"
+  - slug: instagram-story-sequence
+    title: "Instagram Story Sequence"
+  - slug: linkedin-article
+    title: "Linkedin Article"
+  - slug: linkedin-carousel
+    title: "Linkedin Carousel"
+  - slug: linkedin-company-page
+    title: "Linkedin Company Page"
+  - slug: linkedin-outreach
+    title: "Linkedin Outreach"
+  - slug: linkedin-post
+    title: "Linkedin Post"
+  - slug: linkedin-profile-optimization
+    title: "Linkedin Profile Optimization"
+  - slug: mastodon-post
+    title: "Mastodon Post"
+  - slug: negative-comment-response
+    title: "Negative Comment Response"
+  - slug: pinterest-board-strategy
+    title: "Pinterest Board Strategy"
+  - slug: pinterest-pin
+    title: "Pinterest Pin"
+  - slug: pinterest-seo
+    title: "Pinterest Seo"
+  - slug: platform-migration-plan
+    title: "Platform Migration Plan"
+  - slug: reddit-ama-plan
+    title: "Reddit Ama Plan"
+  - slug: reddit-community-strategy
+    title: "Reddit Community Strategy"
+  - slug: reddit-post
+    title: "Reddit Post"
+  - slug: review-response
+    title: "Review Response"
+  - slug: sentiment-analysis
+    title: "Sentiment Analysis"
+  - slug: social-audit
+    title: "Social Audit"
+  - slug: social-content-calendar
+    title: "Social Content Calendar"
+  - slug: social-contest
+    title: "Social Contest"
+  - slug: social-listening-report
+    title: "Social Listening Report"
+  - slug: social-media-bio-generator
+    title: "Social Media Bio Generator"
+  - slug: social-media-crisis-response
+    title: "Social Media Crisis Response"
+  - slug: social-media-policy
+    title: "Social Media Policy"
+  - slug: social-media-response
+    title: "Social Media Response"
+  - slug: social-selling
+    title: "Social Selling"
+  - slug: social-strategy
+    title: "Social Strategy"
+  - slug: threads-post
+    title: "Threads Post"
+  - slug: tiktok-content-strategy
+    title: "Tiktok Content Strategy"
+  - slug: tiktok-duet-strategy
+    title: "Tiktok Duet Strategy"
+  - slug: tiktok-hook-generator
+    title: "Tiktok Hook Generator"
+  - slug: tiktok-script
+    title: "Tiktok Script"
+  - slug: tiktok-series-plan
+    title: "Tiktok Series Plan"
+  - slug: tiktok-trend-analysis
+    title: "Tiktok Trend Analysis"
+  - slug: trend-report
+    title: "Trend Report"
+  - slug: twitter-engagement-strategy
+    title: "Twitter Engagement Strategy"
+  - slug: twitter-growth-strategy
+    title: "Twitter Growth Strategy"
+  - slug: twitter-post
+    title: "Twitter Post"
+  - slug: twitter-profile-optimization
+    title: "Twitter Profile Optimization"
+  - slug: twitter-spaces-plan
+    title: "Twitter Spaces Plan"
+  - slug: twitter-thread
+    title: "Twitter Thread"
+  - slug: ugc-strategy
+    title: "Ugc Strategy"
+  - slug: user-generated-content-brief
+    title: "User Generated Content Brief"
+  - slug: viral-content-formula
+    title: "Viral Content Formula"
+  - slug: youtube-channel-strategy
+    title: "Youtube Channel Strategy"
+  - slug: youtube-description-seo
+    title: "Youtube Description Seo"
+  - slug: youtube-playlist-strategy
+    title: "Youtube Playlist Strategy"
+  - slug: youtube-shorts-script
+    title: "Youtube Shorts Script"
+  - slug: youtube-title-thumbnail
+    title: "Youtube Title Thumbnail"
+  - slug: youtube-video-outline
+    title: "Youtube Video Outline"

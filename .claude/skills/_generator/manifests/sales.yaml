@@ -1,0 +1,164 @@
+# Category: Sales & Revenue (66 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills sales
+
+label: "Sales & Revenue"
+
+frameworks:
+  - BANT (Budget, Authority, Need, Timeline)
+  - MEDDIC
+  - Challenger Sale
+  - SPIN Selling
+  - Sandler Selling System
+  - Solution Selling
+  - Value Selling
+
+metrics:
+  - Win Rate
+  - Average Deal Size
+  - Sales Cycle Length
+  - Pipeline Velocity
+  - Quota Attainment
+  - Activity Metrics (calls/emails/meetings)
+  - Forecast Accuracy
+
+best_practices:
+  - Qualify early and disqualify fast
+  - Follow up within 5 minutes of inbound leads
+  - Multi-thread every deal (3+ contacts)
+  - Always confirm next steps before ending a call
+  - Log every interaction in CRM within 24 hours
+
+skills:
+  - slug: account-plan
+    title: "Account Plan"
+  - slug: affiliate-program
+    title: "Affiliate Program"
+  - slug: boardroom-presentation
+    title: "Boardroom Presentation"
+  - slug: breakup-email
+    title: "Breakup Email"
+  - slug: business-case
+    title: "Business Case"
+  - slug: buyer-persona-sales
+    title: "Buyer Persona Sales"
+  - slug: cadence-optimization
+    title: "Cadence Optimization"
+  - slug: case-study-sales
+    title: "Case Study Sales"
+  - slug: channel-partner-strategy
+    title: "Channel Partner Strategy"
+  - slug: churn-prevention
+    title: "Churn Prevention"
+  - slug: cold-call-script
+    title: "Cold Call Script"
+  - slug: cold-email
+    title: "Cold Email"
+  - slug: cold-linkedin-message
+    title: "Cold Linkedin Message"
+  - slug: commission-structure
+    title: "Commission Structure"
+  - slug: competitor-battlecard
+    title: "Competitor Battlecard"
+  - slug: crm-setup-guide
+    title: "Crm Setup Guide"
+  - slug: cross-sell-playbook
+    title: "Cross Sell Playbook"
+  - slug: deal-qualification
+    title: "Deal Qualification"
+  - slug: deal-scoring
+    title: "Deal Scoring"
+  - slug: demo-script
+    title: "Demo Script"
+  - slug: discovery-call-guide
+    title: "Discovery Call Guide"
+  - slug: executive-sponsor-plan
+    title: "Executive Sponsor Plan"
+  - slug: expansion-revenue-plan
+    title: "Expansion Revenue Plan"
+  - slug: follow-up-email
+    title: "Follow Up Email"
+  - slug: forecast-model
+    title: "Forecast Model"
+  - slug: ideal-customer-profile
+    title: "Ideal Customer Profile"
+  - slug: incentive-plan
+    title: "Incentive Plan"
+  - slug: lead-scoring-model
+    title: "Lead Scoring Model"
+  - slug: objection-handling
+    title: "Objection Handling"
+  - slug: onboarding-sales-rep
+    title: "Onboarding Sales Rep"
+  - slug: one-pager
+    title: "One Pager"
+  - slug: pipeline-review
+    title: "Pipeline Review"
+  - slug: pipeline-stage-definitions
+    title: "Pipeline Stage Definitions"
+  - slug: pricing-negotiation
+    title: "Pricing Negotiation"
+  - slug: procurement-response
+    title: "Procurement Response"
+  - slug: proposal-writer
+    title: "Proposal Writer"
+  - slug: quarterly-business-review
+    title: "Quarterly Business Review"
+  - slug: quota-planning
+    title: "Quota Planning"
+  - slug: re-engagement-email
+    title: "Re Engagement Email"
+  - slug: referral-ask
+    title: "Referral Ask"
+  - slug: renewal-strategy
+    title: "Renewal Strategy"
+  - slug: reseller-program
+    title: "Reseller Program"
+  - slug: rfp-response-sales
+    title: "Rfp Response Sales"
+  - slug: roi-calculator
+    title: "Roi Calculator"
+  - slug: role-play-scenario
+    title: "Role Play Scenario"
+  - slug: sales-automation
+    title: "Sales Automation"
+  - slug: sales-contract
+    title: "Sales Contract"
+  - slug: sales-dashboard
+    title: "Sales Dashboard"
+  - slug: sales-enablement-content
+    title: "Sales Enablement Content"
+  - slug: sales-kpi-tracker
+    title: "Sales Kpi Tracker"
+  - slug: sales-meeting-prep
+    title: "Sales Meeting Prep"
+  - slug: sales-pitch
+    title: "Sales Pitch"
+  - slug: sales-playbook
+    title: "Sales Playbook"
+  - slug: sales-process-design
+    title: "Sales Process Design"
+  - slug: sales-strategy
+    title: "Sales Strategy"
+  - slug: sales-training-plan
+    title: "Sales Training Plan"
+  - slug: sell-sheet
+    title: "Sell Sheet"
+  - slug: sequence-design
+    title: "Sequence Design"
+  - slug: spiff-program
+    title: "Spiff Program"
+  - slug: statement-of-work
+    title: "Statement Of Work"
+  - slug: strategic-account-review
+    title: "Strategic Account Review"
+  - slug: target-account-list
+    title: "Target Account List"
+  - slug: territory-planning
+    title: "Territory Planning"
+  - slug: upsell-strategy
+    title: "Upsell Strategy"
+  - slug: vendor-questionnaire
+    title: "Vendor Questionnaire"
+  - slug: win-loss-analysis
+    title: "Win Loss Analysis"

@@ -1,0 +1,120 @@
+# Category: Fitness & Wellness (45 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills fitness-wellness
+
+label: "Fitness & Wellness"
+
+frameworks:
+  - Periodization
+  - Progressive Overload
+  - Behavior Change Model (Transtheoretical)
+  - Motivational Interviewing
+  - Biopsychosocial Model
+
+metrics:
+  - Client Retention Rate
+  - Session Attendance Rate
+  - Client Goal Achievement
+  - Revenue Per Client
+  - Referral Rate
+  - Client Satisfaction Score
+
+best_practices:
+  - Initial assessment before programming
+  - Reassess every 4-6 weeks
+  - Track adherence, not just results
+  - Communication between sessions (check-ins)
+  - Scope of practice — refer out when appropriate
+  - DISCLAIMER: Skills provide fitness programming frameworks — not medical advice
+
+skills:
+  - slug: app-programming
+    title: "App Programming"
+  - slug: body-composition-analysis
+    title: "Body Composition Analysis"
+  - slug: bootcamp-program
+    title: "Bootcamp Program"
+  - slug: breathwork-session
+    title: "Breathwork Session"
+  - slug: certification-prep
+    title: "Certification Prep"
+  - slug: class-design
+    title: "Class Design"
+  - slug: cleaning-protocol
+    title: "Cleaning Protocol"
+  - slug: client-assessment
+    title: "Client Assessment"
+  - slug: client-onboarding-fitness
+    title: "Client Onboarding Fitness"
+  - slug: client-retention-fitness
+    title: "Client Retention Fitness"
+  - slug: content-plan-fitness
+    title: "Content Plan Fitness"
+  - slug: continuing-education-plan
+    title: "Continuing Education Plan"
+  - slug: corporate-wellness-program
+    title: "Corporate Wellness Program"
+  - slug: equipment-maintenance-fitness
+    title: "Equipment Maintenance Fitness"
+  - slug: fitness-business-plan
+    title: "Fitness Business Plan"
+  - slug: fitness-test
+    title: "Fitness Test"
+  - slug: goal-setting-fitness
+    title: "Goal Setting Fitness"
+  - slug: group-fitness-plan
+    title: "Group Fitness Plan"
+  - slug: habit-change-program
+    title: "Habit Change Program"
+  - slug: injury-prevention
+    title: "Injury Prevention"
+  - slug: meal-plan
+    title: "Meal Plan"
+  - slug: meditation-guide
+    title: "Meditation Guide"
+  - slug: membership-model
+    title: "Membership Model"
+  - slug: nutrition-plan
+    title: "Nutrition Plan"
+  - slug: online-coaching-setup
+    title: "Online Coaching Setup"
+  - slug: periodization-plan
+    title: "Periodization Plan"
+  - slug: pricing-fitness
+    title: "Pricing Fitness"
+  - slug: progress-tracking
+    title: "Progress Tracking"
+  - slug: referral-program-fitness
+    title: "Referral Program Fitness"
+  - slug: rehab-protocol-guide
+    title: "Rehab Protocol Guide"
+  - slug: retreat-planning
+    title: "Retreat Planning"
+  - slug: return-to-sport
+    title: "Return To Sport"
+  - slug: social-media-fitness
+    title: "Social Media Fitness"
+  - slug: specialization-track
+    title: "Specialization Track"
+  - slug: stress-management
+    title: "Stress Management"
+  - slug: studio-operations
+    title: "Studio Operations"
+  - slug: supplement-guide
+    title: "Supplement Guide"
+  - slug: testimonial-collection
+    title: "Testimonial Collection"
+  - slug: training-plan
+    title: "Training Plan"
+  - slug: transformation-story
+    title: "Transformation Story"
+  - slug: virtual-training-guide
+    title: "Virtual Training Guide"
+  - slug: wellness-coaching-plan
+    title: "Wellness Coaching Plan"
+  - slug: workout-program
+    title: "Workout Program"
+  - slug: workshop-fitness
+    title: "Workshop Fitness"
+  - slug: yoga-sequence
+    title: "Yoga Sequence"

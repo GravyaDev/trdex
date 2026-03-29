@@ -1,0 +1,190 @@
+# Category: Software Development (79 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills development
+
+label: "Software Development"
+
+frameworks:
+  - Clean Architecture
+  - SOLID Principles
+  - TDD/BDD
+  - 12-Factor App
+  - GitFlow/Trunk-Based Development
+  - Microservices vs Monolith decision tree
+  - OWASP Top 10
+
+metrics:
+  - Deployment Frequency
+  - Lead Time for Changes
+  - Change Failure Rate
+  - Mean Time to Recovery (MTTR)
+  - Code Coverage
+  - Cyclomatic Complexity
+  - Technical Debt Ratio
+
+best_practices:
+  - Code reviews within 24 hours
+  - Every PR should be reviewable in under 30 minutes
+  - Write tests before fixing bugs
+  - Automate everything that runs more than twice
+  - Document decisions, not just code
+
+skills:
+  - slug: accessibility-audit
+    title: "Accessibility Audit"
+  - slug: alerting-strategy
+    title: "Alerting Strategy"
+  - slug: api-design
+    title: "Api Design"
+  - slug: api-documentation-writer
+    title: "Api Documentation Writer"
+  - slug: api-gateway-design
+    title: "Api Gateway Design"
+  - slug: api-versioning-strategy
+    title: "Api Versioning Strategy"
+  - slug: architecture-decision-record
+    title: "Architecture Decision Record"
+  - slug: architecture-overview
+    title: "Architecture Overview"
+  - slug: blue-green-deployment
+    title: "Blue Green Deployment"
+  - slug: branching-strategy
+    title: "Branching Strategy"
+  - slug: caching-strategy
+    title: "Caching Strategy"
+  - slug: canary-deployment
+    title: "Canary Deployment"
+  - slug: ci-cd-pipeline
+    title: "Ci Cd Pipeline"
+  - slug: circuit-breaker-pattern
+    title: "Circuit Breaker Pattern"
+  - slug: code-cleanup
+    title: "Code Cleanup"
+  - slug: code-review-checklist
+    title: "Code Review Checklist"
+  - slug: codebase-walkthrough
+    title: "Codebase Walkthrough"
+  - slug: coding-standards
+    title: "Coding Standards"
+  - slug: commit-message-guide
+    title: "Commit Message Guide"
+  - slug: contributing-guide
+    title: "Contributing Guide"
+  - slug: cross-browser-testing
+    title: "Cross Browser Testing"
+  - slug: data-model-documentation
+    title: "Data Model Documentation"
+  - slug: database-schema-design
+    title: "Database Schema Design"
+  - slug: dependency-audit
+    title: "Dependency Audit"
+  - slug: deployment-checklist
+    title: "Deployment Checklist"
+  - slug: dev-environment-parity
+    title: "Dev Environment Parity"
+  - slug: developer-onboarding
+    title: "Developer Onboarding"
+  - slug: distributed-tracing
+    title: "Distributed Tracing"
+  - slug: docker-setup
+    title: "Docker Setup"
+  - slug: documentation-standard
+    title: "Documentation Standard"
+  - slug: e2e-test-strategy
+    title: "E2e Test Strategy"
+  - slug: environment-setup
+    title: "Environment Setup"
+  - slug: error-handling-guide
+    title: "Error Handling Guide"
+  - slug: event-driven-architecture
+    title: "Event Driven Architecture"
+  - slug: feature-flag-implementation
+    title: "Feature Flag Implementation"
+  - slug: git-workflow
+    title: "Git Workflow"
+  - slug: incident-response
+    title: "Incident Response"
+  - slug: infrastructure-as-code
+    title: "Infrastructure As Code"
+  - slug: integration-test-plan
+    title: "Integration Test Plan"
+  - slug: kubernetes-deployment
+    title: "Kubernetes Deployment"
+  - slug: license-compliance
+    title: "License Compliance"
+  - slug: linting-setup
+    title: "Linting Setup"
+  - slug: load-test-plan
+    title: "Load Test Plan"
+  - slug: local-dev-setup
+    title: "Local Dev Setup"
+  - slug: logging-strategy
+    title: "Logging Strategy"
+  - slug: microservices-design
+    title: "Microservices Design"
+  - slug: migration-script
+    title: "Migration Script"
+  - slug: monitoring-setup
+    title: "Monitoring Setup"
+  - slug: observability-setup
+    title: "Observability Setup"
+  - slug: on-call-runbook
+    title: "On Call Runbook"
+  - slug: open-source-checklist
+    title: "Open Source Checklist"
+  - slug: opencli
+    title: "OpenCLI — Spec-First CLI Design"
+  - slug: optimization-checklist
+    title: "Optimization Checklist"
+  - slug: package-publishing
+    title: "Package Publishing"
+  - slug: performance-profiling
+    title: "Performance Profiling"
+  - slug: postmortem-template
+    title: "Postmortem Template"
+  - slug: pre-commit-hooks
+    title: "Pre Commit Hooks"
+  - slug: pull-request-template
+    title: "Pull Request Template"
+  - slug: queue-design
+    title: "Queue Design"
+  - slug: readme-template
+    title: "Readme Template"
+  - slug: refactoring-plan
+    title: "Refactoring Plan"
+  - slug: release-management
+    title: "Release Management"
+  - slug: responsive-design-checklist
+    title: "Responsive Design Checklist"
+  - slug: retry-strategy
+    title: "Retry Strategy"
+  - slug: rollback-plan
+    title: "Rollback Plan"
+  - slug: root-cause-analysis
+    title: "Root Cause Analysis"
+  - slug: security-checklist
+    title: "Security Checklist"
+  - slug: security-review
+    title: "Security Review"
+  - slug: semantic-versioning
+    title: "Semantic Versioning"
+  - slug: service-boundary
+    title: "Service Boundary"
+  - slug: supply-chain-security
+    title: "Supply Chain Security"
+  - slug: system-design-doc
+    title: "System Design Doc"
+  - slug: tech-debt-inventory
+    title: "Tech Debt Inventory"
+  - slug: technical-spec
+    title: "Technical Spec"
+  - slug: test-coverage-analysis
+    title: "Test Coverage Analysis"
+  - slug: test-plan
+    title: "Test Plan"
+  - slug: testing-pyramid
+    title: "Testing Pyramid"
+  - slug: unit-test-writer
+    title: "Unit Test Writer"
+  - slug: vulnerability-assessment
+    title: "Vulnerability Assessment"

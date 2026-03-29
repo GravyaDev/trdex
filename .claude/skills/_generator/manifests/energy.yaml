@@ -1,0 +1,119 @@
+# Category: Energy & Sustainability (45 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills energy
+
+label: "Energy & Sustainability"
+
+frameworks:
+  - GHG Protocol
+  - Science-Based Targets (SBTi)
+  - TCFD Recommendations
+  - ISO 50001 Energy Management
+  - Circular Economy Framework
+
+metrics:
+  - Energy Use Intensity (EUI)
+  - Carbon Intensity
+  - Renewable Energy %
+  - Scope 1/2/3 Emissions
+  - Energy Cost Savings
+  - Waste Diversion Rate
+
+best_practices:
+  - Measure before managing — baseline everything
+  - Low-cost behavioral changes before capital projects
+  - Prioritize Scope 1 and 2 reductions first
+  - Verify claims with third-party audits
+  - Report transparently — including Scope 3
+
+skills:
+  - slug: adaptation-plan
+    title: "Adaptation Plan"
+  - slug: battery-storage-analysis
+    title: "Battery Storage Analysis"
+  - slug: carbon-footprint-calculator
+    title: "Carbon Footprint Calculator"
+  - slug: carbon-offset-strategy
+    title: "Carbon Offset Strategy"
+  - slug: circular-economy-assessment
+    title: "Circular Economy Assessment"
+  - slug: climate-risk-assessment
+    title: "Climate Risk Assessment"
+  - slug: community-impact
+    title: "Community Impact"
+  - slug: conservation-strategy
+    title: "Conservation Strategy"
+  - slug: energy-audit
+    title: "Energy Audit"
+  - slug: energy-management-system
+    title: "Energy Management System"
+  - slug: energy-savings-plan
+    title: "Energy Savings Plan"
+  - slug: energy-star-certification
+    title: "Energy Star Certification"
+  - slug: environmental-compliance
+    title: "Environmental Compliance"
+  - slug: environmental-impact-assessment
+    title: "Environmental Impact Assessment"
+  - slug: esg-framework
+    title: "Esg Framework"
+  - slug: ev-fleet-analysis
+    title: "Ev Fleet Analysis"
+  - slug: ghg-inventory
+    title: "Ghg Inventory"
+  - slug: green-building-checklist
+    title: "Green Building Checklist"
+  - slug: green-marketing
+    title: "Green Marketing"
+  - slug: green-vendor-criteria
+    title: "Green Vendor Criteria"
+  - slug: greenwashing-check
+    title: "Greenwashing Check"
+  - slug: iso-50001-prep
+    title: "Iso 50001 Prep"
+  - slug: leed-preparation
+    title: "Leed Preparation"
+  - slug: materiality-assessment
+    title: "Materiality Assessment"
+  - slug: net-zero-plan
+    title: "Net Zero Plan"
+  - slug: permit-tracking
+    title: "Permit Tracking"
+  - slug: ppa-analysis
+    title: "Ppa Analysis"
+  - slug: recycling-program
+    title: "Recycling Program"
+  - slug: renewable-energy-assessment
+    title: "Renewable Energy Assessment"
+  - slug: renewable-energy-certificate
+    title: "Renewable Energy Certificate"
+  - slug: resilience-planning
+    title: "Resilience Planning"
+  - slug: science-based-targets
+    title: "Science Based Targets"
+  - slug: scope-3-analysis
+    title: "Scope 3 Analysis"
+  - slug: social-license
+    title: "Social License"
+  - slug: solar-feasibility
+    title: "Solar Feasibility"
+  - slug: stakeholder-engagement-esg
+    title: "Stakeholder Engagement Esg"
+  - slug: supplier-sustainability-audit
+    title: "Supplier Sustainability Audit"
+  - slug: sustainability-communication
+    title: "Sustainability Communication"
+  - slug: sustainability-report-esg
+    title: "Sustainability Report Esg"
+  - slug: sustainability-strategy
+    title: "Sustainability Strategy"
+  - slug: sustainable-procurement
+    title: "Sustainable Procurement"
+  - slug: utility-bill-analysis
+    title: "Utility Bill Analysis"
+  - slug: waste-management-plan
+    title: "Waste Management Plan"
+  - slug: water-audit
+    title: "Water Audit"
+  - slug: water-management
+    title: "Water Management"

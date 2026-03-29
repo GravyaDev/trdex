@@ -1,0 +1,188 @@
+# Category: Marketing & Advertising (76 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills marketing
+
+label: "Marketing & Advertising"
+
+frameworks:
+  - AIDA
+  - STP (Segmentation, Targeting, Positioning)
+  - Marketing Mix (4Ps/7Ps)
+  - Customer Journey Mapping
+  - Jobs To Be Done
+  - Brand Positioning Canvas
+  - Ansoff Matrix
+  - BCG Matrix
+
+metrics:
+  - CAC
+  - LTV
+  - ROAS
+  - CPM
+  - CPC
+  - CTR
+  - Conversion Rate
+  - Brand Awareness
+  - NPS
+  - Share of Voice
+
+best_practices:
+  - Test one variable at a time
+  - Set baselines before optimizing
+  - Budget allocation: 70% proven / 20% experimental / 10% moonshot
+  - Review performance weekly, strategy monthly
+  - Document all campaign learnings
+
+skills:
+  - slug: account-based-marketing
+    title: "Account Based Marketing"
+  - slug: attribution-model
+    title: "Attribution Model"
+  - slug: audience-persona
+    title: "Audience Persona"
+  - slug: audience-segmentation
+    title: "Audience Segmentation"
+  - slug: b2b-marketing-plan
+    title: "B2b Marketing Plan"
+  - slug: b2c-marketing-plan
+    title: "B2c Marketing Plan"
+  - slug: back-to-school-campaign
+    title: "Back To School Campaign"
+  - slug: brand-audit
+    title: "Brand Audit"
+  - slug: brand-guidelines
+    title: "Brand Guidelines"
+  - slug: brand-messaging-framework
+    title: "Brand Messaging Framework"
+  - slug: brand-positioning
+    title: "Brand Positioning"
+  - slug: brand-voice-guide
+    title: "Brand Voice Guide"
+  - slug: campaign-brief
+    title: "Campaign Brief"
+  - slug: campaign-retrospective
+    title: "Campaign Retrospective"
+  - slug: campaign-strategy
+    title: "Campaign Strategy"
+  - slug: channel-mix-optimization
+    title: "Channel Mix Optimization"
+  - slug: channel-strategy
+    title: "Channel Strategy"
+  - slug: co-marketing-plan
+    title: "Co Marketing Plan"
+  - slug: community-strategy
+    title: "Community Strategy"
+  - slug: competitor-ad-teardown
+    title: "Competitor Ad Teardown"
+  - slug: competitor-analysis
+    title: "Competitor Analysis"
+  - slug: content-marketing-strategy
+    title: "Content Marketing Strategy"
+  - slug: conversion-funnel-analysis
+    title: "Conversion Funnel Analysis"
+  - slug: crisis-communication-plan
+    title: "Crisis Communication Plan"
+  - slug: cross-promotion-strategy
+    title: "Cross Promotion Strategy"
+  - slug: customer-journey-map
+    title: "Customer Journey Map"
+  - slug: d2c-strategy
+    title: "D2c Strategy"
+  - slug: demand-generation
+    title: "Demand Generation"
+  - slug: drip-campaign-design
+    title: "Drip Campaign Design"
+  - slug: elevator-pitch
+    title: "Elevator Pitch"
+  - slug: event-marketing-plan
+    title: "Event Marketing Plan"
+  - slug: geo-targeting-strategy
+    title: "Geo Targeting Strategy"
+  - slug: go-to-market-plan
+    title: "Go To Market Plan"
+  - slug: growth-experiment
+    title: "Growth Experiment"
+  - slug: guerrilla-marketing
+    title: "Guerrilla Marketing"
+  - slug: holiday-marketing-plan
+    title: "Holiday Marketing Plan"
+  - slug: influencer-brief
+    title: "Influencer Brief"
+  - slug: influencer-outreach
+    title: "Influencer Outreach"
+  - slug: influencer-strategy
+    title: "Influencer Strategy"
+  - slug: kpi-framework
+    title: "Kpi Framework"
+  - slug: launch-checklist
+    title: "Launch Checklist"
+  - slug: launch-timeline
+    title: "Launch Timeline"
+  - slug: lead-magnet-strategy
+    title: "Lead Magnet Strategy"
+  - slug: local-marketing-plan
+    title: "Local Marketing Plan"
+  - slug: loyalty-program
+    title: "Loyalty Program"
+  - slug: market-research
+    title: "Market Research"
+  - slug: market-sizing
+    title: "Market Sizing"
+  - slug: marketing-automation-setup
+    title: "Marketing Automation Setup"
+  - slug: marketing-budget
+    title: "Marketing Budget"
+  - slug: marketing-calendar
+    title: "Marketing Calendar"
+  - slug: marketing-dashboard
+    title: "Marketing Dashboard"
+  - slug: marketing-funnel-design
+    title: "Marketing Funnel Design"
+  - slug: marketing-stack-audit
+    title: "Marketing Stack Audit"
+  - slug: martech-evaluation
+    title: "Martech Evaluation"
+  - slug: media-kit
+    title: "Media Kit"
+  - slug: media-pitch
+    title: "Media Pitch"
+  - slug: messaging-matrix
+    title: "Messaging Matrix"
+  - slug: multi-market-launch
+    title: "Multi Market Launch"
+  - slug: partnership-strategy
+    title: "Partnership Strategy"
+  - slug: pr-strategy
+    title: "Pr Strategy"
+  - slug: press-release
+    title: "Press Release"
+  - slug: product-launch-plan
+    title: "Product Launch Plan"
+  - slug: rebranding-plan
+    title: "Rebranding Plan"
+  - slug: referral-program
+    title: "Referral Program"
+  - slug: retargeting-strategy
+    title: "Retargeting Strategy"
+  - slug: seasonal-campaign
+    title: "Seasonal Campaign"
+  - slug: sponsorship-proposal
+    title: "Sponsorship Proposal"
+  - slug: tagline-generator
+    title: "Tagline Generator"
+  - slug: thought-leadership-plan
+    title: "Thought Leadership Plan"
+  - slug: touchpoint-audit
+    title: "Touchpoint Audit"
+  - slug: trade-show-strategy
+    title: "Trade Show Strategy"
+  - slug: unique-selling-proposition
+    title: "Unique Selling Proposition"
+  - slug: value-proposition-canvas
+    title: "Value Proposition Canvas"
+  - slug: vendor-comparison
+    title: "Vendor Comparison"
+  - slug: viral-loop-design
+    title: "Viral Loop Design"
+  - slug: webinar-plan
+    title: "Webinar Plan"

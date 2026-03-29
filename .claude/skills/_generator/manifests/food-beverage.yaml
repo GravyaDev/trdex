@@ -1,0 +1,113 @@
+# Category: Food & Beverage (42 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills food-beverage
+
+label: "Food & Beverage"
+
+frameworks:
+  - Menu Engineering Matrix
+  - HACCP (Hazard Analysis Critical Control Points)
+  - Prime Cost Management
+  - Service Blueprint
+  - Brand Architecture
+
+metrics:
+  - Food Cost % (target: 28-32%)
+  - Labor Cost % (target: 25-30%)
+  - Prime Cost % (target: 55-65%)
+  - Table Turnover Rate
+  - Revenue Per Available Seat Hour
+  - Customer Satisfaction Score
+
+best_practices:
+  - Menu engineering quarterly (stars, plowhorses, puzzles, dogs)
+  - Daily inventory counts on high-cost items
+  - Recipe costing for every menu item
+  - Cross-train all front-of-house staff
+  - Respond to negative reviews within 24 hours
+
+skills:
+  - slug: allergen-management
+    title: "Allergen Management"
+  - slug: bar-training
+    title: "Bar Training"
+  - slug: brand-standards
+    title: "Brand Standards"
+  - slug: catering-proposal
+    title: "Catering Proposal"
+  - slug: cocktail-menu
+    title: "Cocktail Menu"
+  - slug: concept-development
+    title: "Concept Development"
+  - slug: cross-training-plan
+    title: "Cross Training Plan"
+  - slug: customer-feedback-restaurant
+    title: "Customer Feedback Restaurant"
+  - slug: delivery-optimization
+    title: "Delivery Optimization"
+  - slug: event-menu-planning
+    title: "Event Menu Planning"
+  - slug: food-cost-analysis
+    title: "Food Cost Analysis"
+  - slug: food-safety-plan
+    title: "Food Safety Plan"
+  - slug: franchise-operations-manual
+    title: "Franchise Operations Manual"
+  - slug: haccp-plan
+    title: "Haccp Plan"
+  - slug: health-inspection-prep
+    title: "Health Inspection Prep"
+  - slug: influencer-dining
+    title: "Influencer Dining"
+  - slug: ingredient-sourcing
+    title: "Ingredient Sourcing"
+  - slug: inventory-management-restaurant
+    title: "Inventory Management Restaurant"
+  - slug: labor-scheduling
+    title: "Labor Scheduling"
+  - slug: loyalty-program-restaurant
+    title: "Loyalty Program Restaurant"
+  - slug: market-feasibility
+    title: "Market Feasibility"
+  - slug: marketing-restaurant
+    title: "Marketing Restaurant"
+  - slug: menu-costing
+    title: "Menu Costing"
+  - slug: menu-design
+    title: "Menu Design"
+  - slug: menu-engineering
+    title: "Menu Engineering"
+  - slug: online-ordering-setup
+    title: "Online Ordering Setup"
+  - slug: opening-checklist
+    title: "Opening Checklist"
+  - slug: par-level-setting
+    title: "Par Level Setting"
+  - slug: peak-hour-planning
+    title: "Peak Hour Planning"
+  - slug: portion-control
+    title: "Portion Control"
+  - slug: recipe-scaling
+    title: "Recipe Scaling"
+  - slug: recipe-standardization
+    title: "Recipe Standardization"
+  - slug: restaurant-business-plan
+    title: "Restaurant Business Plan"
+  - slug: review-management-restaurant
+    title: "Review Management Restaurant"
+  - slug: sanitation-checklist
+    title: "Sanitation Checklist"
+  - slug: service-standards
+    title: "Service Standards"
+  - slug: social-media-restaurant
+    title: "Social Media Restaurant"
+  - slug: staff-training-restaurant
+    title: "Staff Training Restaurant"
+  - slug: temperature-log
+    title: "Temperature Log"
+  - slug: vendor-negotiation
+    title: "Vendor Negotiation"
+  - slug: waste-reduction
+    title: "Waste Reduction"
+  - slug: wine-pairing
+    title: "Wine Pairing"

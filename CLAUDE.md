@@ -90,6 +90,10 @@ Sessions have finite context. Heavy operations consume it fast.
 
 **How /clear works:** Distills session state into memory.md + daily note handoff, preserving retrieval paths. Then automatically resumes work by reloading compressed context and executing the next action. Seamless to the user.
 
+## Response Quality
+
+At the end of every task, verify that the response satisfies the real intent of the request. If there are discrepancies (missing output format, incomplete execution, instructions not followed), perform an internal Chain-of-Thought refinement pass and return only the corrected version. Do not conclude a task until every instruction has been respected.
+
 ## Maintenance
 - Keep memory.md compact (<100 lines)
 - Aggressively prune stale items

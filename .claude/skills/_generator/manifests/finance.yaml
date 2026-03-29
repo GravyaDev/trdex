@@ -1,0 +1,154 @@
+# Category: Finance & Accounting (60 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills finance
+
+label: "Finance & Accounting"
+
+frameworks:
+  - Three Statement Model
+  - DCF Valuation
+  - Comparable Company Analysis
+  - Zero-Based Budgeting
+  - Rolling Forecast
+  - Scenario Planning (Bull/Base/Bear)
+  - Unit Economics
+
+metrics:
+  - Gross Margin
+  - Net Margin
+  - EBITDA
+  - Burn Rate
+  - Runway
+  - CAC Payback Period
+  - Rule of 40
+  - Current Ratio
+  - Quick Ratio
+
+best_practices:
+  - Never build a model without clearly stating assumptions
+  - Separate inputs from calculations from outputs
+  - Use sensitivity analysis on top 3 variables
+  - Monthly close within 5 business days
+  - Forecast accuracy within 10% of actuals
+
+skills:
+  - slug: acquisition-due-diligence
+    title: "Acquisition Due Diligence"
+  - slug: balance-sheet-analysis
+    title: "Balance Sheet Analysis"
+  - slug: board-financial-report
+    title: "Board Financial Report"
+  - slug: bonus-structure
+    title: "Bonus Structure"
+  - slug: break-even-analysis
+    title: "Break Even Analysis"
+  - slug: budget-template
+    title: "Budget Template"
+  - slug: budget-variance-analysis
+    title: "Budget Variance Analysis"
+  - slug: cap-table
+    title: "Cap Table"
+  - slug: cash-flow-forecast
+    title: "Cash Flow Forecast"
+  - slug: cash-flow-statement
+    title: "Cash Flow Statement"
+  - slug: collections-strategy
+    title: "Collections Strategy"
+  - slug: compensation-benchmarking
+    title: "Compensation Benchmarking"
+  - slug: competitive-pricing-analysis
+    title: "Competitive Pricing Analysis"
+  - slug: compliance-checklist
+    title: "Compliance Checklist"
+  - slug: cost-benefit-analysis
+    title: "Cost Benefit Analysis"
+  - slug: cost-reduction-plan
+    title: "Cost Reduction Plan"
+  - slug: dcf-valuation
+    title: "Dcf Valuation"
+  - slug: deduction-tracker
+    title: "Deduction Tracker"
+  - slug: deferred-revenue-schedule
+    title: "Deferred Revenue Schedule"
+  - slug: depreciation-schedule
+    title: "Depreciation Schedule"
+  - slug: expense-policy
+    title: "Expense Policy"
+  - slug: expense-report-template
+    title: "Expense Report Template"
+  - slug: financial-audit-prep
+    title: "Financial Audit Prep"
+  - slug: financial-dashboard
+    title: "Financial Dashboard"
+  - slug: financial-model
+    title: "Financial Model"
+  - slug: financial-ratio-analysis
+    title: "Financial Ratio Analysis"
+  - slug: fundraising-financial-model
+    title: "Fundraising Financial Model"
+  - slug: internal-controls
+    title: "Internal Controls"
+  - slug: inventory-valuation
+    title: "Inventory Valuation"
+  - slug: investor-report
+    title: "Investor Report"
+  - slug: invoice-template
+    title: "Invoice Template"
+  - slug: kpi-scorecard
+    title: "Kpi Scorecard"
+  - slug: management-report
+    title: "Management Report"
+  - slug: merger-analysis
+    title: "Merger Analysis"
+  - slug: monte-carlo-simulation
+    title: "Monte Carlo Simulation"
+  - slug: mrr-arr-calculator
+    title: "Mrr Arr Calculator"
+  - slug: npv-irr-analysis
+    title: "Npv Irr Analysis"
+  - slug: payback-period-analysis
+    title: "Payback Period Analysis"
+  - slug: payment-terms
+    title: "Payment Terms"
+  - slug: price-sensitivity-analysis
+    title: "Price Sensitivity Analysis"
+  - slug: pricing-strategy
+    title: "Pricing Strategy"
+  - slug: procurement-policy
+    title: "Procurement Policy"
+  - slug: profit-loss-statement
+    title: "Profit Loss Statement"
+  - slug: quarterly-financial-review
+    title: "Quarterly Financial Review"
+  - slug: quarterly-tax-prep
+    title: "Quarterly Tax Prep"
+  - slug: revenue-model
+    title: "Revenue Model"
+  - slug: revenue-recognition
+    title: "Revenue Recognition"
+  - slug: roi-analysis
+    title: "Roi Analysis"
+  - slug: runway-calculator
+    title: "Runway Calculator"
+  - slug: salary-band-structure
+    title: "Salary Band Structure"
+  - slug: scenario-planning
+    title: "Scenario Planning"
+  - slug: sensitivity-analysis
+    title: "Sensitivity Analysis"
+  - slug: subscription-cost-audit
+    title: "Subscription Cost Audit"
+  - slug: synergy-model
+    title: "Synergy Model"
+  - slug: tax-planning-checklist
+    title: "Tax Planning Checklist"
+  - slug: term-sheet-analysis
+    title: "Term Sheet Analysis"
+  - slug: unit-economics-model
+    title: "Unit Economics Model"
+  - slug: vendor-payment-analysis
+    title: "Vendor Payment Analysis"
+  - slug: working-capital-analysis
+    title: "Working Capital Analysis"
+  - slug: zero-based-budget
+    title: "Zero Based Budget"

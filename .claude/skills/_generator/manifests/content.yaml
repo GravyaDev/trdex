@@ -1,0 +1,207 @@
+# Category: Content & Copywriting (88 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills content
+
+label: "Content & Copywriting"
+
+frameworks:
+  - AIDA for copy
+  - PAS (Problem-Agitate-Solve)
+  - BAB (Before-After-Bridge)
+  - Inverted Pyramid
+  - Hub and Spoke content model
+  - Content Atomization
+  - StoryBrand
+
+metrics:
+  - Readability Score (Flesch-Kincaid 60+)
+  - Time on Page
+  - Scroll Depth
+  - Social Shares
+  - Backlinks Generated
+  - Conversion Rate from Content
+
+best_practices:
+  - Write at 8th grade reading level for general audiences
+  - One idea per paragraph, max 3 sentences
+  - Front-load the value — answer the question in the first 100 words
+  - Use active voice (90%+ of sentences)
+  - Every piece needs a clear CTA
+
+skills:
+  - slug: about-page-copy
+    title: "About Page Copy"
+  - slug: ad-copy-facebook
+    title: "Ad Copy Facebook"
+  - slug: ad-copy-google
+    title: "Ad Copy Google"
+  - slug: ad-copy-linkedin
+    title: "Ad Copy Linkedin"
+  - slug: ad-copy-tiktok
+    title: "Ad Copy Tiktok"
+  - slug: ad-copy-twitter
+    title: "Ad Copy Twitter"
+  - slug: ad-copy-youtube
+    title: "Ad Copy Youtube"
+  - slug: annual-report-narrative
+    title: "Annual Report Narrative"
+  - slug: api-documentation
+    title: "Api Documentation"
+  - slug: blog-content-calendar
+    title: "Blog Content Calendar"
+  - slug: blog-post
+    title: "Blog Post"
+  - slug: blog-series-plan
+    title: "Blog Series Plan"
+  - slug: brand-story
+    title: "Brand Story"
+  - slug: business-proposal-copy
+    title: "Business Proposal Copy"
+  - slug: byline-article
+    title: "Byline Article"
+  - slug: case-study
+    title: "Case Study"
+  - slug: changelog
+    title: "Changelog"
+  - slug: checkout-copy
+    title: "Checkout Copy"
+  - slug: company-update
+    title: "Company Update"
+  - slug: comparison-article
+    title: "Comparison Article"
+  - slug: content-atomization
+    title: "Content Atomization"
+  - slug: content-audit
+    title: "Content Audit"
+  - slug: content-brief
+    title: "Content Brief"
+  - slug: content-gap-analysis
+    title: "Content Gap Analysis"
+  - slug: content-repurposing
+    title: "Content Repurposing"
+  - slug: cta-optimizer
+    title: "Cta Optimizer"
+  - slug: customer-story
+    title: "Customer Story"
+  - slug: documentation
+    title: "Documentation"
+  - slug: ebook-chapter
+    title: "Ebook Chapter"
+  - slug: ebook-outline
+    title: "Ebook Outline"
+  - slug: elevator-pitch-copy
+    title: "Elevator Pitch Copy"
+  - slug: email-body-copy
+    title: "Email Body Copy"
+  - slug: email-sequence-copy
+    title: "Email Sequence Copy"
+  - slug: email-subject-lines
+    title: "Email Subject Lines"
+  - slug: empty-state-copy
+    title: "Empty State Copy"
+  - slug: error-message-copy
+    title: "Error Message Copy"
+  - slug: explainer-video-script
+    title: "Explainer Video Script"
+  - slug: faq-page
+    title: "Faq Page"
+  - slug: feature-comparison
+    title: "Feature Comparison"
+  - slug: grant-proposal
+    title: "Grant Proposal"
+  - slug: headline-generator
+    title: "Headline Generator"
+  - slug: homepage-copy
+    title: "Homepage Copy"
+  - slug: how-to-guide
+    title: "How To Guide"
+  - slug: in-app-message-copy
+    title: "In App Message Copy"
+  - slug: industry-report
+    title: "Industry Report"
+  - slug: investor-update
+    title: "Investor Update"
+  - slug: keynote-outline
+    title: "Keynote Outline"
+  - slug: landing-page-copy
+    title: "Landing Page Copy"
+  - slug: listicle
+    title: "Listicle"
+  - slug: manifesto-writer
+    title: "Manifesto Writer"
+  - slug: media-advisory
+    title: "Media Advisory"
+  - slug: microcopy-audit
+    title: "Microcopy Audit"
+  - slug: mission-statement
+    title: "Mission Statement"
+  - slug: naming-brainstorm
+    title: "Naming Brainstorm"
+  - slug: newsletter-issue
+    title: "Newsletter Issue"
+  - slug: newsletter-strategy
+    title: "Newsletter Strategy"
+  - slug: newsletter-welcome-series
+    title: "Newsletter Welcome Series"
+  - slug: onboarding-copy
+    title: "Onboarding Copy"
+  - slug: opinion-piece
+    title: "Opinion Piece"
+  - slug: origin-story
+    title: "Origin Story"
+  - slug: pillar-page
+    title: "Pillar Page"
+  - slug: podcast-episode-plan
+    title: "Podcast Episode Plan"
+  - slug: podcast-outline
+    title: "Podcast Outline"
+  - slug: podcast-show-notes
+    title: "Podcast Show Notes"
+  - slug: presentation-script
+    title: "Presentation Script"
+  - slug: press-release-writer
+    title: "Press Release Writer"
+  - slug: pricing-page-copy
+    title: "Pricing Page Copy"
+  - slug: product-description
+    title: "Product Description"
+  - slug: product-page-copy
+    title: "Product Page Copy"
+  - slug: push-notification-copy
+    title: "Push Notification Copy"
+  - slug: release-notes
+    title: "Release Notes"
+  - slug: rfp-response
+    title: "Rfp Response"
+  - slug: slogan-generator
+    title: "Slogan Generator"
+  - slug: sms-copy
+    title: "Sms Copy"
+  - slug: social-proof-page
+    title: "Social Proof Page"
+  - slug: speech-writer
+    title: "Speech Writer"
+  - slug: style-guide
+    title: "Style Guide"
+  - slug: tagline-brainstorm
+    title: "Tagline Brainstorm"
+  - slug: technical-writing
+    title: "Technical Writing"
+  - slug: testimonial-request
+    title: "Testimonial Request"
+  - slug: thought-leadership-article
+    title: "Thought Leadership Article"
+  - slug: tone-of-voice-guide
+    title: "Tone Of Voice Guide"
+  - slug: tutorial-script
+    title: "Tutorial Script"
+  - slug: user-guide
+    title: "User Guide"
+  - slug: value-proposition-copy
+    title: "Value Proposition Copy"
+  - slug: video-script
+    title: "Video Script"
+  - slug: vision-statement
+    title: "Vision Statement"
+  - slug: whitepaper
+    title: "Whitepaper"

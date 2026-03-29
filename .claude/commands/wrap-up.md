@@ -6,6 +6,8 @@ allowed-tools:
   - Edit
   - Write
   - Bash(date:*)
+  - Bash(git:*)
+  - Bash(pnpm:*)
   - Agent
 ---
 
@@ -40,6 +42,15 @@ In `Task Board.md`:
 - Clear Done list if it's Friday
 - Move incomplete Today items to This Week or Backlog with a note on why
 
+### Step 4b: Security patch log cleanup (Fridays only)
+
+If today is Friday, prune `.claude/logs/security-patches.md`:
+- Read the file
+- Remove any entry lines where the date prefix is older than 7 days from today
+- Keep the header block and any `<!-- cleaned ... -->` comment
+- Append at the bottom: `<!-- cleaned YYYY-MM-DD, removed entries older than YYYY-MM-DD -->`
+- Do NOT run pnpm audit here — vulnerability checks happen only at /start
+
 ### Step 5: Knowledge externalization
 
 Review today's work for learnings:
@@ -61,6 +72,26 @@ Agent(auditor): Review today's work in Daily Notes/MMDDYY.md. Check:
 3. Are there any pending nominations to review?
 Tier: T1 (quick scan). Report findings.
 ```
+
+### Step 6b: Security scan (if code was changed today)
+
+Check `git diff --stat HEAD~1..HEAD`. If any source code files were modified today, invoke:
+
+```
+/autoresearch:security --diff --depth shallow
+```
+
+This scans only today's diff — fast STRIDE + OWASP pass. If findings are CRITICAL or HIGH, add to incident log and create a corrective task on the Task Board.
+
+### Step 6c: Documentation update (Fridays only)
+
+If today is Friday, invoke:
+
+```
+/autoresearch:learn --mode update --depth quick
+```
+
+Keeps project docs in sync with the week's changes. Output goes to the daily note.
 
 ### Step 7: Review incident log
 

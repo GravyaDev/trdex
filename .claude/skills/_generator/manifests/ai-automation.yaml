@@ -1,0 +1,138 @@
+# Category: AI & Automation (54 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills ai-automation
+
+label: "AI & Automation"
+
+frameworks:
+  - AI Readiness Assessment
+  - Automation ROI Calculator
+  - Human-in-the-Loop Design
+  - RAG Architecture
+  - Agent Orchestration Patterns
+  - Responsible AI Framework
+
+metrics:
+  - Time Saved Per Task
+  - Automation Rate
+  - Error Reduction %
+  - Cost Per AI Operation
+  - User Adoption Rate
+  - Output Quality Score
+
+best_practices:
+  - Start with high-volume, low-risk tasks
+  - Always keep human review for critical outputs
+  - Measure time saved, not just accuracy
+  - Version control prompts like code
+  - Monitor for drift and degradation monthly
+
+skills:
+  - slug: agent-evaluation
+    title: "Agent Evaluation"
+  - slug: ai-adoption-plan
+    title: "Ai Adoption Plan"
+  - slug: ai-agent-design
+    title: "Ai Agent Design"
+  - slug: ai-assistant-spec
+    title: "Ai Assistant Spec"
+  - slug: ai-bias-audit
+    title: "Ai Bias Audit"
+  - slug: ai-change-management
+    title: "Ai Change Management"
+  - slug: ai-code-review
+    title: "Ai Code Review"
+  - slug: ai-content-pipeline
+    title: "Ai Content Pipeline"
+  - slug: ai-cost-optimization
+    title: "Ai Cost Optimization"
+  - slug: ai-customer-service
+    title: "Ai Customer Service"
+  - slug: ai-data-analysis
+    title: "Ai Data Analysis"
+  - slug: ai-debugging-workflow
+    title: "Ai Debugging Workflow"
+  - slug: ai-editing-workflow
+    title: "Ai Editing Workflow"
+  - slug: ai-email-drafting
+    title: "Ai Email Drafting"
+  - slug: ai-ethics-checklist
+    title: "Ai Ethics Checklist"
+  - slug: ai-image-prompt
+    title: "Ai Image Prompt"
+  - slug: ai-image-workflow
+    title: "Ai Image Workflow"
+  - slug: ai-meeting-notes
+    title: "Ai Meeting Notes"
+  - slug: ai-pair-programming
+    title: "Ai Pair Programming"
+  - slug: ai-readiness-assessment
+    title: "Ai Readiness Assessment"
+  - slug: ai-research-workflow
+    title: "Ai Research Workflow"
+  - slug: ai-strategy
+    title: "Ai Strategy"
+  - slug: ai-summarization
+    title: "Ai Summarization"
+  - slug: ai-training-program
+    title: "Ai Training Program"
+  - slug: ai-transcription-workflow
+    title: "Ai Transcription Workflow"
+  - slug: ai-translation-workflow
+    title: "Ai Translation Workflow"
+  - slug: ai-use-case-identification
+    title: "Ai Use Case Identification"
+  - slug: ai-vendor-evaluation
+    title: "Ai Vendor Evaluation"
+  - slug: ai-voice-workflow
+    title: "Ai Voice Workflow"
+  - slug: ai-workflow-design
+    title: "Ai Workflow Design"
+  - slug: ai-writing-workflow
+    title: "Ai Writing Workflow"
+  - slug: api-integration-plan
+    title: "Api Integration Plan"
+  - slug: automation-opportunity-map
+    title: "Automation Opportunity Map"
+  - slug: automation-roi-calculator
+    title: "Automation Roi Calculator"
+  - slug: chatbot-design
+    title: "Chatbot Design"
+  - slug: conversational-flow
+    title: "Conversational Flow"
+  - slug: creative-ai-brief
+    title: "Creative Ai Brief"
+  - slug: fine-tuning-plan
+    title: "Fine Tuning Plan"
+  - slug: intelligent-automation
+    title: "Intelligent Automation"
+  - slug: knowledge-base-ai
+    title: "Knowledge Base Ai"
+  - slug: llm-comparison
+    title: "Llm Comparison"
+  - slug: make-workflow
+    title: "Make Workflow"
+  - slug: multi-agent-workflow
+    title: "Multi Agent Workflow"
+  - slug: n8n-workflow
+    title: "N8n Workflow"
+  - slug: no-code-automation
+    title: "No Code Automation"
+  - slug: process-mining
+    title: "Process Mining"
+  - slug: prompt-engineering-guide
+    title: "Prompt Engineering Guide"
+  - slug: prompt-template-builder
+    title: "Prompt Template Builder"
+  - slug: prompt-testing-plan
+    title: "Prompt Testing Plan"
+  - slug: rag-system-design
+    title: "Rag System Design"
+  - slug: responsible-ai-framework
+    title: "Responsible Ai Framework"
+  - slug: rpa-assessment
+    title: "Rpa Assessment"
+  - slug: webhook-design
+    title: "Webhook Design"
+  - slug: zapier-workflow
+    title: "Zapier Workflow"

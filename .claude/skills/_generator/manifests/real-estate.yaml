@@ -1,0 +1,121 @@
+# Category: Real Estate (45 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills real-estate
+
+label: "Real Estate"
+
+frameworks:
+  - Comparable Market Analysis
+  - Cap Rate Analysis
+  - Cash-on-Cash Return
+  - Gross Rent Multiplier
+  - BRRRR Strategy
+  - 1031 Exchange
+
+metrics:
+  - Days on Market
+  - List-to-Sale Ratio
+  - Cap Rate
+  - Cash-on-Cash Return
+  - Occupancy Rate
+  - Net Operating Income
+  - Price Per Square Foot
+
+best_practices:
+  - Price based on comparables within 0.5 miles and 6 months
+  - Professional photos increase views 118%
+  - Respond to inquiries within 5 minutes
+  - Stage homes before listing
+  - Inspect before making offers
+
+skills:
+  - slug: 1031-exchange-guide
+    title: "1031 Exchange Guide"
+  - slug: airbnb-analysis
+    title: "Airbnb Analysis"
+  - slug: asset-allocation-re
+    title: "Asset Allocation Re"
+  - slug: buyer-consultation
+    title: "Buyer Consultation"
+  - slug: buyer-needs-assessment
+    title: "Buyer Needs Assessment"
+  - slug: cap-rate-analysis
+    title: "Cap Rate Analysis"
+  - slug: cash-on-cash-return
+    title: "Cash On Cash Return"
+  - slug: commercial-property-analysis
+    title: "Commercial Property Analysis"
+  - slug: comparative-market-analysis
+    title: "Comparative Market Analysis"
+  - slug: construction-budget
+    title: "Construction Budget"
+  - slug: counter-offer-strategy
+    title: "Counter Offer Strategy"
+  - slug: depreciation-analysis
+    title: "Depreciation Analysis"
+  - slug: development-feasibility
+    title: "Development Feasibility"
+  - slug: exit-strategy-re
+    title: "Exit Strategy Re"
+  - slug: farming-strategy
+    title: "Farming Strategy"
+  - slug: investment-analysis
+    title: "Investment Analysis"
+  - slug: just-sold-post
+    title: "Just Sold Post"
+  - slug: lease-agreement-checklist
+    title: "Lease Agreement Checklist"
+  - slug: listing-description
+    title: "Listing Description"
+  - slug: listing-photography-brief
+    title: "Listing Photography Brief"
+  - slug: listing-presentation
+    title: "Listing Presentation"
+  - slug: maintenance-schedule
+    title: "Maintenance Schedule"
+  - slug: market-analysis
+    title: "Market Analysis"
+  - slug: market-update-newsletter
+    title: "Market Update Newsletter"
+  - slug: negotiation-script
+    title: "Negotiation Script"
+  - slug: neighborhood-analysis
+    title: "Neighborhood Analysis"
+  - slug: offer-letter-real-estate
+    title: "Offer Letter Real Estate"
+  - slug: office-lease-analysis
+    title: "Office Lease Analysis"
+  - slug: open-house-plan
+    title: "Open House Plan"
+  - slug: portfolio-review
+    title: "Portfolio Review"
+  - slug: project-timeline-re
+    title: "Project Timeline Re"
+  - slug: property-inspection
+    title: "Property Inspection"
+  - slug: property-listing
+    title: "Property Listing"
+  - slug: property-management-sop
+    title: "Property Management Sop"
+  - slug: real-estate-marketing-plan
+    title: "Real Estate Marketing Plan"
+  - slug: referral-program-re
+    title: "Referral Program Re"
+  - slug: rental-property-analysis
+    title: "Rental Property Analysis"
+  - slug: retail-space-evaluation
+    title: "Retail Space Evaluation"
+  - slug: seller-consultation
+    title: "Seller Consultation"
+  - slug: showing-feedback
+    title: "Showing Feedback"
+  - slug: sphere-of-influence
+    title: "Sphere Of Influence"
+  - slug: tax-strategy-re
+    title: "Tax Strategy Re"
+  - slug: tenant-screening
+    title: "Tenant Screening"
+  - slug: vacation-rental-strategy
+    title: "Vacation Rental Strategy"
+  - slug: vendor-management-re
+    title: "Vendor Management Re"
