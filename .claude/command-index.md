@@ -47,11 +47,27 @@ All system commands, their triggers, required tools, and invocation mode.
 | `/release [version]` | Shipping a new version | Read, Write, Edit, Glob, Grep, Bash(git,date) | Self-execute | Auto-generate release notes — technical + marketing + executive |
 | `/handoff [recipient]` | Passing work to another person or AI | Read, Write, Edit, Glob, Grep, Bash(git,date) | Self-execute | Structured session handoff with full context briefing |
 
+## Autoresearch (Autonomous Loops)
+
+| Command | Trigger | Tools | Mode | Description |
+|---------|---------|-------|------|-------------|
+| `/autoresearch [goal]` | Any task with a measurable metric | Read, Write, Edit, Bash(git:*), Agent | Self-execute | Autonomous iteration loop — modify, verify, keep/discard, repeat |
+| `/autoresearch:plan [goal]` | Before starting a complex autoresearch run | Read, Write, Agent | Self-execute | Interactive wizard: Goal → Scope + Metric + Verify |
+| `/autoresearch:debug` | Circular debugging 3+ attempts or bug hunt | Read, Grep, Glob, Bash(git:*) | Self-execute | Scientific bug-hunting loop — runs until root cause found |
+| `/autoresearch:fix` | Build broken, tests failing, type errors | Read, Write, Edit, Bash(git:*) | Self-execute | Iterative fix loop — one atomic fix per iteration until zero errors |
+| `/autoresearch:security [scope]` | Before merge, wrap-up (code changed), /review | Read, Grep, Glob | Self-execute | STRIDE + OWASP + 4 red-team personas |
+| `/autoresearch:predict [scope]` | During /review, before /proposal | Read, Glob | Self-execute | 5-persona swarm: Architect, Security, Performance, Reliability, Devil's Advocate |
+| `/autoresearch:scenario [seed]` | During /brief, /audit T3+, edge case exploration | Read, Write, Agent | Self-execute | 12-dimension scenario generator — edge cases, failures, abuse patterns |
+| `/autoresearch:ship [target]` | During /release, /handoff | Read, Write, Bash(git:*) | Self-execute | 8-phase universal shipping checklist — dry-run or execute |
+| `/autoresearch:learn` | Fridays at wrap-up, before /onboard | Read, Write, Edit, Glob | Self-execute | Scout → generate/update docs → validate → fix cycle |
+
 ## System Building
 
 | Command | Trigger | Tools | Mode | Description |
 |---------|---------|-------|------|-------------|
 | `/playbook [name]` | Repeating a manual workflow | Read, Write, Edit, Glob, Bash(date) | Self-execute | Record a workflow and auto-generate a reusable command |
+| `/scaffold-cli [binary]` | Starting a new CLI tool or formalising an existing one | Read, Write, Edit, Bash(ocli,date), Glob | Self-execute | Design CLI spec-first with OpenCLI, generate code + docs |
+| `/generate-skills [category\|slug\|--all]` | Adding/updating boilerplate skills | Read, Write, Bash(find,mkdir) | Self-execute | Generate SKILL.md files from manifest — single source of truth for boilerplate skills |
 
 ## Auto-Trigger Conditions
 
@@ -66,10 +82,16 @@ Commands should be proactively invoked (not waiting for user) when:
 | Quality feels degraded | `/clear` |
 | Stuck for 10+ minutes | `/unstick` |
 | Feature/task completed | `/audit` |
-| Before merging code | `/review` |
+| Starting a CLI tool project | `/scaffold-cli` |
+| Before merging code | `/review` (which auto-invokes `:security` + `:predict`) |
 | Starting unfamiliar project | `/onboard` |
-| Passing work to someone else | `/handoff` |
+| Passing work to someone else | `/handoff` (which auto-invokes `:ship --dry-run`) |
 | System behaviour feels off | `/drift-detect` |
+| Code changed today at wrap-up | `/autoresearch:security --diff --depth shallow` |
+| Friday wrap-up | `/autoresearch:learn --mode update --depth quick` |
+| Same error hit 3+ times | `/autoresearch:debug` (via `/unstick` escalation) |
+| Shipping a release | `/autoresearch:ship --dry-run` (via `/release`) |
+| Weekly audit (T3+) | `/autoresearch:scenario` (via `/audit`) |
 
 ## Invocation Modes
 
