@@ -11,6 +11,7 @@ All system commands, their triggers, required tools, and invocation mode.
 | `/wrap-up` | End of work day | Read, Write, Edit, Bash(date), Agent | Self-execute | Daily audit, externalize knowledge, prep tomorrow |
 | `/standup` | Start of day (quick mode) | Read, Edit, Glob, Bash(git,date) | Self-execute | Auto-generate yesterday/today/blockers from git + tasks |
 | `/clear` | Context pressure or task completion | Read, Write, Edit, Bash(date) | Self-execute | Distill state, flush context, auto-resume |
+| `/brainstorm-session [idea]` | End of session or between tasks — ideas to keep for later | Read, Edit, Bash(date) | Self-execute | Isolated idea mode — discuss, evaluate, promote to tomorrow's Task Board |
 
 ## Quality & Review
 
@@ -34,9 +35,6 @@ All system commands, their triggers, required tools, and invocation mode.
 
 | Command | Trigger | Tools | Mode | Description |
 |---------|---------|-------|------|-------------|
-| `/brief [idea]` | Starting a new project | Read, Write, Edit, Agent, Glob, Bash(date) | Self-execute | Turn rough idea into structured project brief |
-| `/launch [product]` | Preparing to launch a product/feature | Read, Write, Edit, Agent, Glob, Grep, WebSearch, WebFetch, Bash(date) | Self-execute | Full launch pipeline — competitive scan to GTM checklist |
-| `/proposal [project]` | Client asks for a proposal | Read, Write, Edit, Agent, Glob, Bash(date) | Self-execute | Generate structured client proposal with scope and pricing |
 | `/competitive-intel [market]` | Entering a new market or evaluating position | Read, Write, Edit, Agent, Glob, WebSearch, WebFetch, Bash(date) | Self-execute | Deep competitive analysis with strategic recommendations |
 
 ## Communication & Delivery
@@ -61,6 +59,16 @@ All system commands, their triggers, required tools, and invocation mode.
 | `/autoresearch:ship [target]` | During /release, /handoff | Read, Write, Bash(git:*) | Self-execute | 8-phase universal shipping checklist — dry-run or execute |
 | `/autoresearch:learn` | Fridays at wrap-up, before /onboard | Read, Write, Edit, Glob | Self-execute | Scout → generate/update docs → validate → fix cycle |
 
+## Dev Team
+
+| Command | Trigger | Tools | Mode | Description |
+|---------|---------|-------|------|-------------|
+| `/team decompose [feature]` | Starting a new feature | Read, Write, Edit, Glob, Grep | Self-execute | Scompone una feature in task atomici via task-decomposer → scrive context/current-feature.md |
+| `/team architect [feature]` | After decompose, before build | Read, Write, Edit, Bash, Glob, Grep | Self-execute | Design API + DB schema via backend-architect + database-architect → scrive context/architecture.md |
+| `/team review` | Before merge or after implementation | Read, Grep, Glob, Bash | Self-execute | Code review (security/performance/correctness) + architectural review → scrive context/review-notes.md |
+| `/team build [feature]` | Full feature workflow | Read, Write, Edit, Bash, Glob, Grep | Self-execute | Workflow completo: decompose → architect → build (fullstack o python developer) → review |
+| `/team python [feature]` | AI/Python feature implementation | Read, Write, Edit, Bash, Glob, Grep | Self-execute | Implementa componenti LangGraph/FastAPI/LiteLLM via python-ai-developer |
+
 ## System Building
 
 | Command | Trigger | Tools | Mode | Description |
@@ -76,6 +84,7 @@ Commands should be proactively invoked (not waiting for user) when:
 | Condition | Command |
 |-----------|---------|
 | Session starts fresh | `/start` (if morning) or `/standup` (if quick) |
+| Ideas emerge at end of session or between tasks | `/brainstorm [seed]` |
 | 30+ tool calls in session | `/clear` |
 | Compaction warning | `/clear` (emergency mode) |
 | Discrete multi-step task completes | Consider `/clear` |
