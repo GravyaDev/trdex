@@ -101,6 +101,13 @@ your-project/
     │   ├── onboarding-sherpa.md #   Learns new codebases fast
     │   └── archaeologist.md     #   Excavates why code exists
     │
+    ├── teams/                   # Reusable team modules
+    │   └── dev-team/            # Code review & architecture team (7 agents)
+    │       ├── agents/          #   Framework-agnostic specialists
+    │       ├── PROJECT_CONTEXT.template.md
+    │       ├── TEAM.md
+    │       └── context/         #   Inter-agent communication files
+    │
     ├── commands/                # 25 workflow commands
     │   ├── start.md             #   Begin work session
     │   ├── sync.md              #   Mid-day refresh
@@ -148,6 +155,123 @@ your-project/
 Morning:    /start → work → /sync (if switching tasks)
 Afternoon:  work → /clear (if context gets heavy) → work
 Evening:    /wrap-up
+```
+
+---
+
+## 👥 Dev-Team Module — Reusable Code Review & Architecture Team
+
+The `teams/dev-team/` module is a **framework-agnostic team of 7 specialist agents** for code review, architecture, and full-stack development.
+
+### What's Included
+
+```
+.claude/teams/dev-team/
+├── agents/                           # 7 framework-agnostic agents
+│   ├── task-decomposer.md           # Feature decomposition specialist
+│   ├── backend-architect.md         # API & service boundary design
+│   ├── database-architect.md        # Schema design & migrations
+│   ├── fullstack-developer.md       # Adapts to any backend/frontend
+│   ├── python-ai-developer.md       # LangGraph, LiteLLM, async Python
+│   ├── code-reviewer.md             # Security, performance, correctness
+│   └── architect-review.md          # SOLID, dependencies, boundaries
+├── PROJECT_CONTEXT.template.md      # Template for project customization
+├── TEAM.md                          # Team description & workflow
+└── context/
+    ├── README.md                    # Inter-agent communication convention
+    ├── current-feature.md           # Active feature (created by task-decomposer)
+    ├── architecture.md              # Design decisions (created by architects)
+    └── review-notes.md              # Code review findings
+```
+
+### Quick Start — Using Dev-Team on a New Project
+
+1. **Clone claudify into your project**:
+   ```bash
+   git clone https://github.com/GravyaDev/claudify.git
+   # Copy into your project
+   cp -r claudify/.claude .
+   ```
+
+2. **Compile PROJECT_CONTEXT.md for your project**:
+   ```bash
+   cp .claude/teams/dev-team/PROJECT_CONTEXT.template.md \
+      .claude/teams/dev-team/PROJECT_CONTEXT.md
+
+   # Edit PROJECT_CONTEXT.md with your stack:
+   # - Backend framework (Express, FastAPI, Rails, etc.)
+   # - Frontend framework (React, Vue, Next.js, etc.)
+   # - Database & ORM
+   # - AI architecture (if using LangGraph/LiteLLM)
+   # - Directory structure
+   # - Development commands
+   # - Project-specific patterns & conventions
+   ```
+
+3. **Symlink agents to the canonical claudify copy** (keeps agents in sync):
+   ```bash
+   ln -s ../../path/to/claudify/.claude/teams/dev-team/agents \
+         .claude/teams/dev-team/agents
+   ```
+
+4. **Use the `/team` command**:
+   ```bash
+   /team decompose "implement Google Ads integration"
+   /team architect "implement Google Ads integration"
+   /team python "implement Google Ads integration"
+   /team review                    # Review current code changes
+   /team build "implement..."      # Full workflow: decompose → architect → build → review
+   ```
+
+### How It Works
+
+The team communicates via **file-based context**, not fragile JSON:
+
+1. User requests a feature
+2. **task-decomposer** → reads `PROJECT_CONTEXT.md` → writes `context/current-feature.md` (atomic tasks with deps)
+3. **backend-architect** + **database-architect** → read feature scope → write `context/architecture.md`
+4. **fullstack-developer** or **python-ai-developer** → read architecture → implement
+5. **code-reviewer** + **architect-review** → write `context/review-notes.md`
+6. Developer → fix issues → delete review notes → create PR
+
+### Why This Works
+
+- **Framework-agnostic**: Same agents work on Express/Django/Rails, React/Vue, PostgreSQL/MongoDB
+- **Project-specific**: Each project compiles `PROJECT_CONTEXT.md` with its stack, patterns, conventions
+- **Single source of truth**: Agent definitions live in claudify — all projects stay in sync
+- **Human-readable**: All communication is Markdown, no JSON serialization bugs
+- **Reusable**: Copy claudify once, symlink agents, customize via PROJECT_CONTEXT.md
+
+### Example: PROJECT_CONTEXT.md Sections
+
+```markdown
+# Project Context — Your Project Name
+
+## Stack
+- Backend: Express.js + Node.js 20
+- Frontend: React 19 SPA
+- Database: PostgreSQL 17 + pgvector
+- AI Layer: LangGraph + LiteLLM + Voyage AI
+- Auth: BetterAuth + JWT
+- ORM: Drizzle
+
+## Struttura directory chiave
+- Backend: `./app/services/`
+- Frontend: `./app/src/`
+- Database: `./app/db/`
+- AI Service: `./services/agents/src/`
+
+## Pattern specifici
+- Table prefix: `gravya_`
+- Supervisor > Executors architecture
+- Co-author: Kloud <kloud@gravya.it>
+- Memory: 6-tier system (pinned docs → agent memory → knowledge base → semantic search → knowledge graph → session logs)
+
+## Comandi di sviluppo
+- Dev: `pnpm dev`
+- Test: `pnpm test`
+- Migrate: `pnpm migrate:dev`
+- Build: `pnpm build`
 ```
 
 ---
