@@ -1,6 +1,6 @@
-# Claude Context — Claudify
+# Claude Context — Kloudify
 
-This project uses Claudify, a professional operating system for Claude Code.
+This project uses Kloudify, a professional operating system for Claude Code.
 Always read `.claude/memory.md` before taking action.
 
 ## Quick Start

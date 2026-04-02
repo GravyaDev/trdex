@@ -129,6 +129,66 @@ cd app && pnpm install
 ```
 The patch log at `.claude/logs/security-patches.md` records every change for traceability.
 
+### Step 6: Python dependency vulnerability check + auto-patch
+
+Run `pip-audit` inside `app/services/agents/` and classify findings:
+
+```bash
+cd app/services/agents && pip-audit --json -r requirements.txt 2>/dev/null | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+vulns = data.get('dependencies', [])
+counts = {'critical':0,'high':0,'medium':0,'low':0}
+findings = []
+for dep in vulns:
+    for v in dep.get('vulns', []):
+        aliases = v.get('aliases', [v.get('id', '?')])
+        sev = v.get('fix_versions', [])
+        fix = sev[0] if sev else 'none'
+        findings.append((dep['name'], dep['version'], v['id'], fix))
+        print(f\"[{dep['name']:<30}] {dep['version']:<12} vuln={v['id']:<20} fix={fix}\")
+total = len(findings)
+print(f'\nTOTAL: {total} Python vulnerabilities')
+" 2>/dev/null || echo "pip-audit unavailable (install: pip install pip-audit)"
+```
+
+**Auto-patch logic** — apply immediately for each open advisory:
+
+**Tier A — Apply automatically:**
+- Patched version is semver-compatible (same major.minor range) with current pinned version
+- No API or type signature change in the patched range
+- Fix = bump version in `requirements.txt`
+
+**Tier B — Apply automatically with comment:**
+- Patched version requires minor version bump (different minor, same major)
+- e.g. `langchain-core==0.2.1` → `langchain-core==0.3.0`
+- Apply bump, note in log that integration test is advisable
+
+**Tier C — On Hold (add to Task Board "Security — On Hold"):**
+- Requires major version bump
+- Package is abandoned upstream
+- Fix conflicts with another pinned dependency (e.g. langchain ecosystem lockstep)
+- Breaking API change confirmed in changelog
+
+**After applying Tier A/B patches:**
+1. Run `pip install -r requirements.txt` in `app/services/agents/`
+2. Run `pip-audit -r requirements.txt` again to confirm reduction
+3. Log every patch to `.claude/logs/security-patches.md`:
+   ```
+   - `YYYY-MM-DD` | PACKAGE | old→new | METHOD | APPLIED
+   ```
+   METHOD = `requirements.txt bump`
+4. Commit with message:
+   ```
+   security: auto-patch N Python vulnerabilities [MMDDYY]
+
+   - pkg1: old→new
+   - pkg2: old→new
+
+   Co-Authored-By: Kloud <kloud@gravya.it>
+   ```
+5. Show summary: how many fixed vs on-hold vs total
+
 ### Step 7: Open task board
 
 Read `Task Board.md`. Scan for:

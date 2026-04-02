@@ -35,6 +35,23 @@ Edit `.claude/memory.md`:
 - Prune stale Recent Decisions (older than 1 week)
 - Clear resolved Blockers
 
+### Step 3b: Regenerate project profile files
+
+Regenerate both project profile files used by `/implement` and other tools:
+
+```bash
+bash "$CLAUDE_PROJECT_DIR/.claude/hooks/update-project-stack.sh"
+bash "$CLAUDE_PROJECT_DIR/.claude/hooks/update-project-structure.sh"
+```
+
+These files are auto-generated snapshots — do NOT edit them manually:
+- `.claude/project-stack.md` — runtimes, dependencies, Docker, config files
+- `.claude/project-structure.md` — directory tree (depth 4) + file counts
+
+Note: `project-stack.md` is also updated incrementally by a PostToolUse hook
+whenever structural files (package.json, requirements.txt, Dockerfile, etc.) change.
+The wrap-up regeneration ensures both files are complete and in sync.
+
 ### Step 4: Move completed tasks
 
 In `Task Board.md`:
@@ -92,6 +109,27 @@ If today is Friday, invoke:
 ```
 
 Keeps project docs in sync with the week's changes. Output goes to the daily note.
+
+### Step 6d: AI Operations Registry update (Fridays only)
+
+If today is Friday, update the `AI Operations Registry/` files:
+
+1. Read all 6 files in `AI Operations Registry/`
+2. Read current state of:
+   - `app/services/agents/src/kloud/graph.py` (flow chain)
+   - `app/services/agents/src/api.py` (endpoints = processes)
+   - `app/packages/db/src/migrations/` (latest migration number)
+   - `Task Board.md` → planned processes section
+3. For each registry file, check if content matches current reality:
+   - **architecture-map.md**: agents/supervisors/executors/tools match DB seed + code
+   - **decision-chain.md**: flow diagram matches graph.py node sequence
+   - **processes.md**: active processes match api.py endpoints + current supervisor pipeline; planned match Task Board
+   - **traceability.md**: tables match actual logging in code
+   - **escalation.md**: HITL flow matches interrupt_check in graph.py
+   - **gaps.md**: remove resolved gaps, add any new ones discovered this week
+4. Update stale sections. Update `Ultimo aggiornamento` date in each modified file.
+5. Update `README.md` → "Cambiamenti architetturali significativi" table if architecture changed this week.
+6. Log in daily note: "AI Operations Registry updated: [list of files changed]"
 
 ### Step 7: Review incident log
 

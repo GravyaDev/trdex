@@ -1,7 +1,7 @@
 # Task Board
 
 ## Today
-- [ ] Set up project with Claudify (`/start`)
+- [ ] Set up project with Kloudify (`/start`)
 
 ## This Week
 -

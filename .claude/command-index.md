@@ -19,6 +19,7 @@ All system commands, their triggers, required tools, and invocation mode.
 |---------|---------|-------|------|-------------|
 | `/audit [scope]` | After completing a task/feature | Read, Agent, Write, Edit | Self-execute | Delegate quality review to auditor agent |
 | `/review [target]` | Before merging code | Read, Agent, Glob, Grep, Bash(git) | Self-execute | Deep code review — security + performance + architecture |
+| `/deep-audit` | Monthly or after major refactors | Read, Agent, Glob, Grep, Write, Bash(date,find) | Self-execute | Full project audit — 6 specialist analysts in parallel, PASS/WARN/FAIL report |
 | `/system-audit` | Monthly or after major changes | Read, Glob, Grep, Agent, Write, Edit, Bash(date,wc,find) | Self-execute | Deep infrastructure audit of entire system |
 | `/drift-detect` | Monthly or when behaviour feels off | Read, Agent, Glob, Grep, Bash(wc,find,date) | Self-execute | Detect config drift — stale rules, contradictions, orphans |
 | `/retro [period]` | End of sprint/week | Read, Write, Edit, Glob, Agent, Bash(date) | Self-execute | Sprint retrospective — analyze patterns, improve process |
@@ -59,16 +60,6 @@ All system commands, their triggers, required tools, and invocation mode.
 | `/autoresearch:ship [target]` | During /release, /handoff | Read, Write, Bash(git:*) | Self-execute | 8-phase universal shipping checklist — dry-run or execute |
 | `/autoresearch:learn` | Fridays at wrap-up, before /onboard | Read, Write, Edit, Glob | Self-execute | Scout → generate/update docs → validate → fix cycle |
 
-## Dev Team
-
-| Command | Trigger | Tools | Mode | Description |
-|---------|---------|-------|------|-------------|
-| `/team decompose [feature]` | Starting a new feature | Read, Write, Edit, Glob, Grep | Self-execute | Scompone una feature in task atomici via task-decomposer → scrive context/current-feature.md |
-| `/team architect [feature]` | After decompose, before build | Read, Write, Edit, Bash, Glob, Grep | Self-execute | Design API + DB schema via backend-architect + database-architect → scrive context/architecture.md |
-| `/team review` | Before merge or after implementation | Read, Grep, Glob, Bash | Self-execute | Code review (security/performance/correctness) + architectural review → scrive context/review-notes.md |
-| `/team build [feature]` | Full feature workflow | Read, Write, Edit, Bash, Glob, Grep | Self-execute | Workflow completo: decompose → architect → build (fullstack o python developer) → review |
-| `/team python [feature]` | AI/Python feature implementation | Read, Write, Edit, Bash, Glob, Grep | Self-execute | Implementa componenti LangGraph/FastAPI/LiteLLM via python-ai-developer |
-
 ## System Building
 
 | Command | Trigger | Tools | Mode | Description |
@@ -97,7 +88,8 @@ Commands should be proactively invoked (not waiting for user) when:
 | Passing work to someone else | `/handoff` (which auto-invokes `:ship --dry-run`) |
 | System behaviour feels off | `/drift-detect` |
 | Code changed today at wrap-up | `/autoresearch:security --diff --depth shallow` |
-| Friday wrap-up | `/autoresearch:learn --mode update --depth quick` |
+| Friday wrap-up | `/autoresearch:learn` + AI Operations Registry update |
+| Monthly or after major refactors | `/deep-audit` |
 | Same error hit 3+ times | `/autoresearch:debug` (via `/unstick` escalation) |
 | Shipping a release | `/autoresearch:ship --dry-run` (via `/release`) |
 | Weekly audit (T3+) | `/autoresearch:scenario` (via `/audit`) |

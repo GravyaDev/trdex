@@ -1,4 +1,4 @@
-# Claudify Skills Library
+# Kloudify Skills Library
 
 > 1727+ professional skills across 31 categories.
 > Each skill is a structured operational procedure — not a prompt template.
