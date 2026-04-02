@@ -2,24 +2,26 @@
 
 **A professional operating system for Claude Code.**
 
-Kloudify transforms Claude Code from a powerful AI assistant into a persistent, self-improving development partner. It adds structured memory, specialist agents, automated safety hooks, and 1,700+ professional skills — all orchestrated through simple slash commands.
+Kloudify transforms Claude Code from a powerful AI assistant into a persistent, self-improving development partner. It adds structured memory, specialist agents, automated safety hooks, and on-demand professional skills — all orchestrated through simple slash commands.
 
 ---
 
-## ✨ Highlights
+## Highlights
 
 | Feature | What it does |
 |---|---|
 | **6-tier memory** | Claude remembers context across sessions, learns from mistakes, and gets smarter over time |
 | **9 specialist agents** | Purpose-built subagents for quality, debugging, code review, onboarding, and more |
-| **25+ commands** | Workflow rituals (`/start`, `/sync`, `/wrap-up`) plus tools for planning, review, and delivery |
-| **1,727 skills** | Professional operational procedures across 31 categories — from marketing to DevOps |
-| **10 automated hooks** | Deterministic safety nets: dangerous command blocking, file backup, completeness gates, full audit trail |
+| **25+ commands** | Workflow rituals (`/start`, `/sync`, `/wrap-up`) plus tools for planning, audit, review, and delivery |
+| **On-demand skills** | Generator approach: manifest + template → focused skill files produced when needed. No bloat. |
+| **Automated hooks** | Deterministic safety nets: dangerous command blocking, file backup, completeness gates, project stack tracking, full audit trail |
 | **Self-improvement engine** | Knowledge nominations → auditor review → promoted rules. The system gets better the more you use it |
+| **Project profiling** | Auto-generated `project-stack.md` + `project-structure.md` keep agents aware of your stack without re-scanning |
+| **AI Operations Registry** | Optional traceability layer: who does what, where, how — with escalation and gap tracking |
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -38,8 +40,8 @@ jq --version
 cd /path/to/your/project
 
 # Copy Kloudify into your project root
-cp -r /path/to/Kloudify-download/* .
-cp -r /path/to/Kloudify-download/.claude .
+cp -r /path/to/kloudify-download/* .
+cp -r /path/to/kloudify-download/.claude .
 ```
 
 > **Note:** If you already have a `.claude/` directory, merge manually — don't overwrite existing settings or memory.
@@ -61,18 +63,22 @@ Please do the following:
 2. Read .claude/memory.md and .claude/knowledge-base.md.
 3. Read .claude/command-index.md to learn all available commands.
 4. Scan my project structure (files, folders, language, framework, dependencies).
-5. Show me a summary of what you detected.
-6. Ask me a few smart questions to tailor the system to my needs.
-7. Based on my answers and your scan, update memory.md.
-8. Review the skills in .claude/skills/ — recommend the most relevant ones.
+5. Generate the project profile files:
+   - .claude/project-stack.md (runtimes, dependencies, Docker, config)
+   - .claude/project-structure.md (directory tree + file counts)
+6. Show me a summary of what you detected.
+7. Ask me a few smart questions to tailor the system to my needs.
+8. Based on my answers and your scan, update memory.md.
 9. Run /start to initialise the daily workflow.
+
+Scan first, then ask questions — don't wait for me before doing the initial scan.
 ```
 
 That's it. You're running.
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 your-project/
@@ -81,6 +87,7 @@ your-project/
 ├── Task Board.md                # Kanban-style task tracking
 ├── Scratchpad.md                # Quick capture (processed during /sync)
 ├── Daily Notes/                 # Chronological session history
+├── ai-operations-registry/      # AI traceability (optional — copy from template/)
 │
 └── .claude/
     ├── memory.md                # Active session context (<100 lines)
@@ -88,7 +95,8 @@ your-project/
     ├── knowledge-nominations.md # Candidate learnings pipeline
     ├── command-index.md         # Full command catalog
     ├── settings.json            # Hook configuration
-    ├── Kloudify.ocli.yaml       # OpenCLI specification
+    ├── project-stack.md         # Auto-generated: runtimes, dependencies
+    ├── project-structure.md     # Auto-generated: directory tree
     │
     ├── agents/                  # 9 specialist subagents
     │   ├── auditor.md           #   Quality gate — reviews all work
@@ -101,33 +109,24 @@ your-project/
     │   ├── onboarding-sherpa.md #   Learns new codebases fast
     │   └── archaeologist.md     #   Excavates why code exists
     │
-    ├── teams/                   # Reusable team modules
-    │   └── dev-team/            # Code review & architecture team (7 agents)
-    │       ├── agents/          #   Framework-agnostic specialists
-    │       ├── PROJECT_CONTEXT.template.md
-    │       ├── TEAM.md
-    │       └── context/         #   Inter-agent communication files
-    │
-    ├── commands/                # 25 workflow commands
+    ├── commands/                # Workflow commands
     │   ├── start.md             #   Begin work session
     │   ├── sync.md              #   Mid-day refresh
     │   ├── wrap-up.md           #   End-of-day ritual
     │   ├── clear.md             #   Flush context, resume fresh
     │   ├── audit.md             #   Quality review
     │   ├── review.md            #   Deep code review
+    │   ├── deep-audit.md        #   Full project audit (6 specialist analysts)
+    │   ├── brainstorm-session.md#   Isolated idea mode
     │   ├── unstick.md           #   Get unstuck
     │   ├── onboard.md           #   Scan new codebase
-    │   ├── brief.md             #   Idea → project brief
-    │   ├── launch.md            #   Full launch pipeline
-    │   ├── proposal.md          #   Client proposal generator
     │   ├── report.md            #   Professional report
     │   ├── release.md           #   Release notes
     │   ├── handoff.md           #   Session handoff
-    │   ├── retro.md             #   Sprint retrospective
     │   ├── autoresearch.md      #   Autonomous iteration loops
     │   └── ...                  #   + more
     │
-    ├── hooks/                   # 10 automated safety hooks
+    ├── hooks/                   # Automated safety hooks
     │   ├── guard-bash.sh        #   Blocks dangerous shell commands
     │   ├── backup-before-write.sh#  Backs up files before overwrites
     │   ├── completeness-gate.sh #   Validates content completeness
@@ -137,156 +136,45 @@ your-project/
     │   ├── pre-compact-handoff.sh#  Saves state before auto-compaction
     │   ├── post-compact-resume.sh#  Restores context after compaction
     │   ├── session-reset.sh     #   Resets stale gate files
-    │   └── validate-ocli-spec.sh#   Validates OpenCLI specifications
+    │   └── update-project-stack.sh# Tracks structural file changes
     │
-    ├── skills/                  # 1,727+ professional skills
-    │   └── INDEX.md             #   Full skill catalog
+    ├── skills/                  # On-demand skill generation
+    │   ├── _generator/          #   Template + manifests
+    │   └── ...                  #   Generated skill files (on demand)
     │
-    ├── agent-memory/            # Per-agent persistent knowledge (gitignored)
-    ├── backups/                 # Automatic file backups (gitignored)
-    └── logs/                    # Audit trail & incident log (gitignored)
+    ├── plans/                   # Architecture plans and designs
+    ├── reports/                 # Audit reports (generated by /deep-audit)
+    ├── agent-memory/            # Per-agent persistent knowledge
+    ├── backups/                 # Automatic file backups
+    └── logs/                    # Audit trail & incident log
 ```
 
 ---
 
-## ⚡ Daily Workflow
+## Daily Workflow
 
 ```
 Morning:    /start → work → /sync (if switching tasks)
 Afternoon:  work → /clear (if context gets heavy) → work
 Evening:    /wrap-up
+Weekly:     /retro (Friday)
+Periodic:   /deep-audit (monthly or after major refactors)
 ```
 
 ---
 
-## 👥 Dev-Team Module — Reusable Code Review & Architecture Team
-
-The `teams/dev-team/` module is a **framework-agnostic team of 7 specialist agents** for code review, architecture, and full-stack development.
-
-### What's Included
-
-```
-.claude/teams/dev-team/
-├── agents/                           # 7 framework-agnostic agents
-│   ├── task-decomposer.md           # Feature decomposition specialist
-│   ├── backend-architect.md         # API & service boundary design
-│   ├── database-architect.md        # Schema design & migrations
-│   ├── fullstack-developer.md       # Adapts to any backend/frontend
-│   ├── python-ai-developer.md       # LangGraph, LiteLLM, async Python
-│   ├── code-reviewer.md             # Security, performance, correctness
-│   └── architect-review.md          # SOLID, dependencies, boundaries
-├── PROJECT_CONTEXT.template.md      # Template for project customization
-├── TEAM.md                          # Team description & workflow
-└── context/
-    ├── README.md                    # Inter-agent communication convention
-    ├── current-feature.md           # Active feature (created by task-decomposer)
-    ├── architecture.md              # Design decisions (created by architects)
-    └── review-notes.md              # Code review findings
-```
-
-### Quick Start — Using Dev-Team on a New Project
-
-1. **Clone Kloudify into your project**:
-   ```bash
-   git clone https://github.com/GravyaDev/Kloudify.git
-   # Copy into your project
-   cp -r Kloudify/.claude .
-   ```
-
-2. **Compile PROJECT_CONTEXT.md for your project**:
-   ```bash
-   cp .claude/teams/dev-team/PROJECT_CONTEXT.template.md \
-      .claude/teams/dev-team/PROJECT_CONTEXT.md
-
-   # Edit PROJECT_CONTEXT.md with your stack:
-   # - Backend framework (Express, FastAPI, Rails, etc.)
-   # - Frontend framework (React, Vue, Next.js, etc.)
-   # - Database & ORM
-   # - AI architecture (if using LangGraph/LiteLLM)
-   # - Directory structure
-   # - Development commands
-   # - Project-specific patterns & conventions
-   ```
-
-3. **Symlink agents to the canonical Kloudify copy** (keeps agents in sync):
-   ```bash
-   ln -s ../../path/to/Kloudify/.claude/teams/dev-team/agents \
-         .claude/teams/dev-team/agents
-   ```
-
-4. **Use the `/team` command**:
-   ```bash
-   /team decompose "implement Google Ads integration"
-   /team architect "implement Google Ads integration"
-   /team python "implement Google Ads integration"
-   /team review                    # Review current code changes
-   /team build "implement..."      # Full workflow: decompose → architect → build → review
-   ```
-
-### How It Works
-
-The team communicates via **file-based context**, not fragile JSON:
-
-1. User requests a feature
-2. **task-decomposer** → reads `PROJECT_CONTEXT.md` → writes `context/current-feature.md` (atomic tasks with deps)
-3. **backend-architect** + **database-architect** → read feature scope → write `context/architecture.md`
-4. **fullstack-developer** or **python-ai-developer** → read architecture → implement
-5. **code-reviewer** + **architect-review** → write `context/review-notes.md`
-6. Developer → fix issues → delete review notes → create PR
-
-### Why This Works
-
-- **Framework-agnostic**: Same agents work on Express/Django/Rails, React/Vue, PostgreSQL/MongoDB
-- **Project-specific**: Each project compiles `PROJECT_CONTEXT.md` with its stack, patterns, conventions
-- **Single source of truth**: Agent definitions live in Kloudify — all projects stay in sync
-- **Human-readable**: All communication is Markdown, no JSON serialization bugs
-- **Reusable**: Copy Kloudify once, symlink agents, customize via PROJECT_CONTEXT.md
-
-### Example: PROJECT_CONTEXT.md Sections
-
-```markdown
-# Project Context — Your Project Name
-
-## Stack
-- Backend: Express.js + Node.js 20
-- Frontend: React 19 SPA
-- Database: PostgreSQL 17 + pgvector
-- AI Layer: LangGraph + LiteLLM + Voyage AI
-- Auth: BetterAuth + JWT
-- ORM: Drizzle
-
-## Struttura directory chiave
-- Backend: `./app/services/`
-- Frontend: `./app/src/`
-- Database: `./app/db/`
-- AI Service: `./services/agents/src/`
-
-## Pattern specifici
-- Table prefix: `gravya_`
-- Supervisor > Executors architecture
-- Co-author: Kloud <kloud@gravya.it>
-- Memory: 6-tier system (pinned docs → agent memory → knowledge base → semantic search → knowledge graph → session logs)
-
-## Comandi di sviluppo
-- Dev: `pnpm dev`
-- Test: `pnpm test`
-- Migrate: `pnpm migrate:dev`
-- Build: `pnpm build`
-```
-
----
-
-## 🔧 Commands
+## Commands
 
 ### Daily Rituals
 
 | Command | Description |
 |---|---|
-| `/start` | Begin work session — load memory, create daily note, review tasks |
+| `/start` | Begin work session — load memory, create daily note, security checks (npm + pip audit) |
 | `/sync` | Mid-day refresh — update memory, process scratchpad |
-| `/wrap-up` | End of day — audit, externalize knowledge, prep tomorrow |
+| `/wrap-up` | End of day — audit, knowledge externalization, project profile refresh, prep tomorrow |
 | `/standup` | Quick standup — yesterday/today/blockers from git + tasks |
 | `/clear` | Flush context and resume fresh (use between unrelated tasks) |
+| `/brainstorm-session [idea]` | Isolated idea mode — discuss, evaluate, promote to Task Board |
 
 ### Quality & Review
 
@@ -294,7 +182,8 @@ The team communicates via **file-based context**, not fragile JSON:
 |---|---|
 | `/audit [scope]` | Quality review via the auditor agent |
 | `/review [target]` | Deep code review — security + performance + architecture |
-| `/system-audit` | Full infrastructure health check |
+| `/deep-audit` | Full project audit — 6 specialist analysts in parallel, PASS/WARN/FAIL report |
+| `/system-audit` | Infrastructure health check of the Kloudify system itself |
 | `/drift-detect` | Detect config drift — stale rules, contradictions, orphans |
 | `/retro [period]` | Sprint retrospective — analyze patterns, improve process |
 | `/debt-map [dir]` | Map and prioritise technical debt |
@@ -310,9 +199,6 @@ The team communicates via **file-based context**, not fragile JSON:
 
 | Command | Description |
 |---|---|
-| `/brief [idea]` | Turn a rough idea into a structured project brief |
-| `/launch [product]` | Full launch pipeline — competitive scan to GTM checklist |
-| `/proposal [project]` | Generate a client proposal with scope and pricing |
 | `/competitive-intel [market]` | Deep competitive analysis |
 
 ### Communication & Delivery
@@ -330,10 +216,10 @@ The team communicates via **file-based context**, not fragile JSON:
 | `/autoresearch [goal]` | Autonomous iteration loop — modify, verify, keep/discard |
 | `/autoresearch:debug` | Scientific bug-hunting until root cause found |
 | `/autoresearch:fix` | Iterative fix loop until zero errors |
-| `/autoresearch:security [scope]` | STRIDE + OWASP + 4 red-team personas |
-| `/autoresearch:predict [scope]` | 5-persona architectural swarm |
+| `/autoresearch:security [scope]` | STRIDE + OWASP + red-team personas |
+| `/autoresearch:predict [scope]` | 5-persona architectural risk swarm |
 | `/autoresearch:scenario [seed]` | 12-dimension edge case generator |
-| `/autoresearch:ship [target]` | 8-phase universal shipping checklist |
+| `/autoresearch:ship [target]` | Universal shipping checklist |
 | `/autoresearch:learn` | Scout → generate/update docs → validate cycle |
 
 ### System Building
@@ -342,11 +228,18 @@ The team communicates via **file-based context**, not fragile JSON:
 |---|---|
 | `/playbook [name]` | Record a workflow → auto-generate a reusable command |
 | `/scaffold-cli [binary]` | Design a CLI tool spec-first with OpenCLI |
-| `/generate-skills` | Generate skill files from the manifest |
+| `/generate-skills [category]` | Generate skill files on demand from manifests |
+
+### Planned
+
+| Command | Description |
+|---|---|
+| `/implement [feature]` | Multi-agent feature development — auto-profiles project, assigns parametric roles, builds + reviews |
+| `/council [topic]` | Multi-perspective deliberation — dual-mode: subagents or real sessions via claude-peers-mcp |
 
 ---
 
-## 🧠 Memory Architecture
+## Memory Architecture
 
 Kloudify uses a 6-tier memory system so context survives across sessions:
 
@@ -359,7 +252,7 @@ Tier 5 │ MCP Knowledge Graph     → Structured entities and relations (option
 Tier 6 │ Daily Notes             → Chronological session history and handoffs
 ```
 
-The **self-improvement loop** works like this:
+The **self-improvement loop**:
 
 1. Claude (or an agent) observes a pattern or lesson during work
 2. It writes a **knowledge nomination**
@@ -369,9 +262,20 @@ The **self-improvement loop** works like this:
 
 ---
 
-## 🛡️ Safety Hooks
+## Project Profiling
 
-Hooks run automatically — no user action needed. They enforce safety at the tool level:
+Kloudify automatically tracks your project's stack and structure:
+
+- **`.claude/project-stack.md`** — Runtimes, dependencies, Docker files, config files. Updated by a PostToolUse hook whenever structural files change (package.json, requirements.txt, Dockerfile, etc.)
+- **`.claude/project-structure.md`** — Directory tree (depth 4) + file counts by extension. Regenerated at every `/wrap-up`.
+
+These files feed into `/deep-audit` and `/implement` so agents always know your stack without expensive re-scanning.
+
+---
+
+## Safety Hooks
+
+Hooks run automatically — no user action needed:
 
 | Hook | Trigger | What it does |
 |---|---|---|
@@ -379,43 +283,50 @@ Hooks run automatically — no user action needed. They enforce safety at the to
 | `backup-before-write.sh` | Before any file write/edit | Creates a backup copy in `.claude/backups/` |
 | `completeness-gate.sh` | Before writing system files | Validates: no TBDs, max line limits, valid JSON, provenance tags |
 | `log-changes.sh` | After file write/edit | Appends to the audit trail |
+| `update-project-stack.sh` | After writing structural files | Regenerates project stack profile |
 | `log-failures.sh` | After any tool failure | Logs errors for pattern analysis |
 | `log-stop-verdict.sh` | When session ends | Logs task completion verdict |
 | `pre-compact-handoff.sh` | Before auto-compaction | Saves session state so nothing is lost |
 | `post-compact-resume.sh` | After auto-compaction | Restores context seamlessly |
 | `session-reset.sh` | On fresh session start | Resets stale gate files |
-| `validate-ocli-spec.sh` | After writing YAML specs | Validates OpenCLI specification format |
 
 ---
 
-## 📚 Skills Library
+## Skills
 
-1,727+ skills across 31 professional categories:
+Kloudify uses a **generator approach** — no pre-built library of thousands of identical files.
 
-| Category | Count | | Category | Count |
-|---|---|---|---|---|
-| Marketing & Advertising | 76 | | Content & Copywriting | 88 |
-| Social Media | 69 | | SEO & Search | 57 |
-| Sales & Revenue | 66 | | Email Marketing | 51 |
-| Finance & Accounting | 60 | | Legal & Compliance | 54 |
-| Operations & PM | 60 | | HR & People | 57 |
-| Product Management | 63 | | Software Development | 78 |
-| Data & Analytics | 57 | | E-commerce | 54 |
-| Customer Success | 48 | | Startup & Entrepreneurship | 60 |
-| Education & Training | 51 | | Real Estate | 45 |
-| Healthcare | 48 | | Travel & Hospitality | 54 |
-| Design & Creative | 54 | | Consulting & Strategy | 54 |
-| Personal Productivity | 57 | | AI & Automation | 54 |
-| Nonprofit & Social Impact | 48 | | Media & Publishing | 45 |
-| Construction & Trades | 42 | | Food & Beverage | 42 |
-| Fitness & Wellness | 45 | | Agriculture & Farming | 45 |
-| Energy & Sustainability | 45 | | | |
+- **Manifests** (`.claude/skills/_generator/manifests/`) define skill categories and capabilities
+- **Template** (`.claude/skills/_generator/SKILL.template.md`) provides the standard structure
+- **`/generate-skills [category]`** produces focused skill files on demand
 
-Skills are invoked automatically when Claude detects a relevant task, or manually with `Use the [skill-name] skill to...`
+This keeps the system lean. Generate what you need, when you need it.
+
+Categories cover: Development, AI/ML, DevOps, Security, Marketing, Design, Data, and 25+ more.
 
 ---
 
-## 🤖 Agents
+## AI Operations Registry (Optional)
+
+For projects with AI agents, Kloudify includes a traceability framework:
+
+```
+ai-operations-registry/
+├── template/                  # Copy these into your project and fill placeholders
+│   ├── README.md              # Index + principles
+│   ├── architecture-map.md    # Agent hierarchy + mental map
+│   ├── decision-chain.md      # Request → result flow
+│   ├── processes.md           # Active + planned processes
+│   ├── traceability.md        # Event → log mapping
+│   ├── escalation.md          # Escalation tree + HITL levels
+│   └── gaps.md                # Known traceability gaps
+```
+
+Set up: copy `template/` contents to `ai-operations-registry/`, replace `{{placeholders}}`, and the wrap-up (Step 6d, Fridays) will keep them in sync with your code.
+
+---
+
+## Agents
 
 | Agent | Role |
 |---|---|
@@ -431,29 +342,21 @@ Skills are invoked automatically when Claude detects a relevant task, or manuall
 
 ---
 
-## 🔌 MCP Integrations
-
-Kloudify ships with two MCP servers pre-configured in `.mcp.json`:
-
-- **Context7** — Live library documentation (Next.js, React, any npm package) via `@upstash/context7-mcp`
-- **Memory** — Persistent knowledge graph for cross-session facts via `@modelcontextprotocol/server-memory`
-
----
-
-## 💡 Tips
+## Tips
 
 1. **Run `/clear` between unrelated tasks.** Context pollution is the #1 quality killer.
 2. **Keep `memory.md` under 100 lines.** Prune aggressively.
 3. **Let the knowledge base grow naturally.** Don't pre-fill it — let the auditor promote real learnings.
 4. **Trust the hooks.** They catch what instructions miss.
 5. **Try `/unstick` when you're blocked.** It's better than spinning.
-6. **No code required.** Everything is plain English — Kloudify works with any language, framework, or project.
+6. **Run `/deep-audit` monthly.** It catches drift before it becomes debt.
+7. **Generate skills as needed.** Don't generate everything upfront — context budget matters.
 
 ---
 
-## 📬 Support
+## Support
 
-Open an issue on [GitHub](https://github.com/GravyaDev/Kloudify/issues)
+Open an issue on [GitHub](https://github.com/GravyaDev/kloudify/issues)
 
 ---
 
