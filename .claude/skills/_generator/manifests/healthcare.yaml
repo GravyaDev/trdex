@@ -124,3 +124,47 @@ skills:
     title: "Virtual Visit Guide"
   - slug: wellness-program
     title: "Wellness Program"
+  - slug: claude-ally-health
+    title: "Claude Ally Health"
+  - slug: emergency-card
+    title: "Emergency Card"
+  - slug: family-health-analyzer
+    title: "Family Health Analyzer"
+  - slug: fda-food-safety-auditor
+    title: "FDA Food Safety Auditor"
+  - slug: fda-medtech-compliance-auditor
+    title: "FDA Medtech Compliance Auditor"
+  - slug: fitness-analyzer
+    title: "Fitness Analyzer"
+  - slug: food-database-query
+    title: "Food Database Query"
+  - slug: health-trend-analyzer
+    title: "Health Trend Analyzer"
+  - slug: mental-health-analyzer
+    title: "Mental Health Analyzer"
+  - slug: nutrition-analyzer
+    title: "Nutrition Analyzer"
+  - slug: occupational-health-analyzer
+    title: "Occupational Health Analyzer"
+  - slug: oral-health-analyzer
+    title: "Oral Health Analyzer"
+  - slug: pubmed-database
+    title: "Pubmed Database"
+  - slug: rehabilitation-analyzer
+    title: "Rehabilitation Analyzer"
+  - slug: sexual-health-analyzer
+    title: "Sexual Health Analyzer"
+  - slug: skin-health-analyzer
+    title: "Skin Health Analyzer"
+  - slug: sleep-analyzer
+    title: "Sleep Analyzer"
+  - slug: tcm-constitution-analyzer
+    title: "Tcm Constitution Analyzer"
+  - slug: travel-health-analyzer
+    title: "Travel Health Analyzer"
+  - slug: uniprot-database
+    title: "Uniprot Database"
+  - slug: weightloss-analyzer
+    title: "Weightloss Analyzer"
+  - slug: wellally-tech
+    title: "Wellally Tech"

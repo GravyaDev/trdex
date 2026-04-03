@@ -141,3 +141,43 @@ skills:
     title: "Trend Analysis"
   - slug: weekly-report
     title: "Weekly Report"
+  - slug: airflow-dag-patterns
+    title: "Airflow Dag Patterns"
+  - slug: apify-actor-development
+    title: "Apify Actor Development"
+  - slug: apify-actorization
+    title: "Apify Actorization"
+  - slug: apify-audience-analysis
+    title: "Apify Audience Analysis"
+  - slug: apify-brand-reputation-monitoring
+    title: "Apify Brand Reputation Monitoring"
+  - slug: apify-competitor-intelligence
+    title: "Apify Competitor Intelligence"
+  - slug: apify-content-analytics
+    title: "Apify Content Analytics"
+  - slug: apify-ecommerce
+    title: "Apify Ecommerce"
+  - slug: apify-influencer-discovery
+    title: "Apify Influencer Discovery"
+  - slug: apify-lead-generation
+    title: "Apify Lead Generation"
+  - slug: apify-market-research
+    title: "Apify Market Research"
+  - slug: apify-trend-analysis
+    title: "Apify Trend Analysis"
+  - slug: apify-ultimate-scraper
+    title: "Apify Ultimate Scraper"
+  - slug: data-engineer
+    title: "Data Engineer"
+  - slug: data-engineering-data-driven-feature
+    title: "Data Engineering Data Driven Feature"
+  - slug: data-engineering-data-pipeline
+    title: "Data Engineering Data Pipeline"
+  - slug: data-scientist
+    title: "Data Scientist"
+  - slug: data-storytelling
+    title: "Data Storytelling"
+  - slug: data-structure-protocol
+    title: "Data Structure Protocol"
+  - slug: geo-fundamentals
+    title: "Geo Fundamentals"

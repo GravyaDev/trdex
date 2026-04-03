@@ -205,3 +205,35 @@ skills:
     title: "Vision Statement"
   - slug: whitepaper
     title: "Whitepaper"
+  - slug: avoid-ai-writing
+    title: "Avoid AI Writing"
+  - slug: beautiful-prose
+    title: "Beautiful Prose"
+  - slug: blog-writing-guide
+    title: "Blog Writing Guide"
+  - slug: copy-editing
+    title: "Copy Editing"
+  - slug: copywriting
+    title: "Copywriting"
+  - slug: instagram
+    title: "Instagram"
+  - slug: lex
+    title: "Lex"
+  - slug: podcast-generation
+    title: "Podcast Generation"
+  - slug: professional-proofreader
+    title: "Professional Proofreader"
+  - slug: scientific-writing
+    title: "Scientific Writing"
+  - slug: social-content
+    title: "Social Content"
+  - slug: social-orchestrator
+    title: "Social Orchestrator"
+  - slug: telegram
+    title: "Telegram"
+  - slug: telegram-mini-app
+    title: "Telegram Mini App"
+  - slug: tutorial-engineer
+    title: "Tutorial Engineer"
+  - slug: youtube-summarizer
+    title: "Youtube Summarizer"

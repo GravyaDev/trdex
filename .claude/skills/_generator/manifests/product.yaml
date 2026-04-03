@@ -157,3 +157,17 @@ skills:
     title: "User Research Plan"
   - slug: user-story
     title: "User Story"
+  - slug: analytics-product
+    title: "Analytics Product"
+  - slug: analytics-tracking
+    title: "Analytics Tracking"
+  - slug: dx-optimizer
+    title: "DX Optimizer"
+  - slug: kpi-dashboard-design
+    title: "KPI Dashboard Design"
+  - slug: product-inventor
+    title: "Product Inventor"
+  - slug: product-manager
+    title: "Product Manager"
+  - slug: product-manager-toolkit
+    title: "Product Manager Toolkit"

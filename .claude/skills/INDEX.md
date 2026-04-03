@@ -1,6 +1,6 @@
-# Kloudify Skills Library
+# Claudify Skills Library
 
-> 1727+ professional skills across 31 categories.
+> 2726+ professional skills across 46 categories.
 > Each skill is a structured operational procedure — not a prompt template.
 
 ## How Skills Work
@@ -17,37 +17,52 @@ Every skill:
 
 | Category | Skills | Description |
 |----------|--------|-------------|
-| [Marketing & Advertising](./marketing/) | 76 | Campaign strategy, audience research, brand positioning, and advertising across all channels |
-| [Content & Copywriting](./content/) | 88 | Written content creation across all formats — blog posts, whitepapers, landing pages, scripts, and more |
-| [Social Media](./social-media/) | 69 | Platform-specific content creation, scheduling, engagement, and analytics for all major social platforms |
-| [SEO & Search](./seo/) | 57 | Search engine optimization — keyword research, on-page, technical, link building, local SEO, and analytics |
-| [Sales & Revenue](./sales/) | 66 | Sales strategy, prospecting, outreach, negotiation, pipeline management, and revenue operations |
-| [Email Marketing](./email/) | 51 | Email campaigns, automation, sequences, deliverability, and subscriber management |
-| [Finance & Accounting](./finance/) | 60 | Financial modeling, budgeting, forecasting, pricing, and financial reporting |
-| [Legal & Compliance](./legal/) | 54 | Contracts, policies, compliance frameworks, and legal documentation |
-| [Operations & Project Management](./operations/) | 60 | Process design, project planning, resource management, and operational excellence |
-| [HR & People](./hr/) | 57 | Hiring, onboarding, performance management, culture, training, and employee experience |
-| [Product Management](./product/) | 63 | Product strategy, roadmaps, user research, prioritization, and product operations |
-| [Software Development](./development/) | 78 | Code quality, architecture, testing, CI/CD, documentation, debugging, and engineering practices |
-| [Data & Analytics](./data/) | 57 | Data analysis, visualization, reporting, BI dashboards, and data strategy |
-| [E-commerce](./ecommerce/) | 54 | Online store management, product listings, conversion optimization, and marketplace strategy |
-| [Customer Success & Support](./customer-success/) | 48 | Customer onboarding, retention, support operations, and customer experience |
-| [Startup & Entrepreneurship](./startup/) | 60 | Business planning, fundraising, validation, growth, and startup operations |
-| [Education & Training](./education/) | 51 | Course creation, curriculum design, assessment, workshops, and learning management |
-| [Real Estate](./real-estate/) | 45 | Property listings, market analysis, investment analysis, and real estate operations |
-| [Healthcare](./healthcare/) | 48 | Patient communication, practice management, compliance, wellness programs, and health content |
-| [Travel & Hospitality](./travel/) | 54 | Trip planning, hospitality operations, guest experience, and travel content |
-| [Design & Creative](./design/) | 54 | Design briefs, brand identity, UX/UI, creative direction, and visual design processes |
-| [Consulting & Strategy](./consulting/) | 54 | Strategy frameworks, market analysis, client engagement, and advisory services |
-| [Personal Productivity](./productivity/) | 57 | Time management, goal setting, decision making, communication, and personal effectiveness |
-| [AI & Automation](./ai-automation/) | 54 | AI implementation, prompt engineering, workflow automation, and AI strategy |
-| [Nonprofit & Social Impact](./nonprofit/) | 48 | Fundraising, grant writing, volunteer management, and nonprofit operations |
-| [Media & Publishing](./media/) | 45 | Content publishing, editorial management, media production, and audience growth |
-| [Construction & Trades](./construction/) | 42 | Project estimation, safety compliance, client management, and trade operations |
-| [Food & Beverage](./food-beverage/) | 42 | Restaurant operations, menu design, food safety, and hospitality management |
-| [Fitness & Wellness](./fitness-wellness/) | 45 | Program design, client management, wellness coaching, and fitness business operations |
-| [Agriculture & Farming](./agriculture/) | 45 | Farm planning, crop management, livestock, and agricultural business operations |
-| [Energy & Sustainability](./energy/) | 45 | Energy management, sustainability reporting, environmental compliance, and green initiatives |
+| [3D Web & WebGL](./3d-web/) | 18 | Three.js, React Three Fiber, Spline, shaders, interactive 3D scenes |
+| [Agent Systems & Orchestration](./agent-systems/) | 32 | Multi-agent systems, memory architectures, tool building, evaluation |
+| [Agriculture & Farming](./agriculture/) | 45 | Crop planning, farm budgets, soil management |
+| [AI & Automation](./ai-automation/) | 83 | Prompt engineering, workflow automation, AI strategy |
+| [Blockchain & Web3](./blockchain-web3/) | 10 | Solidity, DeFi, NFT, smart contracts, web3 testing |
+| [Construction & Trades](./construction/) | 42 | Project estimation, safety plans, contractor management |
+| [Consulting & Strategy](./consulting/) | 62 | Frameworks, client proposals, strategy documents |
+| [Content & Copywriting](./content/) | 104 | Written content across all formats — blog posts, whitepapers, scripts |
+| [Context Engineering](./context-engineering/) | 13 | Context window management, compression, degradation analysis |
+| [Conversion Rate Optimization](./cro-conversion/) | 7 | A/B tests, forms, popups, onboarding flows, paywall optimization |
+| [Customer Success & Support](./customer-success/) | 50 | Onboarding, churn, NPS, support workflows |
+| [Data & Analytics](./data/) | 77 | Dashboards, reports, data pipelines, KPI frameworks |
+| [Data Science Libraries](./data-science-libs/) | 16 | matplotlib, scikit-learn, pandas, seaborn, polars, networkx |
+| [Database Engineering](./database-engineering/) | 27 | PostgreSQL, vector DB, optimization, migrations, Drizzle, Prisma |
+| [Design & Creative](./design/) | 82 | UX audits, design systems, creative briefs, UI patterns |
+| [DevOps & Cloud](./devops-cloud/) | 59 | Docker, Kubernetes, Terraform, CI/CD, cloud platforms |
+| [Document Generation](./document-generation/) | 5 | DOCX, PDF, PPTX, XLSX creation and manipulation |
+| [E-commerce](./ecommerce/) | 60 | Online store management, conversion optimization, marketplace strategy |
+| [Education & Training](./education/) | 56 | Course creation, curriculum design, assessment, workshops |
+| [Email Marketing](./email/) | 53 | Campaigns, sequences, deliverability, A/B testing |
+| [Energy & Sustainability](./energy/) | 45 | Energy audits, carbon footprint, renewable plans |
+| [Finance & Accounting](./finance/) | 69 | Budgets, forecasts, investor decks, financial models |
+| [Fitness & Wellness](./fitness-wellness/) | 45 | Training plans, nutrition, coaching programs |
+| [Food & Beverage](./food-beverage/) | 42 | Menu engineering, catering, restaurant operations |
+| [Game Development](./game-dev/) | 8 | Unity, Unreal, Godot, Bevy, multiplayer game systems |
+| [Healthcare](./healthcare/) | 70 | Clinical workflows, patient education, compliance, health analysis |
+| [HR & People](./hr/) | 60 | Hiring, onboarding, performance reviews, org design |
+| [Legal & Compliance](./legal/) | 61 | Contracts, policies, risk assessments, GDPR |
+| [Marketing & Advertising](./marketing/) | 89 | Campaign strategy, audience research, brand positioning |
+| [Media & Publishing](./media/) | 46 | Content publishing, editorial management, audience growth |
+| [Mobile Development](./mobile-dev/) | 19 | iOS, Android, Flutter, React Native, Expo |
+| [NLP & LLM Engineering](./nlp-llm/) | 28 | LLM evaluation, RAG, prompt engineering, fine-tuning |
+| [Nonprofit & Social Impact](./nonprofit/) | 50 | Fundraising, grant writing, volunteer management |
+| [Operations & Project Management](./operations/) | 77 | Process design, project planning, resource management |
+| [Product Management](./product/) | 70 | Product strategy, roadmaps, user research, prioritization |
+| [Programming Languages](./programming-languages/) | 61 | Per-language expert skills — Python, Go, Rust, TypeScript, etc. |
+| [Personal Productivity](./productivity/) | 125 | Time management, goal setting, decision making, communication |
+| [Real Estate](./real-estate/) | 45 | Property listings, market analysis, investment analysis |
+| [SaaS Integrations](./saas-integrations/) | 98 | Per-tool automations — Slack, HubSpot, Jira, Notion, etc. |
+| [Sales & Revenue](./sales/) | 70 | Prospecting, proposals, pipeline management, forecasting |
+| [Security & Pentesting](./security-pentesting/) | 64 | Offensive security, SAST, fuzzing, red team, OWASP |
+| [SEO & Search](./seo/) | 74 | Keyword research, on-page, technical, link building, analytics |
+| [Social Media](./social-media/) | 69 | Platform-specific content, scheduling, engagement, analytics |
+| [Software Development](./development/) | 323 | Architecture, code review, APIs, testing, debugging, frameworks |
+| [Startup & Entrepreneurship](./startup/) | 63 | Business planning, fundraising, validation, growth |
+| [Travel & Hospitality](./travel/) | 54 | Trip planning, hospitality operations, guest experience |
 
 ## Quick Start
 

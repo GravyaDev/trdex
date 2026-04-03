@@ -152,3 +152,21 @@ skills:
     title: "Working Capital Analysis"
   - slug: zero-based-budget
     title: "Zero Based Budget"
+  - slug: alpha-vantage
+    title: "Alpha Vantage"
+  - slug: billing-automation
+    title: "Billing Automation"
+  - slug: pakistan-payments-stack
+    title: "Pakistan Payments Stack"
+  - slug: plaid-fintech
+    title: "Plaid Fintech"
+  - slug: quant-analyst
+    title: "Quant Analyst"
+  - slug: risk-manager
+    title: "Risk Manager"
+  - slug: risk-metrics-calculation
+    title: "Risk Metrics Calculation"
+  - slug: startup-financial-modeling
+    title: "Startup Financial Modeling"
+  - slug: startup-metrics-framework
+    title: "Startup Metrics Framework"

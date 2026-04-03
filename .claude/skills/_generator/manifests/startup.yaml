@@ -148,3 +148,9 @@ skills:
     title: "Term Sheet Negotiation"
   - slug: trademark-search
     title: "Trademark Search"
+  - slug: app-builder
+    title: "App Builder"
+  - slug: micro-saas-launcher
+    title: "Micro SaaS Launcher"
+  - slug: saas-mvp-launcher
+    title: "SaaS MVP Launcher"

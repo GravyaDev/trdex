@@ -136,3 +136,59 @@ skills:
     title: "Wcag Audit"
   - slug: wireframe-spec
     title: "Wireframe Spec"
+  - slug: accessibility-compliance-accessibility-audit
+    title: "Accessibility Compliance Accessibility Audit"
+  - slug: building-native-ui
+    title: "Building Native UI"
+  - slug: canvas-design
+    title: "Canvas Design"
+  - slug: chat-widget
+    title: "Chat Widget"
+  - slug: design-orchestration
+    title: "Design Orchestration"
+  - slug: design-spells
+    title: "Design Spells"
+  - slug: favicon
+    title: "Favicon"
+  - slug: fixing-accessibility
+    title: "Fixing Accessibility"
+  - slug: fixing-metadata
+    title: "Fixing Metadata"
+  - slug: fixing-motion-performance
+    title: "Fixing Motion Performance"
+  - slug: frontend-slides
+    title: "Frontend Slides"
+  - slug: iconsax-library
+    title: "Iconsax Library"
+  - slug: interactive-portfolio
+    title: "Interactive Portfolio"
+  - slug: magic-ui-generator
+    title: "Magic UI Generator"
+  - slug: mermaid-expert
+    title: "Mermaid Expert"
+  - slug: product-design
+    title: "Product Design"
+  - slug: remotion
+    title: "Remotion"
+  - slug: remotion-best-practices
+    title: "Remotion Best Practices"
+  - slug: screen-reader-testing
+    title: "Screen Reader Testing"
+  - slug: stitch-ui-design
+    title: "Stitch UI Design"
+  - slug: theme-factory
+    title: "Theme Factory"
+  - slug: ui-skills
+    title: "UI Skills"
+  - slug: ui-ux-designer
+    title: "UI UX Designer"
+  - slug: ui-ux-pro-max
+    title: "UI UX Pro Max"
+  - slug: ui-visual-validator
+    title: "UI Visual Validator"
+  - slug: wcag-audit-patterns
+    title: "WCAG Audit Patterns"
+  - slug: web-artifacts-builder
+    title: "Web Artifacts Builder"
+  - slug: web-design-guidelines
+    title: "Web Design Guidelines"

@@ -1,0 +1,34 @@
+# Category: Conversion Rate Optimization (7 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills cro-conversion
+
+label: "Conversion Rate Optimization"
+
+frameworks:
+  - Best practices for conversion rate optimization
+
+metrics:
+  - Adoption rate
+  - Quality score
+  - Time to delivery
+
+best_practices:
+  - Follow established patterns and conventions
+  - Validate output before delivery
+  - Document decisions and trade-offs
+
+skills:
+  - slug: ab-test-setup
+    title: "Ab Test Setup"
+  - slug: form-cro
+    title: "Form CRO"
+  - slug: onboarding-cro
+    title: "Onboarding CRO"
+  - slug: page-cro
+    title: "Page CRO"
+  - slug: paywall-upgrade-cro
+    title: "Paywall Upgrade CRO"
+  - slug: popup-cro
+    title: "Popup CRO"
+  - slug: signup-flow-cro
+    title: "Signup Flow CRO"

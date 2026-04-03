@@ -1,0 +1,76 @@
+# Category: NLP & LLM Engineering (28 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills nlp-llm
+
+label: "NLP & LLM Engineering"
+
+frameworks:
+  - Best practices for nlp & llm engineering
+
+metrics:
+  - Adoption rate
+  - Quality score
+  - Time to delivery
+
+best_practices:
+  - Follow established patterns and conventions
+  - Validate output before delivery
+  - Document decisions and trade-offs
+
+skills:
+  - slug: advanced-evaluation
+    title: "Advanced Evaluation"
+  - slug: embedding-strategies
+    title: "Embedding Strategies"
+  - slug: enhance-prompt
+    title: "Enhance Prompt"
+  - slug: evaluation
+    title: "Evaluation"
+  - slug: hugging-face-cli
+    title: "Hugging Face CLI"
+  - slug: hugging-face-dataset-viewer
+    title: "Hugging Face Dataset Viewer"
+  - slug: hugging-face-datasets
+    title: "Hugging Face Datasets"
+  - slug: hugging-face-evaluation
+    title: "Hugging Face Evaluation"
+  - slug: hugging-face-jobs
+    title: "Hugging Face Jobs"
+  - slug: hugging-face-model-trainer
+    title: "Hugging Face Model Trainer"
+  - slug: hugging-face-paper-publisher
+    title: "Hugging Face Paper Publisher"
+  - slug: hugging-face-tool-builder
+    title: "Hugging Face Tool Builder"
+  - slug: langfuse
+    title: "Langfuse"
+  - slug: llm-app-patterns
+    title: "LLM App Patterns"
+  - slug: llm-application-dev-ai-assistant
+    title: "LLM Application Dev AI Assistant"
+  - slug: llm-application-dev-langchain-agent
+    title: "LLM Application Dev Langchain Agent"
+  - slug: llm-application-dev-prompt-optimize
+    title: "LLM Application Dev Prompt Optimize"
+  - slug: llm-evaluation
+    title: "LLM Evaluation"
+  - slug: llm-ops
+    title: "LLM Ops"
+  - slug: llm-prompt-optimizer
+    title: "LLM Prompt Optimizer"
+  - slug: local-llm-expert
+    title: "Local LLM Expert"
+  - slug: notebooklm
+    title: "Notebooklm"
+  - slug: prompt-engineer
+    title: "Prompt Engineer"
+  - slug: prompt-engineering
+    title: "Prompt Engineering"
+  - slug: prompt-engineering-patterns
+    title: "Prompt Engineering Patterns"
+  - slug: prompt-library
+    title: "Prompt Library"
+  - slug: rag-engineer
+    title: "RAG Engineer"
+  - slug: rag-implementation
+    title: "RAG Implementation"

@@ -162,3 +162,11 @@ skills:
     title: "Vendor Questionnaire"
   - slug: win-loss-analysis
     title: "Win Loss Analysis"
+  - slug: monetization
+    title: "Monetization"
+  - slug: pricing-strategy
+    title: "Pricing Strategy"
+  - slug: sales-automator
+    title: "Sales Automator"
+  - slug: salesforce-development
+    title: "Salesforce Development"

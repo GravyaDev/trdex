@@ -1,0 +1,216 @@
+# Category: SaaS Integrations (98 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills saas-integrations
+
+label: "SaaS Integrations"
+
+frameworks:
+  - Best practices for saas integrations
+
+metrics:
+  - Adoption rate
+  - Quality score
+  - Time to delivery
+
+best_practices:
+  - Follow established patterns and conventions
+  - Validate output before delivery
+  - Document decisions and trade-offs
+
+skills:
+  - slug: activecampaign-automation
+    title: "Activecampaign Automation"
+  - slug: airtable-automation
+    title: "Airtable Automation"
+  - slug: amplitude-automation
+    title: "Amplitude Automation"
+  - slug: asana-automation
+    title: "Asana Automation"
+  - slug: bamboohr-automation
+    title: "Bamboohr Automation"
+  - slug: basecamp-automation
+    title: "Basecamp Automation"
+  - slug: bitbucket-automation
+    title: "Bitbucket Automation"
+  - slug: box-automation
+    title: "Box Automation"
+  - slug: brevo-automation
+    title: "Brevo Automation"
+  - slug: cal-com-automation
+    title: "Cal Com Automation"
+  - slug: calendly-automation
+    title: "Calendly Automation"
+  - slug: canva-automation
+    title: "Canva Automation"
+  - slug: circleci-automation
+    title: "Circleci Automation"
+  - slug: clickup-automation
+    title: "Clickup Automation"
+  - slug: close-automation
+    title: "Close Automation"
+  - slug: coda-automation
+    title: "Coda Automation"
+  - slug: confluence-automation
+    title: "Confluence Automation"
+  - slug: convertkit-automation
+    title: "Convertkit Automation"
+  - slug: datadog-automation
+    title: "Datadog Automation"
+  - slug: discord-automation
+    title: "Discord Automation"
+  - slug: discord-bot-architect
+    title: "Discord Bot Architect"
+  - slug: docusign-automation
+    title: "Docusign Automation"
+  - slug: dropbox-automation
+    title: "Dropbox Automation"
+  - slug: figma-automation
+    title: "Figma Automation"
+  - slug: freshdesk-automation
+    title: "Freshdesk Automation"
+  - slug: freshservice-automation
+    title: "Freshservice Automation"
+  - slug: github-automation
+    title: "Github Automation"
+  - slug: gitlab-automation
+    title: "Gitlab Automation"
+  - slug: gmail-automation
+    title: "Gmail Automation"
+  - slug: google-analytics-automation
+    title: "Google Analytics Automation"
+  - slug: google-calendar-automation
+    title: "Google Calendar Automation"
+  - slug: google-docs-automation
+    title: "Google Docs Automation"
+  - slug: google-drive-automation
+    title: "Google Drive Automation"
+  - slug: google-sheets-automation
+    title: "Google Sheets Automation"
+  - slug: google-slides-automation
+    title: "Google Slides Automation"
+  - slug: googlesheets-automation
+    title: "Googlesheets Automation"
+  - slug: hubspot-automation
+    title: "Hubspot Automation"
+  - slug: hubspot-integration
+    title: "Hubspot Integration"
+  - slug: instagram-automation
+    title: "Instagram Automation"
+  - slug: intercom-automation
+    title: "Intercom Automation"
+  - slug: jira-automation
+    title: "Jira Automation"
+  - slug: klaviyo-automation
+    title: "Klaviyo Automation"
+  - slug: linear-automation
+    title: "Linear Automation"
+  - slug: linear-claude-skill
+    title: "Linear Claude Skill"
+  - slug: linkedin-automation
+    title: "Linkedin Automation"
+  - slug: linkedin-cli
+    title: "Linkedin CLI"
+  - slug: mailchimp-automation
+    title: "Mailchimp Automation"
+  - slug: make-automation
+    title: "Make Automation"
+  - slug: miro-automation
+    title: "Miro Automation"
+  - slug: mixpanel-automation
+    title: "Mixpanel Automation"
+  - slug: monday-automation
+    title: "Monday Automation"
+  - slug: n8n-code-javascript
+    title: "n8n Code Javascript"
+  - slug: n8n-code-python
+    title: "n8n Code Python"
+  - slug: n8n-expression-syntax
+    title: "n8n Expression Syntax"
+  - slug: n8n-mcp-tools-expert
+    title: "n8n MCP Tools Expert"
+  - slug: n8n-node-configuration
+    title: "n8n Node Configuration"
+  - slug: n8n-validation-expert
+    title: "n8n Validation Expert"
+  - slug: n8n-workflow-patterns
+    title: "n8n Workflow Patterns"
+  - slug: notion-automation
+    title: "Notion Automation"
+  - slug: one-drive-automation
+    title: "One Drive Automation"
+  - slug: outlook-automation
+    title: "Outlook Automation"
+  - slug: outlook-calendar-automation
+    title: "Outlook Calendar Automation"
+  - slug: pagerduty-automation
+    title: "Pagerduty Automation"
+  - slug: pipedrive-automation
+    title: "Pipedrive Automation"
+  - slug: posthog-automation
+    title: "Posthog Automation"
+  - slug: postmark-automation
+    title: "Postmark Automation"
+  - slug: reddit-automation
+    title: "Reddit Automation"
+  - slug: render-automation
+    title: "Render Automation"
+  - slug: salesforce-automation
+    title: "Salesforce Automation"
+  - slug: segment-automation
+    title: "Segment Automation"
+  - slug: segment-cdp
+    title: "Segment Cdp"
+  - slug: sendgrid-automation
+    title: "Sendgrid Automation"
+  - slug: sentry-automation
+    title: "Sentry Automation"
+  - slug: shopify-automation
+    title: "Shopify Automation"
+  - slug: slack-automation
+    title: "Slack Automation"
+  - slug: slack-bot-builder
+    title: "Slack Bot Builder"
+  - slug: slack-gif-creator
+    title: "Slack Gif Creator"
+  - slug: square-automation
+    title: "Square Automation"
+  - slug: stripe-automation
+    title: "Stripe Automation"
+  - slug: supabase-automation
+    title: "Supabase Automation"
+  - slug: telegram-automation
+    title: "Telegram Automation"
+  - slug: telegram-bot-builder
+    title: "Telegram Bot Builder"
+  - slug: tiktok-automation
+    title: "Tiktok Automation"
+  - slug: todoist-automation
+    title: "Todoist Automation"
+  - slug: trello-automation
+    title: "Trello Automation"
+  - slug: twitter-automation
+    title: "Twitter Automation"
+  - slug: vercel-automation
+    title: "Vercel Automation"
+  - slug: webflow-automation
+    title: "Webflow Automation"
+  - slug: whatsapp-automation
+    title: "Whatsapp Automation"
+  - slug: whatsapp-cloud-api
+    title: "Whatsapp Cloud API"
+  - slug: wrike-automation
+    title: "Wrike Automation"
+  - slug: x-article-publisher-skill
+    title: "X Article Publisher Skill"
+  - slug: x-twitter-scraper
+    title: "X Twitter Scraper"
+  - slug: youtube-automation
+    title: "Youtube Automation"
+  - slug: zapier-make-patterns
+    title: "Zapier Make Patterns"
+  - slug: zendesk-automation
+    title: "Zendesk Automation"
+  - slug: zoho-crm-automation
+    title: "Zoho CRM Automation"
+  - slug: zoom-automation
+    title: "Zoom Automation"

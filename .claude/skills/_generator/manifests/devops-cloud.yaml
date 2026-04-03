@@ -1,0 +1,138 @@
+# Category: DevOps & Cloud (59 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills devops-cloud
+
+label: "DevOps & Cloud"
+
+frameworks:
+  - Best practices for devops & cloud
+
+metrics:
+  - Adoption rate
+  - Quality score
+  - Time to delivery
+
+best_practices:
+  - Follow established patterns and conventions
+  - Validate output before delivery
+  - Document decisions and trade-offs
+
+skills:
+  - slug: appdeploy
+    title: "Appdeploy"
+  - slug: aws-cost-cleanup
+    title: "AWS Cost Cleanup"
+  - slug: aws-cost-optimizer
+    title: "AWS Cost Optimizer"
+  - slug: aws-serverless
+    title: "AWS Serverless"
+  - slug: aws-skills
+    title: "AWS Skills"
+  - slug: azd-deployment
+    title: "Azd Deployment"
+  - slug: cdk-patterns
+    title: "CDK Patterns"
+  - slug: cicd-automation-workflow-automate
+    title: "CI/CD Automation Workflow Automate"
+  - slug: cloud-architect
+    title: "Cloud Architect"
+  - slug: cloud-devops
+    title: "Cloud Devops"
+  - slug: cloudflare-workers-expert
+    title: "Cloudflare Workers Expert"
+  - slug: cloudformation-best-practices
+    title: "Cloudformation Best Practices"
+  - slug: deployment-engineer
+    title: "Deployment Engineer"
+  - slug: deployment-pipeline-design
+    title: "Deployment Pipeline Design"
+  - slug: deployment-procedures
+    title: "Deployment Procedures"
+  - slug: deployment-validation-config-validate
+    title: "Deployment Validation Config Validate"
+  - slug: devcontainer-setup
+    title: "Devcontainer Setup"
+  - slug: devops-deploy
+    title: "Devops Deploy"
+  - slug: devops-troubleshooter
+    title: "Devops Troubleshooter"
+  - slug: distributed-debugging-debug-trace
+    title: "Distributed Debugging Debug Trace"
+  - slug: docker-expert
+    title: "Docker Expert"
+  - slug: gcp-cloud-run
+    title: "GCP Cloud Run"
+  - slug: gha-security-review
+    title: "GHA Security Review"
+  - slug: git-hooks-automation
+    title: "Git Hooks Automation"
+  - slug: github-actions-templates
+    title: "Github Actions Templates"
+  - slug: github-workflow-automation
+    title: "Github Workflow Automation"
+  - slug: gitlab-ci-patterns
+    title: "Gitlab CI Patterns"
+  - slug: gitops-workflow
+    title: "Gitops Workflow"
+  - slug: grafana-dashboards
+    title: "Grafana Dashboards"
+  - slug: helm-chart-scaffolding
+    title: "Helm Chart Scaffolding"
+  - slug: hybrid-cloud-architect
+    title: "Hybrid Cloud Architect"
+  - slug: hybrid-cloud-networking
+    title: "Hybrid Cloud Networking"
+  - slug: incident-responder
+    title: "Incident Responder"
+  - slug: incident-response-incident-response
+    title: "Incident Response Incident Response"
+  - slug: incident-response-smart-fix
+    title: "Incident Response Smart Fix"
+  - slug: incident-runbook-templates
+    title: "Incident Runbook Templates"
+  - slug: istio-traffic-management
+    title: "Istio Traffic Management"
+  - slug: k8s-manifest-generator
+    title: "K8s Manifest Generator"
+  - slug: k8s-security-policies
+    title: "K8s Security Policies"
+  - slug: kubernetes-architect
+    title: "Kubernetes Architect"
+  - slug: linkerd-patterns
+    title: "Linkerd Patterns"
+  - slug: loki-mode
+    title: "Loki Mode"
+  - slug: multi-cloud-architecture
+    title: "Multi Cloud Architecture"
+  - slug: observability-engineer
+    title: "Observability Engineer"
+  - slug: observability-monitoring-monitor-setup
+    title: "Observability Monitoring Monitor Setup"
+  - slug: observability-monitoring-slo-implement
+    title: "Observability Monitoring SLO Implement"
+  - slug: on-call-handoff-patterns
+    title: "On Call Handoff Patterns"
+  - slug: postmortem-writing
+    title: "Postmortem Writing"
+  - slug: prometheus-configuration
+    title: "Prometheus Configuration"
+  - slug: secrets-management
+    title: "Secrets Management"
+  - slug: server-management
+    title: "Server Management"
+  - slug: service-mesh-expert
+    title: "Service Mesh Expert"
+  - slug: service-mesh-observability
+    title: "Service Mesh Observability"
+  - slug: slo-implementation
+    title: "SLO Implementation"
+  - slug: terraform-aws-modules
+    title: "Terraform AWS Modules"
+  - slug: terraform-infrastructure
+    title: "Terraform Infrastructure"
+  - slug: terraform-module-library
+    title: "Terraform Module Library"
+  - slug: terraform-skill
+    title: "Terraform Skill"
+  - slug: terraform-specialist
+    title: "Terraform Specialist"

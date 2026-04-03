@@ -1,0 +1,74 @@
+# Category: Database Engineering (27 skills)
+# Edit this file to add/remove skills or update shared category data.
+# Run: /generate-skills database-engineering
+
+label: "Database Engineering"
+
+frameworks:
+  - Best practices for database engineering
+
+metrics:
+  - Adoption rate
+  - Quality score
+  - Time to delivery
+
+best_practices:
+  - Follow established patterns and conventions
+  - Validate output before delivery
+  - Document decisions and trade-offs
+
+skills:
+  - slug: claimable-postgres
+    title: "Claimable Postgres"
+  - slug: database
+    title: "Database"
+  - slug: database-admin
+    title: "Database Admin"
+  - slug: database-architect
+    title: "Database Architect"
+  - slug: database-cloud-optimization-cost-optimize
+    title: "Database Cloud Optimization Cost Optimize"
+  - slug: database-design
+    title: "Database Design"
+  - slug: database-migration
+    title: "Database Migration"
+  - slug: database-migrations-migration-observability
+    title: "Database Migrations Migration Observability"
+  - slug: database-migrations-sql-migrations
+    title: "Database Migrations SQL Migrations"
+  - slug: database-optimizer
+    title: "Database Optimizer"
+  - slug: dbt-transformation-patterns
+    title: "dbt Transformation Patterns"
+  - slug: drizzle-orm-expert
+    title: "Drizzle ORM Expert"
+  - slug: event-store-design
+    title: "Event Store Design"
+  - slug: hybrid-search-implementation
+    title: "Hybrid Search Implementation"
+  - slug: neon-postgres
+    title: "Neon Postgres"
+  - slug: nosql-expert
+    title: "NoSQL Expert"
+  - slug: postgres-best-practices
+    title: "Postgres Best Practices"
+  - slug: postgresql
+    title: "Postgresql"
+  - slug: postgresql-optimization
+    title: "Postgresql Optimization"
+  - slug: prisma-expert
+    title: "Prisma Expert"
+  - slug: similarity-search-patterns
+    title: "Similarity Search Patterns"
+  - slug: spark-optimization
+    title: "Spark Optimization"
+  - slug: sql-optimization-patterns
+    title: "SQL Optimization Patterns"
+  - slug: sql-pro
+    title: "SQL Pro"
+  - slug: using-neon
+    title: "Using Neon"
+  - slug: vector-database-engineer
+    title: "Vector Database Engineer"
+  - slug: vector-index-tuning
+    title: "Vector Index Tuning"

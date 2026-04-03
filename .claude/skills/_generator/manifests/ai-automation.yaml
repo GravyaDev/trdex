@@ -136,3 +136,61 @@ skills:
     title: "Webhook Design"
   - slug: zapier-workflow
     title: "Zapier Workflow"
+  - slug: ai-analyzer
+    title: "AI Analyzer"
+  - slug: ai-engineer
+    title: "AI Engineer"
+  - slug: ai-ml
+    title: "AI ML"
+  - slug: ai-product
+    title: "AI Product"
+  - slug: ai-studio-image
+    title: "AI Studio Image"
+  - slug: ai-wrapper-product
+    title: "AI Wrapper Product"
+  - slug: audio-transcriber
+    title: "Audio Transcriber"
+  - slug: auri-core
+    title: "Auri Core"
+  - slug: comfyui-gateway
+    title: "Comfyui Gateway"
+  - slug: computer-vision-expert
+    title: "Computer Vision Expert"
+  - slug: fal-audio
+    title: "Fal Audio"
+  - slug: fal-generate
+    title: "Fal Generate"
+  - slug: fal-image-edit
+    title: "Fal Image Edit"
+  - slug: fal-platform
+    title: "Fal Platform"
+  - slug: fal-upscale
+    title: "Fal Upscale"
+  - slug: fal-workflow
+    title: "Fal Workflow"
+  - slug: gemini-api-dev
+    title: "Gemini API Dev"
+  - slug: gemini-api-integration
+    title: "Gemini API Integration"
+  - slug: image-studio
+    title: "Image Studio"
+  - slug: imagen
+    title: "Imagen"
+  - slug: machine-learning-ops-ml-pipeline
+    title: "Machine Learning Ops ML Pipeline"
+  - slug: ml-engineer
+    title: "ML Engineer"
+  - slug: ml-pipeline-workflow
+    title: "ML Pipeline Workflow"
+  - slug: mlops-engineer
+    title: "Mlops Engineer"
+  - slug: seek-and-analyze-video
+    title: "Seek And Analyze Video"
+  - slug: stability-ai
+    title: "Stability AI"
+  - slug: videodb
+    title: "Videodb"
+  - slug: videodb-skills
+    title: "Videodb Skills"
+  - slug: vizcom
+    title: "Vizcom"

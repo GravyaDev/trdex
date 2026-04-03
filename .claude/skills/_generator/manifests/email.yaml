@@ -129,3 +129,7 @@ skills:
     title: "Welcome Sequence"
   - slug: win-back-sequence
     title: "Win Back Sequence"
+  - slug: email-sequence
+    title: "Email Sequence"
+  - slug: email-systems
+    title: "Email Systems"

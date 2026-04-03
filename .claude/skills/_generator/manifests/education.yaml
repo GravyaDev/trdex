@@ -130,3 +130,13 @@ skills:
     title: "Workshop Facilitator Guide"
   - slug: workshop-materials
     title: "Workshop Materials"
+  - slug: citation-management
+    title: "Citation Management"
+  - slug: claude-scientific-skills
+    title: "Claude Scientific Skills"
+  - slug: explain-like-socrates
+    title: "Explain Like Socrates"
+  - slug: moodle-external-api-development
+    title: "Moodle External API Development"
+  - slug: reference-builder
+    title: "Reference Builder"

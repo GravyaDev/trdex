@@ -124,3 +124,7 @@ skills:
     title: "Voice Of Customer"
   - slug: webinar-series
     title: "Webinar Series"
+  - slug: customer-support
+    title: "Customer Support"
+  - slug: helpdesk-automation
+    title: "Helpdesk Automation"

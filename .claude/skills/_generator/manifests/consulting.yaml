@@ -136,3 +136,19 @@ skills:
     title: "Vendor Selection"
   - slug: war-gaming
     title: "War Gaming"
+  - slug: business-analyst
+    title: "Business Analyst"
+  - slug: junta-leiloeiros
+    title: "Junta Leiloeiros"
+  - slug: kaizen
+    title: "Kaizen"
+  - slug: multi-advisor
+    title: "Multi Advisor"
+  - slug: startup-analyst
+    title: "Startup Analyst"
+  - slug: startup-business-analyst-business-case
+    title: "Startup Business Analyst Business Case"
+  - slug: startup-business-analyst-financial-projections
+    title: "Startup Business Analyst Financial Projections"
+  - slug: startup-business-analyst-market-opportunity
+    title: "Startup Business Analyst Market Opportunity"

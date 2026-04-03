@@ -136,3 +136,15 @@ skills:
     title: "Wholesale Strategy"
   - slug: woocommerce-setup
     title: "Woocommerce Setup"
+  - slug: shopify-apps
+    title: "Shopify Apps"
+  - slug: shopify-development
+    title: "Shopify Development"
+  - slug: wordpress
+    title: "Wordpress"
+  - slug: wordpress-plugin-development
+    title: "Wordpress Plugin Development"
+  - slug: wordpress-theme-development
+    title: "Wordpress Theme Development"
+  - slug: wordpress-woocommerce-development
+    title: "Wordpress Woocommerce Development"

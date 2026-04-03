@@ -135,3 +135,17 @@ skills:
     title: "Vendor Contract Review"
   - slug: whistleblower-policy
     title: "Whistleblower Policy"
+  - slug: gdpr-data-handling
+    title: "GDPR Data Handling"
+  - slug: legal-advisor
+    title: "Legal Advisor"
+  - slug: pci-compliance
+    title: "PCI Compliance"
+  - slug: security-compliance-compliance-check
+    title: "Security Compliance Compliance Check"
+  - slug: security-scanning-security-dependencies
+    title: "Security Scanning Security Dependencies"
+  - slug: security-scanning-security-hardening
+    title: "Security Scanning Security Hardening"
+  - slug: security-scanning-security-sast
+    title: "Security Scanning Security SAST"

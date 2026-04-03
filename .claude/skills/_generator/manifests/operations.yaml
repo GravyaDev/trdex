@@ -151,3 +151,37 @@ skills:
     title: "Workflow Design"
   - slug: workload-balancing
     title: "Workload Balancing"
+  - slug: carrier-relationship-management
+    title: "Carrier Relationship Management"
+  - slug: changelog-automation
+    title: "Changelog Automation"
+  - slug: customs-trade-compliance
+    title: "Customs Trade Compliance"
+  - slug: energy-procurement
+    title: "Energy Procurement"
+  - slug: environment-setup-guide
+    title: "Environment Setup Guide"
+  - slug: file-organizer
+    title: "File Organizer"
+  - slug: inventory-demand-planning
+    title: "Inventory Demand Planning"
+  - slug: logistics-exception-management
+    title: "Logistics Exception Management"
+  - slug: odoo-backup-strategy
+    title: "Odoo Backup Strategy"
+  - slug: odoo-module-developer
+    title: "Odoo Module Developer"
+  - slug: odoo-performance-tuner
+    title: "Odoo Performance Tuner"
+  - slug: odoo-xml-views-builder
+    title: "Odoo Xml Views Builder"
+  - slug: office-productivity
+    title: "Office Productivity"
+  - slug: production-scheduling
+    title: "Production Scheduling"
+  - slug: quality-nonconformance
+    title: "Quality Nonconformance"
+  - slug: returns-reverse-logistics
+    title: "Returns Reverse Logistics"
+  - slug: supply-chain-risk-auditor
+    title: "Supply Chain Risk Auditor"

@@ -142,3 +142,37 @@ skills:
     title: "Xml Sitemap Optimization"
   - slug: youtube-seo
     title: "Youtube Seo"
+  - slug: keyword-extractor
+    title: "Keyword Extractor"
+  - slug: local-legal-seo-audit
+    title: "Local Legal SEO Audit"
+  - slug: programmatic-seo
+    title: "Programmatic SEO"
+  - slug: schema-markup
+    title: "Schema Markup"
+  - slug: seo-audit
+    title: "SEO Audit"
+  - slug: seo-authority-builder
+    title: "SEO Authority Builder"
+  - slug: seo-cannibalization-detector
+    title: "SEO Cannibalization Detector"
+  - slug: seo-content-auditor
+    title: "SEO Content Auditor"
+  - slug: seo-content-planner
+    title: "SEO Content Planner"
+  - slug: seo-content-refresher
+    title: "SEO Content Refresher"
+  - slug: seo-content-writer
+    title: "SEO Content Writer"
+  - slug: seo-forensic-incident-response
+    title: "SEO Forensic Incident Response"
+  - slug: seo-fundamentals
+    title: "SEO Fundamentals"
+  - slug: seo-keyword-strategist
+    title: "SEO Keyword Strategist"
+  - slug: seo-meta-optimizer
+    title: "SEO Meta Optimizer"
+  - slug: seo-snippet-hunter
+    title: "SEO Snippet Hunter"
+  - slug: seo-structure-architect
+    title: "SEO Structure Architect"

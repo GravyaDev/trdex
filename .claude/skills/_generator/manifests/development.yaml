@@ -188,3 +188,491 @@ skills:
     title: "Unit Test Writer"
   - slug: vulnerability-assessment
     title: "Vulnerability Assessment"
+  - slug: address-github-comments
+    title: "Address Github Comments"
+  - slug: algolia-search
+    title: "Algolia Search"
+  - slug: amazon-alexa
+    title: "Amazon Alexa"
+  - slug: angular
+    title: "Angular"
+  - slug: angular-best-practices
+    title: "Angular Best Practices"
+  - slug: angular-migration
+    title: "Angular Migration"
+  - slug: angular-state-management
+    title: "Angular State Management"
+  - slug: angular-ui-patterns
+    title: "Angular UI Patterns"
+  - slug: animejs-animation
+    title: "Animejs Animation"
+  - slug: antigravity-workflows
+    title: "Antigravity Workflows"
+  - slug: api-design-principles
+    title: "API Design Principles"
+  - slug: api-documentation-generator
+    title: "API Documentation Generator"
+  - slug: api-documenter
+    title: "API Documenter"
+  - slug: api-endpoint-builder
+    title: "API Endpoint Builder"
+  - slug: api-patterns
+    title: "API Patterns"
+  - slug: api-testing-observability-api-mock
+    title: "API Testing Observability API Mock"
+  - slug: application-performance-performance-optimization
+    title: "Application Performance Performance Optimization"
+  - slug: architect-review
+    title: "Architect Review"
+  - slug: architecture
+    title: "Architecture"
+  - slug: architecture-decision-records
+    title: "Architecture Decision Records"
+  - slug: architecture-patterns
+    title: "Architecture Patterns"
+  - slug: auth-implementation-patterns
+    title: "Auth Implementation Patterns"
+  - slug: avalonia-zafiro-development
+    title: "Avalonia Zafiro Development"
+  - slug: backend-architect
+    title: "Backend Architect"
+  - slug: backend-dev-guidelines
+    title: "Backend Dev Guidelines"
+  - slug: backend-development-feature-development
+    title: "Backend Development Feature Development"
+  - slug: backend-security-coder
+    title: "Backend Security Coder"
+  - slug: baseline-ui
+    title: "Baseline UI"
+  - slug: bazel-build-optimization
+    title: "Bazel Build Optimization"
+  - slug: blockrun
+    title: "Blockrun"
+  - slug: blueprint
+    title: "Blueprint"
+  - slug: browser-automation
+    title: "Browser Automation"
+  - slug: browser-extension-builder
+    title: "Browser Extension Builder"
+  - slug: build
+    title: "Build"
+  - slug: bullmq-specialist
+    title: "Bullmq Specialist"
+  - slug: c4-architecture-c4-architecture
+    title: "C4 Architecture C4 Architecture"
+  - slug: c4-code
+    title: "C4 Code"
+  - slug: c4-component
+    title: "C4 Component"
+  - slug: c4-container
+    title: "C4 Container"
+  - slug: c4-context
+    title: "C4 Context"
+  - slug: cc-skill-backend-patterns
+    title: "Cc Skill Backend Patterns"
+  - slug: cc-skill-clickhouse-io
+    title: "Cc Skill Clickhouse Io"
+  - slug: cc-skill-coding-standards
+    title: "Cc Skill Coding Standards"
+  - slug: cc-skill-continuous-learning
+    title: "Cc Skill Continuous Learning"
+  - slug: cc-skill-frontend-patterns
+    title: "Cc Skill Frontend Patterns"
+  - slug: cc-skill-project-guidelines-example
+    title: "Cc Skill Project Guidelines Example"
+  - slug: cc-skill-security-review
+    title: "Cc Skill Security Review"
+  - slug: cc-skill-strategic-compact
+    title: "Cc Skill Strategic Compact"
+  - slug: chrome-extension-developer
+    title: "Chrome Extension Developer"
+  - slug: clean-code
+    title: "Clean Code"
+  - slug: clerk-auth
+    title: "Clerk Auth"
+  - slug: code-documentation-code-explain
+    title: "Code Documentation Code Explain"
+  - slug: code-documentation-doc-generate
+    title: "Code Documentation Doc Generate"
+  - slug: code-refactoring-context-restore
+    title: "Code Refactoring Context Restore"
+  - slug: code-refactoring-refactor-clean
+    title: "Code Refactoring Refactor Clean"
+  - slug: code-refactoring-tech-debt
+    title: "Code Refactoring Tech Debt"
+  - slug: code-review-ai-ai-review
+    title: "Code Review AI AI Review"
+  - slug: code-review-excellence
+    title: "Code Review Excellence"
+  - slug: code-reviewer
+    title: "Code Reviewer"
+  - slug: code-simplifier
+    title: "Code Simplifier"
+  - slug: codebase-audit-pre-push
+    title: "Codebase Audit Pre Push"
+  - slug: codebase-cleanup-deps-audit
+    title: "Codebase Cleanup Deps Audit"
+  - slug: codebase-cleanup-refactor-clean
+    title: "Codebase Cleanup Refactor Clean"
+  - slug: codebase-cleanup-tech-debt
+    title: "Codebase Cleanup Tech Debt"
+  - slug: codex-review
+    title: "Codex Review"
+  - slug: commit
+    title: "Commit"
+  - slug: comprehensive-review-full-review
+    title: "Comprehensive Review Full Review"
+  - slug: comprehensive-review-pr-enhance
+    title: "Comprehensive Review PR Enhance"
+  - slug: convex
+    title: "Convex"
+  - slug: core-components
+    title: "Core Components"
+  - slug: cqrs-implementation
+    title: "Cqrs Implementation"
+  - slug: create-branch
+    title: "Create Branch"
+  - slug: create-pr
+    title: "Create PR"
+  - slug: dbos-golang
+    title: "Dbos Golang"
+  - slug: dbos-python
+    title: "Dbos Python"
+  - slug: dbos-typescript
+    title: "Dbos Typescript"
+  - slug: ddd-context-mapping
+    title: "DDD Context Mapping"
+  - slug: ddd-strategic-design
+    title: "DDD Strategic Design"
+  - slug: ddd-tactical-patterns
+    title: "DDD Tactical Patterns"
+  - slug: debug-buttercup
+    title: "Debug Buttercup"
+  - slug: debugger
+    title: "Debugger"
+  - slug: debugging-strategies
+    title: "Debugging Strategies"
+  - slug: debugging-toolkit-smart-debug
+    title: "Debugging Toolkit Smart Debug"
+  - slug: dependency-management-deps-audit
+    title: "Dependency Management Deps Audit"
+  - slug: dependency-upgrade
+    title: "Dependency Upgrade"
+  - slug: development
+    title: "Development"
+  - slug: differential-review
+    title: "Differential Review"
+  - slug: django-access-review
+    title: "Django Access Review"
+  - slug: django-perf-review
+    title: "Django Perf Review"
+  - slug: documentation
+    title: "Documentation"
+  - slug: documentation-generation-doc-generate
+    title: "Documentation Generation Doc Generate"
+  - slug: documentation-templates
+    title: "Documentation Templates"
+  - slug: domain-driven-design
+    title: "Domain Driven Design"
+  - slug: dotnet-architect
+    title: "Dotnet Architect"
+  - slug: dotnet-backend
+    title: "Dotnet Backend"
+  - slug: dotnet-backend-patterns
+    title: "Dotnet Backend Patterns"
+  - slug: e2e-testing
+    title: "E2E Testing"
+  - slug: e2e-testing-patterns
+    title: "E2E Testing Patterns"
+  - slug: earllm-build
+    title: "Earllm Build"
+  - slug: error-debugging-error-analysis
+    title: "Error Debugging Error Analysis"
+  - slug: error-debugging-error-trace
+    title: "Error Debugging Error Trace"
+  - slug: error-debugging-multi-agent-review
+    title: "Error Debugging Multi Agent Review"
+  - slug: error-detective
+    title: "Error Detective"
+  - slug: error-diagnostics-error-analysis
+    title: "Error Diagnostics Error Analysis"
+  - slug: error-diagnostics-error-trace
+    title: "Error Diagnostics Error Trace"
+  - slug: error-diagnostics-smart-debug
+    title: "Error Diagnostics Smart Debug"
+  - slug: error-handling-patterns
+    title: "Error Handling Patterns"
+  - slug: event-sourcing-architect
+    title: "Event Sourcing Architect"
+  - slug: evolution
+    title: "Evolution"
+  - slug: fastapi-router-py
+    title: "Fastapi Router Py"
+  - slug: fastapi-templates
+    title: "Fastapi Templates"
+  - slug: file-uploads
+    title: "File Uploads"
+  - slug: find-bugs
+    title: "Find Bugs"
+  - slug: finishing-a-development-branch
+    title: "Finishing A Development Branch"
+  - slug: firebase
+    title: "Firebase"
+  - slug: fix-review
+    title: "Fix Review"
+  - slug: framework-migration-code-migrate
+    title: "Framework Migration Code Migrate"
+  - slug: framework-migration-deps-upgrade
+    title: "Framework Migration Deps Upgrade"
+  - slug: framework-migration-legacy-modernize
+    title: "Framework Migration Legacy Modernize"
+  - slug: frontend-design
+    title: "Frontend Design"
+  - slug: frontend-dev-guidelines
+    title: "Frontend Dev Guidelines"
+  - slug: frontend-developer
+    title: "Frontend Developer"
+  - slug: frontend-mobile-development-component-scaffold
+    title: "Frontend Mobile Development Component Scaffold"
+  - slug: frontend-mobile-security-xss-scan
+    title: "Frontend Mobile Security XSS Scan"
+  - slug: frontend-security-coder
+    title: "Frontend Security Coder"
+  - slug: frontend-ui-dark-ts
+    title: "Frontend UI Dark TS"
+  - slug: full-stack-orchestration-full-stack-feature
+    title: "Full Stack Orchestration Full Stack Feature"
+  - slug: gh-review-requests
+    title: "Gh Review Requests"
+  - slug: git-advanced-workflows
+    title: "Git Advanced Workflows"
+  - slug: git-pr-workflows-git-workflow
+    title: "Git PR Workflows Git Workflow"
+  - slug: git-pr-workflows-onboard
+    title: "Git PR Workflows Onboard"
+  - slug: git-pr-workflows-pr-enhance
+    title: "Git PR Workflows PR Enhance"
+  - slug: git-pushing
+    title: "Git Pushing"
+  - slug: github-issue-creator
+    title: "Github Issue Creator"
+  - slug: go-playwright
+    title: "Go Playwright"
+  - slug: go-rod-master
+    title: "Go Rod Master"
+  - slug: graphql
+    title: "GraphQL"
+  - slug: graphql-architect
+    title: "GraphQL Architect"
+  - slug: gravya-platform-dev
+    title: "Gravya Platform Dev"
+  - slug: grpc-golang
+    title: "gRPC Golang"
+  - slug: i18n-localization
+    title: "i18n Localization"
+  - slug: inngest
+    title: "Inngest"
+  - slug: iterate-pr
+    title: "Iterate PR"
+  - slug: javascript-testing-patterns
+    title: "Javascript Testing Patterns"
+  - slug: javascript-typescript-typescript-scaffold
+    title: "Javascript Typescript Typescript Scaffold"
+  - slug: laravel-expert
+    title: "Laravel Expert"
+  - slug: laravel-security-audit
+    title: "Laravel Security Audit"
+  - slug: legacy-modernizer
+    title: "Legacy Modernizer"
+  - slug: lint-and-validate
+    title: "Lint And Validate"
+  - slug: makepad-skills
+    title: "Makepad Skills"
+  - slug: mcp-builder
+    title: "MCP Builder"
+  - slug: mcp-builder-ms
+    title: "MCP Builder Ms"
+  - slug: microservices-patterns
+    title: "Microservices Patterns"
+  - slug: molykit
+    title: "Molykit"
+  - slug: monorepo-architect
+    title: "Monorepo Architect"
+  - slug: monorepo-management
+    title: "Monorepo Management"
+  - slug: native-data-fetching
+    title: "Native Data Fetching"
+  - slug: nerdzao-elite
+    title: "Nerdzao Elite"
+  - slug: nerdzao-elite-gemini-high
+    title: "Nerdzao Elite Gemini High"
+  - slug: nestjs-expert
+    title: "Nestjs Expert"
+  - slug: new-rails-project
+    title: "New Rails Project"
+  - slug: nextjs-app-router-patterns
+    title: "Nextjs App Router Patterns"
+  - slug: nextjs-best-practices
+    title: "Nextjs Best Practices"
+  - slug: nextjs-supabase-auth
+    title: "Nextjs Supabase Auth"
+  - slug: nodejs-backend-patterns
+    title: "Nodejs Backend Patterns"
+  - slug: nodejs-best-practices
+    title: "Nodejs Best Practices"
+  - slug: nx-workspace-patterns
+    title: "Nx Workspace Patterns"
+  - slug: openapi-spec-generation
+    title: "Openapi Spec Generation"
+  - slug: payment-integration
+    title: "Payment Integration"
+  - slug: paypal-integration
+    title: "Paypal Integration"
+  - slug: performance-engineer
+    title: "Performance Engineer"
+  - slug: performance-optimizer
+    title: "Performance Optimizer"
+  - slug: performance-testing-review-ai-review
+    title: "Performance Testing Review AI Review"
+  - slug: performance-testing-review-multi-agent-review
+    title: "Performance Testing Review Multi Agent Review"
+  - slug: pipecat-friday-agent
+    title: "Pipecat Friday Agent"
+  - slug: playwright-java
+    title: "Playwright Java"
+  - slug: playwright-skill
+    title: "Playwright Skill"
+  - slug: pr-writer
+    title: "PR Writer"
+  - slug: production-code-audit
+    title: "Production Code Audit"
+  - slug: project-development
+    title: "Project Development"
+  - slug: projection-patterns
+    title: "Projection Patterns"
+  - slug: pydantic-models-py
+    title: "Pydantic Models Py"
+  - slug: python-development-python-scaffold
+    title: "Python Development Python Scaffold"
+  - slug: python-fastapi-development
+    title: "Python Fastapi Development"
+  - slug: python-testing-patterns
+    title: "Python Testing Patterns"
+  - slug: radix-ui-design-system
+    title: "Radix UI Design System"
+  - slug: react-best-practices
+    title: "React Best Practices"
+  - slug: react-flow-architect
+    title: "React Flow Architect"
+  - slug: react-flow-node-ts
+    title: "React Flow Node TS"
+  - slug: react-modernization
+    title: "React Modernization"
+  - slug: react-nextjs-development
+    title: "React Nextjs Development"
+  - slug: react-patterns
+    title: "React Patterns"
+  - slug: react-state-management
+    title: "React State Management"
+  - slug: react-ui-patterns
+    title: "React UI Patterns"
+  - slug: receiving-code-review
+    title: "Receiving Code Review"
+  - slug: requesting-code-review
+    title: "Requesting Code Review"
+  - slug: robius-app-architecture
+    title: "Robius App Architecture"
+  - slug: saga-orchestration
+    title: "Saga Orchestration"
+  - slug: sankhya-dashboard-html-jsp-custom-best-pratices
+    title: "Sankhya Dashboard HTML Jsp Custom Best Pratices"
+  - slug: senior-architect
+    title: "Senior Architect"
+  - slug: senior-frontend
+    title: "Senior Frontend"
+  - slug: senior-fullstack
+    title: "Senior Fullstack"
+  - slug: shadcn
+    title: "Shadcn"
+  - slug: sharp-edges
+    title: "Sharp Edges"
+  - slug: software-architecture
+    title: "Software Architecture"
+  - slug: spec-to-code-compliance
+    title: "Spec To Code Compliance"
+  - slug: stitch-loop
+    title: "Stitch Loop"
+  - slug: stripe-integration
+    title: "Stripe Integration"
+  - slug: systematic-debugging
+    title: "Systematic Debugging"
+  - slug: tailwind-design-system
+    title: "Tailwind Design System"
+  - slug: tailwind-patterns
+    title: "Tailwind Patterns"
+  - slug: tanstack-query-expert
+    title: "Tanstack Query Expert"
+  - slug: tdd-orchestrator
+    title: "TDD Orchestrator"
+  - slug: tdd-workflow
+    title: "TDD Workflow"
+  - slug: tdd-workflows-tdd-cycle
+    title: "TDD Workflows TDD Cycle"
+  - slug: tdd-workflows-tdd-green
+    title: "TDD Workflows TDD Green"
+  - slug: tdd-workflows-tdd-red
+    title: "TDD Workflows TDD Red"
+  - slug: tdd-workflows-tdd-refactor
+    title: "TDD Workflows TDD Refactor"
+  - slug: team-collaboration-issue
+    title: "Team Collaboration Issue"
+  - slug: temporal-python-testing
+    title: "Temporal Python Testing"
+  - slug: test-automator
+    title: "Test Automator"
+  - slug: test-driven-development
+    title: "Test Driven Development"
+  - slug: test-fixing
+    title: "Test Fixing"
+  - slug: testing-patterns
+    title: "Testing Patterns"
+  - slug: testing-qa
+    title: "Testing QA"
+  - slug: track-management
+    title: "Track Management"
+  - slug: trigger-dev
+    title: "Trigger Dev"
+  - slug: turborepo-caching
+    title: "Turborepo Caching"
+  - slug: twilio-communications
+    title: "Twilio Communications"
+  - slug: uncle-bob-craft
+    title: "Uncle Bob Craft"
+  - slug: unit-testing-test-generate
+    title: "Unit Testing Test Generate"
+  - slug: upstash-qstash
+    title: "Upstash Qstash"
+  - slug: using-git-worktrees
+    title: "Using Git Worktrees"
+  - slug: vercel-ai-sdk-expert
+    title: "Vercel AI SDK Expert"
+  - slug: vercel-deployment
+    title: "Vercel Deployment"
+  - slug: verification-before-completion
+    title: "Verification Before Completion"
+  - slug: vexor
+    title: "Vexor"
+  - slug: web-performance-optimization
+    title: "Web Performance Optimization"
+  - slug: webapp-testing
+    title: "Webapp Testing"
+  - slug: workflow-automation
+    title: "Workflow Automation"
+  - slug: workflow-orchestration-patterns
+    title: "Workflow Orchestration Patterns"
+  - slug: workflow-patterns
+    title: "Workflow Patterns"
+  - slug: zod-validation-expert
+    title: "Zod Validation Expert"
+  - slug: zustand-store-ts
+    title: "Zustand Store TS"

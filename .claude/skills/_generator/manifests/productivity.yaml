@@ -143,3 +143,139 @@ skills:
     title: "Work Breakdown Structure"
   - slug: work-life-audit
     title: "Work Life Audit"
+  - slug: ask-questions-if-underspecified
+    title: "Ask Questions If Underspecified"
+  - slug: audit-context-building
+    title: "Audit Context Building"
+  - slug: audit-skills
+    title: "Audit Skills"
+  - slug: behavioral-modes
+    title: "Behavioral Modes"
+  - slug: brainstorming
+    title: "Brainstorming"
+  - slug: clarity-gate
+    title: "Clarity Gate"
+  - slug: claude-code-expert
+    title: "Claude Code Expert"
+  - slug: claude-code-guide
+    title: "Claude Code Guide"
+  - slug: claude-d3js-skill
+    title: "Claude D3js Skill"
+  - slug: claude-in-chrome-troubleshooting
+    title: "Claude In Chrome Troubleshooting"
+  - slug: claude-monitor
+    title: "Claude Monitor"
+  - slug: claude-settings-audit
+    title: "Claude Settings Audit"
+  - slug: claude-speed-reader
+    title: "Claude Speed Reader"
+  - slug: claude-win11-speckit-update-skill
+    title: "Claude Win11 Speckit Update Skill"
+  - slug: concise-planning
+    title: "Concise Planning"
+  - slug: context7-auto-research
+    title: "Context7 Auto Research"
+  - slug: daily
+    title: "Daily"
+  - slug: deep-research
+    title: "Deep Research"
+  - slug: diary
+    title: "Diary"
+  - slug: doc-coauthoring
+    title: "Doc Coauthoring"
+  - slug: docs-architect
+    title: "Docs Architect"
+  - slug: exa-search
+    title: "Exa Search"
+  - slug: executing-plans
+    title: "Executing Plans"
+  - slug: filesystem-context
+    title: "Filesystem Context"
+  - slug: firecrawl-scraper
+    title: "Firecrawl Scraper"
+  - slug: goal-analyzer
+    title: "Goal Analyzer"
+  - slug: infinite-gratitude
+    title: "Infinite Gratitude"
+  - slug: internal-comms-anthropic
+    title: "Internal Comms Anthropic"
+  - slug: internal-comms-community
+    title: "Internal Comms Community"
+  - slug: issues
+    title: "Issues"
+  - slug: last30days
+    title: "Last30days"
+  - slug: manifest
+    title: "Manifest"
+  - slug: matematico-tao
+    title: "Matematico Tao"
+  - slug: mtls-configuration
+    title: "mTLS Configuration"
+  - slug: notion-template-business
+    title: "Notion Template Business"
+  - slug: obsidian-clipper-template-creator
+    title: "Obsidian Clipper Template Creator"
+  - slug: oss-hunter
+    title: "Oss Hunter"
+  - slug: personal-tool-builder
+    title: "Personal Tool Builder"
+  - slug: plan-writing
+    title: "Plan Writing"
+  - slug: planning-with-files
+    title: "Planning With Files"
+  - slug: progressive-estimation
+    title: "Progressive Estimation"
+  - slug: readme
+    title: "Readme"
+  - slug: screenshots
+    title: "Screenshots"
+  - slug: search-specialist
+    title: "Search Specialist"
+  - slug: skill-check
+    title: "Skill Check"
+  - slug: skill-creator
+    title: "Skill Creator"
+  - slug: skill-improver
+    title: "Skill Improver"
+  - slug: skill-rails-upgrade
+    title: "Skill Rails Upgrade"
+  - slug: skill-scanner
+    title: "Skill Scanner"
+  - slug: speckit-updater
+    title: "Speckit Updater"
+  - slug: speed
+    title: "Speed"
+  - slug: superpowers-lab
+    title: "Superpowers Lab"
+  - slug: task-intelligence
+    title: "Task Intelligence"
+  - slug: tavily-web
+    title: "Tavily Web"
+  - slug: team-collaboration-standup-notes
+    title: "Team Collaboration Standup Notes"
+  - slug: unsplash-integration
+    title: "Unsplash Integration"
+  - slug: using-superpowers
+    title: "Using Superpowers"
+  - slug: vexor-cli
+    title: "Vexor CLI"
+  - slug: vibe-code-auditor
+    title: "Vibe Code Auditor"
+  - slug: web-scraper
+    title: "Web Scraper"
+  - slug: wiki-architect
+    title: "Wiki Architect"
+  - slug: wiki-changelog
+    title: "Wiki Changelog"
+  - slug: wiki-onboarding
+    title: "Wiki Onboarding"
+  - slug: wiki-page-writer
+    title: "Wiki Page Writer"
+  - slug: wiki-qa
+    title: "Wiki QA"
+  - slug: wiki-researcher
+    title: "Wiki Researcher"
+  - slug: wiki-vitepress
+    title: "Wiki Vitepress"
+  - slug: writing-plans
+    title: "Writing Plans"
