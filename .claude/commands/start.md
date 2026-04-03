@@ -29,10 +29,10 @@ These are your working context. Knowledge-base entries are mandatory constraints
 
 ### Step 3: Create daily note
 
-Create `Daily Notes/MMDDYY.md` (if it doesn't exist):
+Create `Daily Notes/YYYY-MM-DD.md` (if it doesn't exist):
 
 ```markdown
-# MMDDYY - Daily Work Log
+# YYYY-MM-DD - Daily Work Log
 
 ## Decisions
 -
@@ -47,156 +47,77 @@ Create `Daily Notes/MMDDYY.md` (if it doesn't exist):
 -
 ```
 
-### Step 4: Paperclip upstream check
+### Step 4: Upstream check (if configured)
 
-Run inside `app/`:
+If `memory.md` mentions an upstream remote, check for new upstream commits:
+
 ```bash
-git -C app fetch upstream --quiet 2>/dev/null || git -C "$(find . -name '.git' -not -path '*/.git/*' | head -1 | xargs dirname)" fetch upstream --quiet
+git fetch upstream --quiet 2>/dev/null
 git log upstream/main..HEAD --oneline 2>/dev/null | head -20
 ```
 
 Show a one-line summary:
 - How many commits ahead of upstream we are
-- Any new upstream commits since last check (commits on upstream/main not in our branch)
+- Any new upstream commits since last check
 - Flag if upstream has security fixes or breaking changes in commit messages
+
+If no upstream is configured, skip this step silently.
 
 ### Step 5: Dependency vulnerability check + auto-patch
 
-Run `pnpm audit` inside `app/` and classify findings:
+Detect the project's package managers by scanning for manifest files, then run the appropriate audit tool(s).
 
-```bash
-cd app && pnpm audit --json 2>/dev/null | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-advisories = data.get('advisories', {})
-counts = {'critical':0,'high':0,'moderate':0,'low':0}
-for v in advisories.values():
-    s = v['severity'].lower()
-    counts[s] = counts.get(s,0) + 1
-    paths = []
-    for f in v.get('findings',[]):
-        for p in f.get('paths',[])[:1]:
-            paths.append(p.split(' > ')[0])
-    print(f\"[{v['severity'].upper():<8}] {v['module_name']:<22} patched={v.get('patched_versions','none'):<20} via={','.join(set(paths))[:60]}\")
-total = sum(counts.values())
-print(f'\nTOTAL: {total} | CRITICAL:{counts[\"critical\"]} HIGH:{counts[\"high\"]} MODERATE:{counts[\"moderate\"]} LOW:{counts[\"low\"]}')
-" 2>/dev/null || echo "pnpm audit unavailable"
-```
+**Detection logic:**
+- `package.json` found → run `npm audit` (or `pnpm audit` / `yarn audit` based on lockfile)
+- `requirements.txt` or `pyproject.toml` found → run `pip-audit`
+- `Cargo.toml` found → run `cargo audit`
+- `go.mod` found → run `govulncheck`
+- No manifest found → skip with message "No dependency manifests detected"
+
+Search up to depth 3 from project root (skip `node_modules`, `.git`, `vendor`).
 
 **Auto-patch logic** — apply immediately for each open advisory:
 
 **Tier A — Apply automatically (no user confirmation needed):**
-- Vulnerability is a transitive dep (not in any `package.json` directly)
-- Fix = add/update a pnpm override in root `package.json` → `pnpm.overrides`
+- Vulnerability is a transitive dependency
+- Patched version is semver-compatible (same major) with current version
 - No API or type signature change in the patched range
-
-**Tier B — Apply automatically with simple direct bump:**
-- Vulnerability is in a direct dep in `server/package.json` or `packages/db/package.json`
-- Patched version is semver-compatible (same major) with current pinned version
-- e.g. multer `^2.0.2` → `^2.1.1`
-
-**Tier C — On Hold (add to Task Board "Security — On Hold"):**
-- Requires major version bump
-- Is a peer dep constrained by another package (e.g. kysely locked by drizzle-orm)
-- Package is abandoned upstream (fix requires upstream to act first)
-- Breaking API change confirmed in changelog
-
-**After applying Tier A/B patches:**
-1. Run `pnpm install` in `app/`
-2. Run `pnpm audit` again to confirm reduction
-3. Log every patch to `.claude/logs/security-patches.md`:
-   ```
-   - `YYYY-MM-DD` | PACKAGE | old→new | METHOD | COMMIT | APPLIED
-   ```
-   METHOD = `pnpm override` or `direct bump (path/to/package.json)`
-4. Commit with message:
-   ```
-   security: auto-patch N vulnerabilities [MMDDYY]
-
-   - pkg1: old→new (override)
-   - pkg2: old→new (direct bump)
-
-   Co-Authored-By: Kloud <kloud@gravya.it>
-   ```
-5. Show summary: how many fixed vs on-hold vs total
-
-**Rollback procedure** (if a patch breaks something):
-```bash
-# Revert the security commit
-git -C app revert HEAD --no-edit
-# Then reinstall
-cd app && pnpm install
-```
-The patch log at `.claude/logs/security-patches.md` records every change for traceability.
-
-### Step 6: Python dependency vulnerability check + auto-patch
-
-Run `pip-audit` inside `app/services/agents/` and classify findings:
-
-```bash
-cd app/services/agents && pip-audit --json -r requirements.txt 2>/dev/null | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-vulns = data.get('dependencies', [])
-counts = {'critical':0,'high':0,'medium':0,'low':0}
-findings = []
-for dep in vulns:
-    for v in dep.get('vulns', []):
-        aliases = v.get('aliases', [v.get('id', '?')])
-        sev = v.get('fix_versions', [])
-        fix = sev[0] if sev else 'none'
-        findings.append((dep['name'], dep['version'], v['id'], fix))
-        print(f\"[{dep['name']:<30}] {dep['version']:<12} vuln={v['id']:<20} fix={fix}\")
-total = len(findings)
-print(f'\nTOTAL: {total} Python vulnerabilities')
-" 2>/dev/null || echo "pip-audit unavailable (install: pip install pip-audit)"
-```
-
-**Auto-patch logic** — apply immediately for each open advisory:
-
-**Tier A — Apply automatically:**
-- Patched version is semver-compatible (same major.minor range) with current pinned version
-- No API or type signature change in the patched range
-- Fix = bump version in `requirements.txt`
 
 **Tier B — Apply automatically with comment:**
-- Patched version requires minor version bump (different minor, same major)
-- e.g. `langchain-core==0.2.1` → `langchain-core==0.3.0`
-- Apply bump, note in log that integration test is advisable
+- Vulnerability is in a direct dependency
+- Patched version requires a minor version bump (same major)
+- Note in log that integration test is advisable
 
 **Tier C — On Hold (add to Task Board "Security — On Hold"):**
 - Requires major version bump
+- Is a peer dep constrained by another package
 - Package is abandoned upstream
-- Fix conflicts with another pinned dependency (e.g. langchain ecosystem lockstep)
 - Breaking API change confirmed in changelog
 
 **After applying Tier A/B patches:**
-1. Run `pip install -r requirements.txt` in `app/services/agents/`
-2. Run `pip-audit -r requirements.txt` again to confirm reduction
+1. Reinstall dependencies using the project's package manager
+2. Re-run the audit tool to confirm reduction
 3. Log every patch to `.claude/logs/security-patches.md`:
    ```
    - `YYYY-MM-DD` | PACKAGE | old→new | METHOD | APPLIED
    ```
-   METHOD = `requirements.txt bump`
-4. Commit with message:
-   ```
-   security: auto-patch N Python vulnerabilities [MMDDYY]
-
-   - pkg1: old→new
-   - pkg2: old→new
-
-   Co-Authored-By: Kloud <kloud@gravya.it>
-   ```
+4. Commit with the Co-Authored-By identity from the knowledge base
 5. Show summary: how many fixed vs on-hold vs total
 
-### Step 7: Open task board
+**Rollback procedure** (if a patch breaks something):
+```bash
+git revert HEAD --no-edit
+# Then reinstall dependencies
+```
+
+### Step 6: Open task board
 
 Read `Task Board.md`. Scan for:
 - Overdue items (anything from previous days still open)
 - Today's priorities
 - Blocked items
 
-### Step 8: Task review
+### Step 7: Task review
 
 For each task in Today:
 1. Is it still relevant?
@@ -205,7 +126,7 @@ For each task in Today:
 
 Move stale tasks to Backlog. Flag blocked items.
 
-### Step 9: Ready to work
+### Step 8: Ready to work
 
 Output a brief orientation:
 - What day it is

@@ -16,7 +16,7 @@ Mid-day context refresh. Process captured notes, update memory, health check.
 
 Read simultaneously:
 - `.claude/memory.md`
-- `Daily Notes/MMDDYY.md` (today's date)
+- `Daily Notes/YYYY-MM-DD.md` (today's date)
 - `Scratchpad.md`
 
 ### Step 2: Process scratchpad

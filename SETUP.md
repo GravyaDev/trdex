@@ -47,46 +47,21 @@ This adds the `.claude/` system directory, `CLAUDE.md`, `Task Board.md`, `Scratc
 
 If you already have a `.claude/` directory, merge manually — don't overwrite your existing settings or memory.
 
-## 3. Start Claude Code and run the onboarding prompt
+## 3. Start Claude Code
 
 ```bash
 claude
 ```
 
-Then paste the onboarding prompt below. This tells Claude to scan your project, adopt the Kloudify system, and configure everything for your specific setup.
+Kloudify detects the `__NEEDS_ONBOARD` file and automatically runs the onboarding wizard. It will:
 
----
+1. Scan your project structure, languages, and frameworks
+2. Generate project profile files
+3. Ask you a few questions to tailor the system
+4. Configure commit identity, memory, and preferences
+5. Run `/start` to begin your first session
 
-## Onboarding Prompt (copy and paste this into Claude Code)
-
-```
-I just installed the Kloudify operating system into this project. The system files are in .claude/ and the main instructions are in CLAUDE.md.
-
-Please do the following:
-
-1. Read CLAUDE.md to understand the full system architecture.
-2. Read .claude/memory.md and .claude/knowledge-base.md.
-3. Read .claude/command-index.md to learn all available commands.
-4. Scan my project structure (files, folders, language, framework, dependencies).
-5. Based on what you find, generate the project profile files:
-   - .claude/project-stack.md (runtimes, dependencies, Docker, config)
-   - .claude/project-structure.md (directory tree + file counts)
-6. Show me a summary of what you detected.
-7. Then ask me a few smart questions to tailor the system to my needs:
-   - What are my main goals with this project?
-   - What does my typical workflow look like?
-   - What tasks do I spend the most time on (or want to automate)?
-   - Are there any tools, platforms, or services I use regularly?
-8. Based on my answers and your scan, update memory.md with:
-   - Project name and description
-   - Language/framework/build tool
-   - Key file paths
-   - Any patterns you noticed
-   - My goals and workflow preferences
-9. Run /start to initialise the daily workflow.
-
-Scan first, then ask questions — don't wait for me before doing the initial scan.
-```
+No manual prompt needed.
 
 ---
 
@@ -98,7 +73,7 @@ Claude remembers context across sessions, learns from mistakes, and gets better 
 ### 9 Specialist Agents
 Auditor (quality gate), Unsticker, Error Whisperer, Rubber Duck, PR Ghostwriter, Yak-Shave Detector, Debt Collector, Onboarding Sherpa, Archaeologist. They run automatically via commands — no manual configuration.
 
-### Commands
+### 25+ Commands
 Workflow rituals and utilities. Type them in Claude Code and the system handles the rest. See the full list below.
 
 ### Skills (on-demand, not pre-generated)
@@ -229,13 +204,16 @@ Periodic:   /deep-audit (monthly or after major refactors)
 No. Everything is plain English.
 
 **Does this work with any project?**
-Yes — any language, framework, or structure. The onboarding prompt adapts automatically. The project profile system detects your stack and configures agents accordingly.
+Yes — any language, framework, or structure. The onboarding adapts automatically. The project profile system detects your stack and configures agents accordingly.
 
 **What about skills — are there thousands of pre-built ones?**
 No. Kloudify uses a generator approach. Skill manifests define categories and capabilities; `/generate-skills` produces focused skill files on demand. This keeps the system lean — no 1,700 identical boilerplate files.
 
 **How do I update?**
-Re-download from your purchase link, or run `npx create-kloudify update` if you prefer the CLI.
+Re-download from your purchase link, or pull the latest from the [GravyaDev/kloudify](https://github.com/GravyaDev/kloudify) repository.
+
+**Need help?**
+Open an issue on [GitHub](https://github.com/GravyaDev/kloudify/issues).
 
 ## Tips
 

@@ -24,7 +24,7 @@ date +"%m%d%y %H:%M" && rm -f ".claude/logs/.quality-gate-active" ".claude/logs/
 
 ### Step 1: Read state (parallel, skip in emergency)
 
-Read simultaneously: `.claude/memory.md` + `Daily Notes/MMDDYY.md`
+Read simultaneously: `.claude/memory.md` + `Daily Notes/YYYY-MM-DD.md`
 
 ### Step 2: Distill session (from in-context memory)
 
@@ -66,13 +66,13 @@ New priorities, threads, decisions → edit. Nothing changed → skip.
 - User overrides (explicitly corrected something)
 - Empirical facts (verified through testing or data)
 
-Write directly with `[Source: User directive MMDDYY]` or `[Source: Empirical MMDDYY]`.
+Write directly with `[Source: User directive YYYY-MM-DD]` or `[Source: Empirical YYYY-MM-DD]`.
 
 **Tier 2: Nominate to `knowledge-nominations.md`** (lower-confidence):
 - Agent inferences (patterns observed but not confirmed)
 - Hypotheses (things that seem true but need more evidence)
 
-Append: `- [MMDDYY] /clear: [learning] | Evidence: [source]`
+Append: `- [YYYY-MM-DD] /clear: [learning] | Evidence: [source]`
 
 **Rule: When in doubt, promote. A rule in knowledge-base.md that gets corrected later is better than a rule in nominations that never gets seen.**
 

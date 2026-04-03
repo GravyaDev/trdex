@@ -81,7 +81,7 @@ Comprehensive infrastructure audit. Run monthly or after major system changes.
 
 Write results to daily note under:
 ```markdown
-## System Audit — MMDDYY
+## System Audit — YYYY-MM-DD
 
 **Grade:** [A-F]
 **Checks:** [passed]/9

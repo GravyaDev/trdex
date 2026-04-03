@@ -2,6 +2,12 @@
 
 All system commands, their triggers, required tools, and invocation mode.
 
+## Setup
+
+| Command | Trigger | Tools | Mode | Description |
+|---------|---------|-------|------|-------------|
+| `/onboard-init` | `__NEEDS_ONBOARD` exists in project root | Read, Write, Edit, Agent, Bash(date,git,find,wc) | Self-execute | First-time onboarding — scan project, generate profiles, configure system |
+
 ## Daily Rituals
 
 | Command | Trigger | Tools | Mode | Description |
@@ -74,6 +80,7 @@ Commands should be proactively invoked (not waiting for user) when:
 
 | Condition | Command |
 |-----------|---------|
+| `__NEEDS_ONBOARD` file exists | `/onboard-init` (before any other command) |
 | Session starts fresh | `/start` (if morning) or `/standup` (if quick) |
 | Ideas emerge at end of session or between tasks | `/brainstorm [seed]` |
 | 30+ tool calls in session | `/clear` |

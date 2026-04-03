@@ -7,7 +7,6 @@ allowed-tools:
   - Write
   - Bash(date:*)
   - Bash(git:*)
-  - Bash(pnpm:*)
   - Agent
 ---
 
@@ -19,7 +18,7 @@ End-of-day ritual. Externalize knowledge, clean up, prepare for tomorrow.
 
 Read simultaneously:
 - `.claude/memory.md`
-- `Daily Notes/MMDDYY.md` (today)
+- `Daily Notes/YYYY-MM-DD.md` (today)
 - `Scratchpad.md`
 - `Task Board.md`
 
@@ -66,7 +65,7 @@ If today is Friday, prune `.claude/logs/security-patches.md`:
 - Remove any entry lines where the date prefix is older than 7 days from today
 - Keep the header block and any `<!-- cleaned ... -->` comment
 - Append at the bottom: `<!-- cleaned YYYY-MM-DD, removed entries older than YYYY-MM-DD -->`
-- Do NOT run pnpm audit here — vulnerability checks happen only at /start
+- Do NOT run dependency audits here — vulnerability checks happen only at /start
 
 ### Step 5: Knowledge externalization
 
@@ -76,14 +75,14 @@ Review today's work for learnings:
 - **Pattern observations**: Recurring patterns noticed → nominate
 - **Failure lessons**: Root cause of any resolved failures → nominate
 
-Format: `- [MMDDYY] /wrap-up: [learning] | Evidence: [source]`
+Format: `- [YYYY-MM-DD] /wrap-up: [learning] | Evidence: [source]`
 
 ### Step 6: Mandatory daily audit
 
 Spawn the auditor agent to review today's work:
 
 ```
-Agent(auditor): Review today's work in Daily Notes/MMDDYY.md. Check:
+Agent(auditor): Review today's work in Daily Notes/YYYY-MM-DD.md. Check:
 1. Were all tasks completed or properly deferred?
 2. Were any knowledge-base rules violated?
 3. Are there any pending nominations to review?
@@ -110,26 +109,16 @@ If today is Friday, invoke:
 
 Keeps project docs in sync with the week's changes. Output goes to the daily note.
 
-### Step 6d: AI Operations Registry update (Fridays only)
+### Step 6d: AI Operations Registry update (Fridays only, if present)
 
-If today is Friday, update the `AI Operations Registry/` files:
+If today is Friday and an `ai-operations-registry/` directory exists:
 
-1. Read all 6 files in `AI Operations Registry/`
-2. Read current state of:
-   - `app/services/agents/src/kloud/graph.py` (flow chain)
-   - `app/services/agents/src/api.py` (endpoints = processes)
-   - `app/packages/db/src/migrations/` (latest migration number)
-   - `Task Board.md` → planned processes section
-3. For each registry file, check if content matches current reality:
-   - **architecture-map.md**: agents/supervisors/executors/tools match DB seed + code
-   - **decision-chain.md**: flow diagram matches graph.py node sequence
-   - **processes.md**: active processes match api.py endpoints + current supervisor pipeline; planned match Task Board
-   - **traceability.md**: tables match actual logging in code
-   - **escalation.md**: HITL flow matches interrupt_check in graph.py
-   - **gaps.md**: remove resolved gaps, add any new ones discovered this week
-4. Update stale sections. Update `Ultimo aggiornamento` date in each modified file.
-5. Update `README.md` → "Cambiamenti architetturali significativi" table if architecture changed this week.
-6. Log in daily note: "AI Operations Registry updated: [list of files changed]"
+1. Read all files in `ai-operations-registry/`
+2. Cross-reference with the current codebase to check if content matches reality
+3. Update stale sections and dates
+4. Log in daily note: "AI Operations Registry updated: [list of files changed]"
+
+Skip this step if no AI Operations Registry is configured.
 
 ### Step 7: Review incident log
 
@@ -142,7 +131,7 @@ Add them to Task Board → Today.
 
 ### Step 9: Update daily note
 
-Add to `Daily Notes/MMDDYY.md` → End of Day Summary:
+Add to `Daily Notes/YYYY-MM-DD.md` → End of Day Summary:
 - Key accomplishments
 - Decisions made
 - Open items carried forward

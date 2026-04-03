@@ -79,10 +79,27 @@ for section in ('dependencies', 'devDependencies', 'peerDependencies'):
   # Detect runtimes
   echo "## Runtimes Detected"
   echo ""
-  [ -f "$PROJECT_DIR/app/package.json" ] && echo "- **Node.js** (pnpm workspace)"
-  [ -f "$PROJECT_DIR/app/services/agents/requirements.txt" ] && echo "- **Python 3.12** (pip)"
+  # Node.js — detect package manager from lockfile
+  if find "$PROJECT_DIR" -maxdepth 3 -name "package.json" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | head -1 | grep -q .; then
+    if [ -f "$PROJECT_DIR/pnpm-lock.yaml" ] || find "$PROJECT_DIR" -maxdepth 2 -name "pnpm-lock.yaml" 2>/dev/null | head -1 | grep -q .; then
+      echo "- **Node.js** (pnpm)"
+    elif [ -f "$PROJECT_DIR/yarn.lock" ] || find "$PROJECT_DIR" -maxdepth 2 -name "yarn.lock" 2>/dev/null | head -1 | grep -q .; then
+      echo "- **Node.js** (yarn)"
+    elif [ -f "$PROJECT_DIR/bun.lockb" ]; then
+      echo "- **Node.js** (bun)"
+    else
+      echo "- **Node.js** (npm)"
+    fi
+  fi
+  # Python
+  if find "$PROJECT_DIR" -maxdepth 4 -name "requirements.txt" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | head -1 | grep -q .; then
+    echo "- **Python** (pip)"
+  elif [ -f "$PROJECT_DIR/pyproject.toml" ]; then
+    echo "- **Python** (pyproject)"
+  fi
   [ -f "$PROJECT_DIR/Cargo.toml" ] && echo "- **Rust** (cargo)"
   [ -f "$PROJECT_DIR/go.mod" ] && echo "- **Go** (modules)"
+  [ -f "$PROJECT_DIR/Gemfile" ] && echo "- **Ruby** (bundler)"
   echo ""
 
   # Docker

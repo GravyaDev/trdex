@@ -7,96 +7,96 @@ allowed-tools:
   - Bash(date:*)
 ---
 
-Modalità brainstorm isolata. Discuti idee liberamente senza toccare il lavoro in corso. Le idee promosse vanno in Task Board → Today per la sessione successiva.
+Isolated brainstorm mode. Discuss ideas freely without touching work in progress. Promoted ideas go to Task Board → Today for the next session.
 
 ## Steps
 
 ### Step 1: Setup (read-only)
 
-Leggi in parallelo:
-- `Task Board.md` — per sapere cosa c'è già in Today/This Week ed evitare duplicati
-- `.claude/memory.md` — per contestualizzare le idee rispetto al lavoro in corso
+Read in parallel:
+- `Task Board.md` — to see what's already in Today/This Week and avoid duplicates
+- `.claude/memory.md` — to contextualize ideas relative to current work
 
-**Non modificare nulla. Nessuna scrittura in questo step.**
+**Do not modify anything. No writes in this step.**
 
-Tieni a mente il contesto caricato ma non menzionarlo a meno che non sia rilevante per le idee discusse.
+Keep the loaded context in mind but don't mention it unless relevant to the ideas being discussed.
 
-### Step 2: Apertura modalità
+### Step 2: Mode opening
 
-Annuncia con un messaggio breve:
+Announce with a brief message:
 
-> **Modalità brainstorm attiva.** Tutto quello che diciamo qui è isolato dal lavoro in corso — niente tocca memoria, scratchpad o daily notes. Le idee che promuoviamo finiranno in Task Board domani mattina.
+> **Brainstorm mode active.** Everything we discuss here is isolated from current work — nothing touches memory, scratchpad, or daily notes. Ideas we promote will land on the Task Board tomorrow morning.
 
-Se c'è un argomento seed (`$ARGUMENTS`), usalo come punto di partenza immediato.
-Altrimenti chiedi: "Cosa hai in mente?"
+If there's a seed topic (`$ARGUMENTS`), use it as an immediate starting point.
+Otherwise ask: "What's on your mind?"
 
-### Step 3: Loop conversazionale
+### Step 3: Conversation loop
 
-Per ogni idea introdotta dall'utente, segui questo schema — adatta il tono alla conversazione, non essere meccanico:
+For each idea introduced by the user, follow this framework — adapt the tone to the conversation, don't be mechanical:
 
-1. **Capire l'obiettivo reale**
-   - "Cosa stai cercando di risolvere con questo?"
-   - "Qual è il risultato concreto che ti aspetti?"
+1. **Understand the real goal**
+   - "What are you trying to solve with this?"
+   - "What's the concrete outcome you expect?"
 
-2. **Espandere e connettere**
-   - Proponi varianti o angolazioni alternative
-   - Collega a cose già in corso (usa il contesto caricato)
-   - Segnala rischi o dipendenze non ovvie
+2. **Expand and connect**
+   - Propose variants or alternative angles
+   - Connect to things already in progress (use the loaded context)
+   - Flag non-obvious risks or dependencies
 
-3. **Valutare insieme**
-   - Dimensione: task singolo / feature / refactor architetturale / esperimento
-   - Urgenza: bloccante / utile ora / backlog
-   - Valore atteso vs. complessità
+3. **Evaluate together**
+   - Size: single task / feature / architectural refactor / experiment
+   - Urgency: blocking / useful now / backlog
+   - Expected value vs. complexity
 
-4. **Classificare provvisoriamente**
-   - `[CANDIDATA]` — ha senso fare, value chiaro, fattibile
-   - `[PARCHEGGIATA]` — buona idea ma timing sbagliato o manca contesto
-   - `[SCARTATA]` — yak shaving, duplicato, o valore troppo basso
+4. **Tentatively classify**
+   - `[CANDIDATE]` — makes sense to do, clear value, feasible
+   - `[PARKED]` — good idea but wrong timing or missing context
+   - `[DISCARDED]` — yak shaving, duplicate, or too low value
 
-Continua il loop finché l'utente non chiude la sessione con "basta", "chiudi", "fine", o simili.
+Continue the loop until the user closes the session with "done", "close", "end", or similar.
 
-Claude può proporre promozione o scarto di una idea se ha ragioni concrete — l'utente decide sempre.
+Claude can propose promotion or discard of an idea if there are concrete reasons — the user always decides.
 
-### Step 4: Resoconto
+### Step 4: Summary
 
-Quando l'utente chiude, produci un riepilogo in output (NON scritto su nessun file):
+When the user closes, produce a summary in output (NOT written to any file):
 
 ```
-## Sessione brainstorm — [DATA ORA]
+## Brainstorm Session — [DATE TIME]
 
-### Promosse → Task Board domani
-- **[titolo idea]**: [descrizione concisa — una riga]
+### Promoted → Task Board tomorrow
+- **[idea title]**: [concise description — one line]
 ...
 
-### Parcheggiate
-- **[titolo idea]**: [perché parcheggiata]
+### Parked
+- **[idea title]**: [why parked]
 ...
 
-### Scartate
-- **[titolo idea]**: [perché]
+### Discarded
+- **[idea title]**: [why]
 ...
 ```
 
-Se non ci sono idee in una categoria, ometti quella sezione.
+If there are no ideas in a category, omit that section.
 
-### Step 5: Promozione al Task Board
+### Step 5: Promotion to Task Board
 
-Per ogni idea classificata come "promossa":
+For each idea classified as "promoted":
 
-1. Leggi `Task Board.md`
-2. Aggiungi ogni idea promossa alla sezione **Today** con il prefisso `[idea]`:
+1. Read `Task Board.md`
+2. Add each promoted idea to the **Today** section with the `[idea]` prefix:
    ```
-   - [ ] [idea] <titolo conciso> — <una riga di contesto>
+   - [ ] [idea] <concise title> — <one line of context>
    ```
-3. Inserisci le voci alla fine della sezione Today (dopo i task esistenti)
+3. Insert entries at the end of the Today section (after existing tasks)
 
-**Non toccare**: `memory.md`, `Scratchpad.md`, `Daily Notes/`, nessun altro file.
-**Nessun commit.** La scrittura su Task Board è l'unica azione di output.
+**Do not touch**: `memory.md`, `Scratchpad.md`, `Daily Notes/`, or any other file.
+**No commits.** Writing to Task Board is the only output action.
 
-Se non ci sono idee promosse, non scrivere nulla — chiudi con il resoconto e basta.
+If there are no promoted ideas, don't write anything — close with the summary and that's it.
 
-### Note operative
+### Operational notes
 
-- Il prefisso `[idea]` permette a `/start` di distinguere le idee promosse dai task operativi e trattarle separatamente (chiedere se avviarle, spostarle in This Week, o tenerle in Today)
-- Se un'idea è già presente in Task Board o This Week, segnalalo durante la discussione anziché duplicare al momento della promozione
-- Niente Agent calls — questa modalità è sincrona e leggera per design
+- The `[idea]` prefix allows `/start` to distinguish promoted ideas from operational tasks and handle them separately (ask whether to start them, move to This Week, or keep in Today)
+- If an idea already exists in Task Board or This Week, flag it during discussion instead of duplicating at promotion time
+- No Agent calls — this mode is synchronous and lightweight by design

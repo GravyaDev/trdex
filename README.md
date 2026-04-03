@@ -48,33 +48,21 @@ cp -r /path/to/kloudify-download/.claude .
 
 ### Onboard
 
-Launch Claude Code and paste the onboarding prompt:
+Launch Claude Code:
 
 ```bash
 claude
 ```
 
-```
-I just installed the Kloudify operating system into this project.
-The system files are in .claude/ and the main instructions are in CLAUDE.md.
+Kloudify detects `__NEEDS_ONBOARD` and automatically runs the onboarding wizard. It will:
 
-Please do the following:
-1. Read CLAUDE.md to understand the full system architecture.
-2. Read .claude/memory.md and .claude/knowledge-base.md.
-3. Read .claude/command-index.md to learn all available commands.
-4. Scan my project structure (files, folders, language, framework, dependencies).
-5. Generate the project profile files:
-   - .claude/project-stack.md (runtimes, dependencies, Docker, config)
-   - .claude/project-structure.md (directory tree + file counts)
-6. Show me a summary of what you detected.
-7. Ask me a few smart questions to tailor the system to my needs.
-8. Based on my answers and your scan, update memory.md.
-9. Run /start to initialise the daily workflow.
+1. Scan your project structure, languages, and frameworks
+2. Generate project profile files
+3. Ask you a few questions to tailor the system
+4. Configure commit identity, memory, and preferences
+5. Run `/start` to begin your first session
 
-Scan first, then ask questions — don't wait for me before doing the initial scan.
-```
-
-That's it. You're running.
+No manual prompt needed. That's it. You're running.
 
 ---
 

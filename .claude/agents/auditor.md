@@ -201,7 +201,7 @@ A learning gets promoted when ALL of these are true:
 
 ### Promotion format
 ```
-- [MMDDYY] [Category]: [Concise fact or rule] (Source: [how confirmed])
+- [YYYY-MM-DD] [Category]: [Concise fact or rule] (Source: [how confirmed])
 ```
 
 ### Curation (includes staleness review)

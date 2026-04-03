@@ -3,6 +3,20 @@
 This project uses Kloudify, a professional operating system for Claude Code.
 Always read `.claude/memory.md` before taking action.
 
+## First-Run Onboarding
+
+If the file `__NEEDS_ONBOARD` exists in the project root, execute `/onboard-init` before any other action. This runs the automated first-time setup: project scan, profile generation, and system configuration.
+
+## Date Format
+
+All dates throughout the system use **ISO 8601: `YYYY-MM-DD`**. This applies to:
+- Daily Notes filenames (`Daily Notes/YYYY-MM-DD.md`)
+- Log entries and timestamps
+- Knowledge base source tags (`[Source: user override 2026-04-03]`)
+- Audit reports and security patch logs
+
+Never use locale-dependent formats (MM/DD/YY, DD/MM/YY, YYYY-MM-DD). The system date for today is provided in the conversation context — use that, not `date` command output, to avoid format mismatches.
+
 ## Quick Start
 - Run `/start` to begin work
 - Run `/sync` mid-day to refresh memory
@@ -61,7 +75,7 @@ All agents can invoke system commands. Read `.claude/command-index.md` for the f
 | What am I doing right now? | `memory.md` → Now | Task Board → Today |
 | How to do a procedure | `.claude/commands/` or `.claude/skills/` | CLAUDE.md |
 | A fact or learned rule | `knowledge-base.md` | Agent memory |
-| What happened on a specific day | `Daily Notes/MMDDYY.md` | Audit trail |
+| What happened on a specific day | `Daily Notes/YYYY-MM-DD.md` | Audit trail |
 | What went wrong before | `knowledge-base.md` → Hard Rules | Agent memory → Known Patterns |
 | What commands exist | `.claude/command-index.md` | `.claude/commands/{name}.md` |
 
@@ -89,6 +103,9 @@ Sessions have finite context. Heavy operations consume it fast.
 - When switching between different task domains: acknowledge the boundary, prefer `/clear` for heavy switches
 
 **How /clear works:** Distills session state into memory.md + daily note handoff, preserving retrieval paths. Then automatically resumes work by reloading compressed context and executing the next action. Seamless to the user.
+
+**Delegation for context hygiene:**
+When a task is self-contained (its output does not inform the next step), delegate it to a subagent. This preserves context for work that actually needs it. Examples: batch find-and-replace, linting checks, file generation from templates, verification scans.
 
 ## Response Quality
 
