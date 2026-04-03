@@ -209,9 +209,6 @@ Yes — any language, framework, or structure. The onboarding adapts automatical
 **What about skills — are there thousands of pre-built ones?**
 No. Kloudify uses a generator approach. Skill manifests define categories and capabilities; `/generate-skills` produces focused skill files on demand. This keeps the system lean — no 1,700 identical boilerplate files.
 
-**How do I update?**
-Re-download from your purchase link, or pull the latest from the [GravyaDev/kloudify](https://github.com/GravyaDev/kloudify) repository.
-
 **Need help?**
 Open an issue on [GitHub](https://github.com/GravyaDev/kloudify/issues).
 
