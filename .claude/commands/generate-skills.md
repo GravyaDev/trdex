@@ -1,6 +1,6 @@
 ---
-description: Generate SKILL.md files from the manifest — add, update, or rebuild skill categories
-argument-hint: "[category | skill-slug | --all]"
+description: Generate SKILL.md files from the manifest — by category, by slug, or by pattern
+argument-hint: "[category | slug | category:slug1,slug2 | slug-pattern* | --all]"
 allowed-tools:
   - Read
   - Write
@@ -14,8 +14,8 @@ Use this instead of hand-crafting individual SKILL.md files.
 
 ```
 .claude/skills/_generator/
-  manifest-index.yaml        # Level 1: 31 categories, ~35 lines — always read first
-  manifests/<category>.yaml  # Level 2: skills list + category data, ~50-100 lines — read only when needed
+  manifest-index.yaml        # Level 1: categories — always read first
+  manifests/<category>.yaml  # Level 2: skills list + category data — read only when needed
   SKILL.template.md          # The boilerplate template with {{placeholders}}
 ```
 
@@ -26,10 +26,11 @@ Use this instead of hand-crafting individual SKILL.md files.
 
 ## When to use
 
-- Adding a new skill → add entry to `manifests/<category>.yaml`, run `/generate-skills <category>`
-- Adding a new category → add to `manifest-index.yaml` + create `manifests/<category>.yaml`, run `/generate-skills <category>`
-- Updating frameworks/metrics for a category → edit `manifests/<category>.yaml`, run `/generate-skills <category> --force`
-- Rebuilding everything → `/generate-skills --all`
+- Generate one skill → `/generate-skills react-patterns`
+- Generate specific skills from a category → `/generate-skills development:react-patterns,nextjs-best-practices`
+- Generate by pattern → `/generate-skills react-*`
+- Generate entire category → `/generate-skills development`
+- Rebuild everything → `/generate-skills --all`
 
 ## Steps
 
@@ -39,23 +40,39 @@ Read `.claude/skills/_generator/manifest-index.yaml`.
 
 ### Step 2: Determine scope
 
-| Argument | Action |
-|----------|--------|
+Parse the argument to determine what to generate:
+
+| Argument format | Action |
+|-----------------|--------|
 | `--all` | Iterate all categories in index |
-| `<category-slug>` | Use that category directly |
-| `<skill-slug>` | Search index descriptions to identify category, then load that manifest |
-| *(none)* | Ask user which category |
+| `<category>` | Load that category manifest, generate **all** its skills |
+| `<category>:<slug1>,<slug2>,...` | Load that category manifest, generate **only** the listed slugs |
+| `<slug>` (not a category name) | Search all category manifests to find which contains this slug, generate only that skill |
+| `<pattern*>` (contains `*` or `?`) | Search all category manifests, generate skills whose slug matches the glob pattern |
+| `<slug1> <slug2> ...` (multiple space-separated) | Resolve each slug individually, generate each |
+| *(none)* | Ask user which category, then list its skills and ask which to generate |
 
-### Step 3: Load category manifest
+**Interactive selection (no argument):**
+1. Show categories with skill counts
+2. User picks a category
+3. Show all skills in that category as a numbered list
+4. User picks: "all", specific numbers, or a range (e.g., "1-5, 8, 12")
+5. Generate only selected skills
 
-For each category to process, read:
+### Step 3: Load category manifest(s)
+
+For each category involved, read:
 `.claude/skills/_generator/manifests/<category>.yaml`
+
+If resolving individual slugs, search manifests until the slug is found. Cache already-loaded manifests to avoid re-reading.
 
 ### Step 4: Read template
 
 Read `.claude/skills/_generator/SKILL.template.md` (once, reuse for all skills).
 
-### Step 5: For each skill, apply substitutions
+### Step 5: For each skill to generate, apply substitutions
+
+Filter the `skills:` list from the manifest to only include skills that match the resolved scope from Step 2.
 
 | Placeholder | Value |
 |---|---|
@@ -78,8 +95,13 @@ Create directory if missing. Skip existing files unless `--force`.
 
 ```
 Generated: <N> skill files
-Category:  <name>
+Category:  <name> (or "multiple")
 Skipped:   <N> already existed (use --force to overwrite)
+
+Skills generated:
+  - <slug-1>
+  - <slug-2>
+  ...
 ```
 
 ## Flags
@@ -98,7 +120,7 @@ Skipped:   <N> already existed (use --force to overwrite)
      - slug: my-new-skill
        title: "My New Skill"
    ```
-3. Run `/generate-skills <category>`
+3. Run `/generate-skills <category>:my-new-skill`
 
 ## Adding a new category
 
