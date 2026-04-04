@@ -29,6 +29,8 @@ STRUCTURE_FILE="$PROJECT_DIR/.claude/project-structure.md"
     -not -path "*/.pytest_cache*" \
     -not -path "*/dist/*" \
     -not -path "*/.next*" \
+    -not -path "*/.venv*" \
+    -not -path "*/venv*" \
     -not -path "*/.antigravity*" \
     -not -path "*/.claude*" \
     -not -path "*/Daily Notes*" \
@@ -53,6 +55,11 @@ STRUCTURE_FILE="$PROJECT_DIR/.claude/project-structure.md"
     -not -path "*/node_modules*" \
     -not -path "*/.git/*" \
     -not -path "*/__pycache__*" \
+    -not -path "*/.venv*" \
+    -not -path "*/venv*" \
+    -not -path "*/.pytest_cache*" \
+    -not -path "*/.ruff_cache*" \
+    -not -path "*/.mypy_cache*" \
     -not -path "*/.antigravity*" \
     -not -path "*/.claude*" \
     -not -path "*/Daily Notes*" \

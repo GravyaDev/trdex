@@ -1,31 +1,40 @@
 # Memory
 
 ## Now
-- Architecture doc completato → `docs/architecture.md`
-- Prossimo: scaffold progetto (pyproject.toml, struttura, docker)
+- Architettura aggiornata con AI Agent System (LangGraph, Qdrant, Jina)
+- 4 FAIL audit risolti (F1-F4), 22 test passing
+- Prossimo: commit + push, poi Phase 2 (AI Agents)
 
 ## Project: trdex
-- **What**: Trading automation platform (crypto, FX, stocks)
-- **Phase**: Greenfield — architettura definita, pronto per scaffold
-- **Stack**: Python 3.12+, uv, CCXT, asyncio, Pydantic v2, FastAPI, PostgreSQL+TimescaleDB, Redis, Ruff, pytest
-- **Architecture**: Clean Architecture, DDD bounded contexts (Market Data, Strategy, Execution, Portfolio, Backtest, API)
-- **Owner**: Daniele (daniele@gravya.it)
+- **What**: AI-driven trading automation platform (crypto, FX, stocks)
+- **Phase**: Audit fixes done. Phase 2 (AI Agents) è priorità immediata.
+- **Stack**: Python 3.12+, LangGraph, Qdrant, Jina Embeddings, CCXT, asyncio, Pydantic v2, FastAPI, PG+TimescaleDB, Redis, polars
+- **Architecture**: Clean Arch + DDD + Multi-Agent System (Scout → Analyst → Risk → Executor)
+- **Owner**: Daniele (daniele@gravya.it), app privata (no MiFID)
 
 ## Architecture (docs/architecture.md)
-- 6 bounded contexts: Market, Strategy, Execution, Portfolio, Backtest, API
-- Core interfaces: PriceFeed, Strategy, ExecutionGateway (ABC)
-- Simulation-first: paper trading → backtest validation → live (gated)
-- Rate limiter: convex throttle basato su API headers reali
-- 5 MVP phases pianificate
+- **AI Agent Layer**: LangGraph state machine, 4 agents (Scout, Analyst, Risk, Executor)
+- **Context Ingestion**: News/social → Jina embeddings (UE, gratuito) → Qdrant vector DB
+- **Data Layer**: Binance/CoinGecko/ForexRate feeds + rate limiter convesso
+- **Execution**: Simulator (paper) + Live (gated), safety gates esterni all'AI
+- **Dashboard MVP**: Streamlit (futuro: Next.js)
+- **Backlog futuro**: LLM locale (Ollama), Telegram bot, Redis Streams
 
-## Key Reference Docs
-- `docs/architecture.md` — architettura completa + tech spec
-- `Riferimenti/` — API catalog, framework survey, HFT guidance
+## Audit Status
+- Deep audit 2026-04-04: 4 FAIL → tutti risolti
+- F1: source-pinned feed error handling → FeedError typed
+- F2: API auth → X-API-Key middleware
+- F3: empty feed registry → ConfigurationError
+- F4: API versioning → /v1/ prefix
+
+## Key Files
+- `docs/architecture.md` — architettura completa (aggiornata con AI agents)
+- `.claude/reports/deep-audit-2026-04-04.md` — audit report
+- `Riferimenti/Suggerimenti.md` — suggerimenti LLM secondario (integrati)
 
 ## Open Threads
-- [ ] Scaffold progetto (pyproject.toml, struttura dir, docker-compose)
-- [ ] Define branching strategy (git-workflow skill)
-- [ ] Implementare primo PriceFeed (Binance REST)
+- [ ] Commit + push audit fixes + architecture update
+- [ ] Phase 2: LangGraph + Qdrant + Jina + Multi-Agent System
 
 ## Blockers
 - (none)

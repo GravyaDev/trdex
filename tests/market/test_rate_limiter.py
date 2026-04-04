@@ -1,7 +1,8 @@
-"""Tests for rate limiter."""
+"""Tests for rate limiter and feed manager."""
 
 import pytest
 
+from trdex.market.manager import ConfigurationError, PriceFeedManager
 from trdex.market.rate_limiter import CircuitState, RateLimiter
 
 
@@ -45,3 +46,18 @@ async def test_high_utilization_increases_delay(limiter: RateLimiter) -> None:
     high_delay = limiter._compute_delay()
 
     assert high_delay > low_delay
+
+
+# --- PriceFeedManager tests ---
+
+
+async def test_manager_empty_raises_configuration_error() -> None:
+    manager = PriceFeedManager()
+    with pytest.raises(ConfigurationError, match="No feeds registered"):
+        await manager.get_ticker("BTC/USDT")
+
+
+async def test_manager_empty_ohlcv_raises_configuration_error() -> None:
+    manager = PriceFeedManager()
+    with pytest.raises(ConfigurationError, match="No feeds registered"):
+        await manager.get_ohlcv("BTC/USDT")

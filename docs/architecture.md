@@ -2,11 +2,11 @@
 
 ## Executive Summary
 
-trdex è una piattaforma di trading automation per crypto, FX e altri asset. L'architettura segue Clean Architecture con layer separati per dati di mercato, strategie, simulazione ed esecuzione. Il sistema parte in modalità simulation-only: nessun ordine reale finché i risultati simulati non sono validati. Stack: Python 3.12+, asyncio, CCXT, PostgreSQL + TimescaleDB.
+trdex è una piattaforma di trading automation AI-driven per crypto, FX e altri asset. L'architettura combina Clean Architecture con un **Multi-Agent System** orchestrato da LangGraph: agenti AI specializzati (Scout, Analyst, Risk Manager, Executor) collaborano attraverso un grafo a stati per analizzare mercati, valutare rischi ed eseguire operazioni. I dati di contesto (notizie, sentiment) sono indicizzati in un Vector DB (Qdrant) con embeddings Jina AI. Il sistema parte in modalità simulation-only: nessun ordine reale finché i risultati simulati non sono validati. Stack: Python 3.12+, LangGraph, Qdrant, Jina Embeddings, CCXT, PostgreSQL + TimescaleDB.
 
 ## Context & Objectives
 
-- **Objective**: Costruire un sistema modulare che legga dati di mercato via API, esegua strategie di trading in simulazione, e possa graduare verso l'esecuzione reale
+- **Objective**: Costruire un sistema AI-driven che legga dati di mercato e contesto (notizie, sentiment) via API, utilizzi agenti AI specializzati per analisi e decisioni, esegua strategie in simulazione, e possa graduare verso l'esecuzione reale
 - **Audience**: Daniele (sviluppatore unico, Gravya)
 - **Approach**: Simulation-first — paper trading → backtest validation → live trading (gated)
 
@@ -16,70 +16,90 @@ trdex è una piattaforma di trading automation per crypto, FX e altri asset. L'a
 
 | Componente | Scelta | Motivazione |
 |-----------|--------|-------------|
-| **Linguaggio** | Python 3.12+ | Ecosistema trading maturo (CCXT, pandas, numpy, ta-lib), async nativo, Freqtrade/Hummingbot come riferimento |
+| **Linguaggio** | Python 3.12+ | Ecosistema trading maturo (CCXT, pandas, numpy, ta-lib), async nativo, AI/ML first-class |
 | **Package manager** | uv | Veloce, lockfile deterministico, gestisce Python versions |
+| **AI Orchestration** | LangGraph | Grafi a stati per multi-agent workflow, controllo deterministico sulle decisioni AI |
+| **Embeddings** | Jina AI | API gratuita, server in UE (GDPR-compliant), embeddings per RAG su notizie/sentiment |
+| **Vector DB** | Qdrant | Vector search per contesto notizie/sentiment, self-hosted o cloud |
 | **Exchange lib** | CCXT | 100+ exchange, API uniforme REST+WS, Python/JS/TS |
 | **Data validation** | Pydantic v2 | Type-safe models per ordini, prezzi, config |
+| **Data processing** | pandas + polars | pandas per compatibilità, polars per backtest ad alta velocità |
 | **Async runtime** | asyncio + aiohttp | WebSocket feeds concorrenti, I/O non bloccante |
 | **Database** | PostgreSQL + TimescaleDB | Time-series OHLCV nativo, query SQL standard, compressione |
-| **Cache/realtime** | Redis | Order book cache, pub/sub per segnali interni |
+| **Cache/realtime** | Redis (+ Streams) | Order book cache, pub/sub e Streams per comunicazione inter-agente |
 | **API interna** | FastAPI | Dashboard/monitoring endpoint, auto-docs OpenAPI |
+| **Dashboard MVP** | Streamlit | Prototipo rapido dashboard visuale (produzione futura: Next.js) |
 | **Testing** | pytest + pytest-asyncio | Test async, fixtures, parametrize |
 | **Linting** | Ruff | Linter+formatter all-in-one, velocissimo |
 | **CI/CD** | GitHub Actions | Pipeline test → lint → type-check |
-| **Container** | Docker + docker-compose | Dev environment riproducibile con DB + Redis |
+| **Container** | Docker + docker-compose | Dev environment riproducibile con DB + Redis + Qdrant |
 
 ---
 
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    trdex system                      │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  ┌───────────┐  ┌───────────┐  ┌───────────────┐   │
-│  │  Market   │  │  Market   │  │   Market      │   │
-│  │  Feed:    │  │  Feed:    │  │   Feed:       │   │
-│  │  Binance  │  │  CoinGecko│  │   ForexRate   │   │
-│  │  (WS)     │  │  (REST)   │  │   (REST)      │   │
-│  └─────┬─────┘  └─────┬─────┘  └──────┬────────┘   │
-│        │              │               │             │
-│        └──────────┬───┘───────────────┘             │
-│                   ▼                                 │
-│  ┌─────────────────────────────────────┐            │
-│  │       Price Feed Manager            │            │
-│  │  (unified interface, rate limiter)  │            │
-│  └──────────────┬──────────────────────┘            │
-│                 │                                   │
-│        ┌────────┼────────┐                          │
-│        ▼        ▼        ▼                          │
-│  ┌──────┐ ┌─────────┐ ┌──────────┐                 │
-│  │Store │ │Strategy  │ │Screener  │                 │
-│  │(DB)  │ │Engine    │ │& Ranking │                 │
-│  └──────┘ └────┬─────┘ └──────────┘                 │
-│                │                                    │
-│                ▼                                    │
-│  ┌─────────────────────────────────────┐            │
-│  │       Execution Gateway             │            │
-│  │  ┌──────────┐  ┌──────────────┐     │            │
-│  │  │Simulator │  │Live Executor │     │            │
-│  │  │(paper)   │  │(real orders) │     │            │
-│  │  └──────────┘  └──────────────┘     │            │
-│  └──────────────┬──────────────────────┘            │
-│                 │                                   │
-│                 ▼                                   │
-│  ┌─────────────────────────────────────┐            │
-│  │       Portfolio & Risk Manager      │            │
-│  │  (positions, P&L, drawdown, limits) │            │
-│  └─────────────────────────────────────┘            │
-│                                                     │
-│  ┌─────────────────────────────────────┐            │
-│  │       FastAPI Dashboard             │            │
-│  │  (status, metrics, manual controls) │            │
-│  └─────────────────────────────────────┘            │
-│                                                     │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                         trdex system                              │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌─────────────────────── DATA LAYER ────────────────────────┐   │
+│  │                                                           │   │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │   │
+│  │  │ Binance  │  │CoinGecko │  │ForexRate │  │News/Soc. │  │   │
+│  │  │ (REST)   │  │ (REST)   │  │ (REST)   │  │  APIs    │  │   │
+│  │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘  │   │
+│  │       └──────────┬───┘─────────────┘─────────────┘        │   │
+│  │                  ▼                                        │   │
+│  │  ┌────────────────────────────┐  ┌──────────────────────┐ │   │
+│  │  │   Price Feed Manager      │  │  Context Ingestion   │ │   │
+│  │  │   (rate limiter, failover)│  │  (Jina → Qdrant)     │ │   │
+│  │  └────────────┬───────────────┘  └──────────┬───────────┘ │   │
+│  └───────────────┼─────────────────────────────┼─────────────┘   │
+│                  │                             │                 │
+│  ┌───────────── AI AGENT LAYER (LangGraph) ────┼─────────────┐   │
+│  │               ▼                             ▼             │   │
+│  │  ┌──────────────────┐   ┌──────────────────────────────┐  │   │
+│  │  │  SCOUT Agent     │   │  ANALYST Agent               │  │   │
+│  │  │  News/sentiment  │──▶│  Technicals + LLM reasoning  │  │   │
+│  │  │  monitoring      │   │  (Qdrant RAG context)        │  │   │
+│  │  └──────────────────┘   └─────────────┬────────────────┘  │   │
+│  │                                       │                   │   │
+│  │                                       ▼                   │   │
+│  │                         ┌──────────────────────────────┐  │   │
+│  │                         │  RISK MANAGER Agent          │  │   │
+│  │                         │  Drawdown, limits, stop-loss │  │   │
+│  │                         │  CAN BLOCK execution         │  │   │
+│  │                         └─────────────┬────────────────┘  │   │
+│  │                                       │                   │   │
+│  │                                       ▼                   │   │
+│  │                         ┌──────────────────────────────┐  │   │
+│  │                         │  EXECUTOR Agent              │  │   │
+│  │                         │  Order routing (sim/live)    │  │   │
+│  │                         └─────────────┬────────────────┘  │   │
+│  └───────────────────────────────────────┼───────────────────┘   │
+│                                          │                       │
+│  ┌───────────── EXECUTION LAYER ─────────┼───────────────────┐   │
+│  │                                       ▼                   │   │
+│  │  ┌──────────────────┐  ┌──────────────────────────────┐   │   │
+│  │  │   Simulator      │  │   Live Executor (gated)      │   │   │
+│  │  │   (paper trading)│  │   (CCXT → exchange)          │   │   │
+│  │  └────────┬─────────┘  └──────────────┬───────────────┘   │   │
+│  └───────────┼───────────────────────────┼───────────────────┘   │
+│              └─────────────┬─────────────┘                       │
+│                            ▼                                     │
+│  ┌─────────────────────────────────────────┐                     │
+│  │     Portfolio & Risk Manager            │                     │
+│  │     (positions, P&L, drawdown, limits)  │                     │
+│  └─────────────────────────────────────────┘                     │
+│                                                                  │
+│  ┌───────── STORAGE ──────────┐  ┌───── DASHBOARD ────────────┐  │
+│  │ TimescaleDB (OHLCV, trades)│  │ FastAPI API + Streamlit UI │  │
+│  │ Qdrant (embeddings/context)│  │ (status, portfolio, logs)  │  │
+│  │ Redis (cache + streams)    │  │                            │  │
+│  └────────────────────────────┘  └────────────────────────────┘  │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -89,11 +109,12 @@ trdex è una piattaforma di trading automation per crypto, FX e altri asset. L'a
 | Context | Responsabilità | Dipendenze |
 |---------|---------------|------------|
 | **Market Data** | Connessioni API, normalizzazione prezzi, OHLCV, order book | Exchange APIs, aggregatori |
-| **Strategy** | Definizione e valutazione segnali buy/sell, indicatori tecnici | Market Data (read) |
-| **Execution** | Routing ordini a simulatore o exchange reale | Strategy (segnali), Market Data (prezzi) |
+| **Context Ingestion** | News/social scraping, embedding via Jina AI, storage in Qdrant | News APIs, Jina, Qdrant |
+| **AI Agents** | Multi-agent orchestration via LangGraph (Scout → Analyst → Risk → Executor) | Market Data, Context Ingestion, Portfolio |
+| **Execution** | Routing ordini a simulatore o exchange reale | AI Agents (decisioni), Market Data (prezzi) |
 | **Portfolio** | Tracking posizioni, P&L, risk metrics (Sharpe, drawdown, VaR) | Execution (trades completati) |
-| **Backtest** | Replay storico con strategia, metriche di performance | Market Data (storico), Strategy |
-| **API/Dashboard** | Monitoring, stato sistema, controlli manuali | Tutti (read-only) |
+| **Backtest** | Replay storico con strategia, metriche di performance | Market Data (storico), AI Agents |
+| **API/Dashboard** | Monitoring, stato sistema, controlli manuali (FastAPI + Streamlit) | Tutti (read-only) |
 
 ---
 
@@ -125,13 +146,28 @@ trdex/
 │       │   ├── manager.py      # PriceFeedManager: routing, failover
 │       │   └── rate_limiter.py # Adaptive rate limiter (da API headers)
 │       │
-│       ├── strategy/           # Bounded Context: Strategy
+│       ├── context/            # Bounded Context: Context Ingestion
+│       │   ├── __init__.py
+│       │   ├── models.py       # NewsItem, SentimentScore, ContextChunk
+│       │   ├── ingestion.py    # News/social API scraping
+│       │   ├── embeddings.py   # Jina AI embeddings client
+│       │   └── vector_store.py # Qdrant storage and retrieval (RAG)
+│       │
+│       ├── agents/             # Bounded Context: AI Agents (LangGraph)
+│       │   ├── __init__.py
+│       │   ├── models.py       # AgentState, AgentDecision
+│       │   ├── graph.py        # LangGraph state machine definition
+│       │   ├── scout.py        # Scout Agent: news/sentiment monitoring
+│       │   ├── analyst.py      # Analyst Agent: technicals + LLM reasoning
+│       │   ├── risk.py         # Risk Manager Agent: limits, stop-loss, blocks
+│       │   └── executor.py     # Executor Agent: order routing logic
+│       │
+│       ├── strategy/           # Strategy utilities (indicatori, config)
 │       │   ├── __init__.py
 │       │   ├── models.py       # Signal, StrategyConfig
-│       │   ├── base.py         # ABC: Strategy
 │       │   ├── indicators.py   # Indicatori tecnici (RSI, MACD, BB, ecc.)
 │       │   └── examples/
-│       │       └── sma_cross.py # Esempio: SMA crossover
+│       │       └── sma_cross.py # Esempio: SMA crossover (rule-based fallback)
 │       │
 │       ├── execution/          # Bounded Context: Execution
 │       │   ├── __init__.py
@@ -340,42 +376,48 @@ Per conformità con le regole della knowledge-base:
 
 ## MVP Phases
 
-### Phase 1 — Thin Vertical Slice (settimana 1-2)
-Obiettivo: **un sistema che gira end-to-end** (fetch → strategy → sim → output).
-- [ ] Scaffold progetto (pyproject.toml, uv, struttura directory)
-- [ ] Docker compose (PostgreSQL + TimescaleDB + Redis)
-- [ ] Pydantic models (Ticker, OHLCV, Order, Signal)
-- [ ] PriceFeed ABC + implementazione Binance (REST via CCXT, solo REST — no WS)
-- [ ] Rate limiter adattivo (con fallback conservativo se headers assenti)
-- [ ] Strategy ABC + esempio SMA crossover (thin slice)
-- [ ] Simulator minimale (paper trading, output su terminale)
-- [ ] Endpoint `/health` + `/status` minimale (FastAPI)
-- [ ] Pin event loop policy per Windows (SelectorEventLoop)
-- [ ] Test suite base
-- [ ] CI: solo unit test + lint + type-check (no backtest in CI)
+### Phase 1 — Scaffold + Audit Fixes (COMPLETATA + fix in corso)
+- [x] Scaffold progetto (pyproject.toml, uv, struttura directory)
+- [x] Docker compose (PostgreSQL + TimescaleDB + Redis)
+- [x] Pydantic models, PriceFeed ABC, Strategy ABC, Simulator, FastAPI
+- [x] Rate limiter, circuit breaker, test suite, CI
+- [ ] Fix audit F1-F4 (error handling, auth, API versioning)
 
-### Phase 2 — Strategy & Execution (settimana 3-4)
-- [ ] Indicatori tecnici base (RSI, MACD, Bollinger Bands)
-- [ ] ExecutionGateway con routing sim/live
+### Phase 2 — AI Agent System + Context (PRIORITÀ IMMEDIATA)
+Obiettivo: **il cervello AI del sistema** — LangGraph multi-agent + RAG context.
+- [ ] Aggiungere dipendenze: langgraph, qdrant-client, jina SDK, polars
+- [ ] Docker compose: aggiungere Qdrant
+- [ ] Context Ingestion: Jina embeddings client + Qdrant vector store
+- [ ] LangGraph state machine: Scout → Analyst → Risk → Executor pipeline
+- [ ] Scout Agent: monitoraggio news/sentiment via API
+- [ ] Analyst Agent: analisi tecnica + LLM reasoning con RAG context da Qdrant
+- [ ] Risk Manager Agent: drawdown limits, stop-loss, block execution
+- [ ] Executor Agent: routing a Simulator o Live (con gate check)
+- [ ] Implementazione Binance REST feed (CCXT) — primo feed concreto
+- [ ] End-to-end test: data → agents → simulated order
+
+### Phase 3 — Execution & Portfolio (settimana 3-4)
+- [ ] DefaultExecutionGateway con routing sim/live + gate check
 - [ ] Portfolio tracker (posizioni, P&L)
-- [ ] Position sizing conservativo di default (max 2% portfolio per trade)
+- [ ] Position sizing conservativo (max 2% portfolio)
+- [ ] Stop-loss hardware/software esterno all'AI
 - [ ] Persistenza OHLCV su TimescaleDB
-- [ ] Strategy config tipizzato (Pydantic StrategyConfig per strategia, non dict)
+- [ ] Indicatori tecnici base (RSI, MACD, Bollinger) — input per Analyst Agent
 
-### Phase 3 — Backtest & Validation (settimana 5-6)
-- [ ] Backtest engine (replay storico, vectorized su DataFrame — no row-by-row async)
+### Phase 4 — Backtest & Validation (settimana 5-6)
+- [ ] Confronto backtrader vs vectorbt, implementare il migliore
+- [ ] Backtest engine (vectorized su polars DataFrame)
 - [ ] Performance report (Sharpe, max drawdown, win rate)
 - [ ] Seed script per dati storici
-- [ ] Aggiunta feed aggregatore (CoinGecko)
-- [ ] Aggiunta feed FX (ForexRateAPI)
+- [ ] Feed CoinGecko + ForexRateAPI
 
-### Phase 4 — Dashboard & Real-time (settimana 7-8)
+### Phase 5 — Dashboard & Real-time (settimana 7-8)
+- [ ] Streamlit dashboard MVP (portfolio, agent decisions, logs)
 - [ ] FastAPI endpoints completi (portfolio, strategy control)
 - [ ] WebSocket feed Binance (raw, senza ccxt.pro)
-- [ ] Risk manager (drawdown limits, kill switch)
-- [ ] Alerting (log-based, futuro: Telegram)
+- [ ] Alerting (log-based)
 
-### Phase 5 — Live Trading (quando criteri simulazione soddisfatti)
+### Phase 6 — Live Trading (quando criteri simulazione soddisfatti)
 Criteri gate (configurabili, default):
 - Simulazione ≥ 30 giorni
 - Sharpe ratio > 1.0
@@ -384,10 +426,16 @@ Criteri gate (configurabili, default):
 
 Gate hard-coded in ExecutionGateway (non process discipline).
 - [ ] Live executor (ordini reali via CCXT)
-- [ ] Safety gates (max loss giornaliero, kill switch)
+- [ ] Safety gates (max loss giornaliero, kill switch) — esterno all'AI
 - [ ] Binance testnet prima di produzione
 - [ ] Audit di sicurezza API keys
 - [ ] Test di precisione per-exchange prima di abilitare nuovi exchange
+
+### Backlog Futuro
+- [ ] LLM locale (Llama via Ollama/vLLM) per reasoning privacy-first
+- [ ] Telegram bot per notifiche e analisi giornaliera
+- [ ] Next.js dashboard (sostituzione Streamlit per produzione)
+- [ ] Redis Streams per comunicazione inter-agente ad alta velocità
 
 ---
 
@@ -401,6 +449,10 @@ Gate hard-coded in ExecutionGateway (non process discipline).
 | Simulazione non rappresentativa | M | H | Slippage model, fee simulation, confronto con paper trading exchange |
 | Strategia profittevole in backtest ma non in live | H | H | Walk-forward validation, out-of-sample testing, position sizing conservativo |
 | Downtime exchange durante posizione aperta | M | H | Circuit breaker, stop-loss su exchange, heartbeat monitoring |
+| Allucinazione LLM che spinge ordine errato | M | H | Risk Manager Agent ha potere di veto, stop-loss esterno all'AI, confidence threshold |
+| Sentiment data stale o manipolato | M | M | Cross-reference multi-source, decay temporale su embeddings, freshness check |
+| Qdrant downtime | L | M | Fallback a strategia rule-based (SMA crossover) senza contesto AI |
+| Jina API rate limit o downtime | L | M | Cache locale embeddings recenti, batch processing, fallback graceful |
 
 ---
 

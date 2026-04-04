@@ -9,7 +9,7 @@ async def test_health_endpoint() -> None:
     app = create_app()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/health")
+        response = await client.get("/v1/health")
 
     assert response.status_code == 200
     data = response.json()
@@ -17,11 +17,12 @@ async def test_health_endpoint() -> None:
     assert "version" in data
 
 
-async def test_status_endpoint() -> None:
+async def test_status_endpoint_no_auth() -> None:
+    """Status endpoint accessible without auth in dev mode (empty API key)."""
     app = create_app()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/status")
+        response = await client.get("/v1/status")
 
     assert response.status_code == 200
     data = response.json()

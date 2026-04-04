@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     # FastAPI
     api_host: str = "0.0.0.0"
     api_port: int = 8000
+    api_key: str = ""  # Set to enable auth; empty = dev mode (no auth)
+    cors_origins: str = ""  # Comma-separated origins; empty = no CORS
 
     # Exchange keys (optional — only needed when connecting)
     binance_api_key: str = ""
