@@ -1,5 +1,6 @@
 """Tests for paper trading simulator."""
 
+import pytest
 from decimal import Decimal
 
 from trdex.execution.models import Order, OrderType, Side
@@ -44,3 +45,31 @@ async def test_simulator_fee_calculation() -> None:
 async def test_simulator_cancel_nonexistent() -> None:
     sim = Simulator()
     assert await sim.cancel("nonexistent") is False
+
+
+async def test_simulator_market_order_no_price_raises() -> None:
+    sim = Simulator()
+    order = Order(
+        symbol="BTC/USDT",
+        side=Side.BUY,
+        type=OrderType.MARKET,
+        amount=Decimal("0.1"),
+        price=None,
+    )
+    with pytest.raises(ValueError, match="no price"):
+        await sim.execute(order)
+
+
+async def test_simulator_stores_order_on_execute() -> None:
+    sim = Simulator()
+    order = Order(
+        symbol="BTC/USDT",
+        side=Side.BUY,
+        type=OrderType.LIMIT,
+        amount=Decimal("0.1"),
+        price=Decimal("60000"),
+    )
+    result = await sim.execute(order)
+    assert result.order_id in sim._orders
+    assert await sim.cancel(result.order_id) is True
+    assert result.order_id not in sim._orders

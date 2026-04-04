@@ -15,7 +15,6 @@ dependencies = [
     "pydantic-settings>=2.0",
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
-    "aiohttp>=3.9",
     "asyncpg>=0.29",
     "sqlalchemy[asyncio]>=2.0",
     "redis>=5.0",
@@ -23,9 +22,11 @@ dependencies = [
     "numpy>=1.26",
     # Phase 2 — AI Agent System
     "langgraph>=0.2",
+    # Telegram signal following
+    "telethon>=1.36",
     "langchain-core>=0.2",
     "qdrant-client>=1.9",
-    "polars>=0.20",
+    "polars==1.33.1",           # lts-cpu variant required on Windows (cpu-check VirtualAlloc issue)
     "httpx>=0.27",
 ]
 

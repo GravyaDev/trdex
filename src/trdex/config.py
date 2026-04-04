@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     jina_api_key: str = ""          # https://jina.ai — free tier, 100 req/min
     qdrant_url: str = "http://localhost:6333"
 
+    # Telegram signal following (my.telegram.org)
+    telegram_api_id: int = 0
+    telegram_api_hash: str = ""
+    telegram_phone: str = ""
+    telegram_channels: str = ""     # comma-separated, e.g. "@ch1,@ch2"
+    telegram_signal_budget: float = 100.0  # fixed budget per signal (quote currency)
+
     # Simulation gate criteria (Phase 5)
     gate_min_days: int = Field(default=30, description="Minimum simulation days before live")
     gate_min_sharpe: float = Field(default=1.0, description="Minimum Sharpe ratio")

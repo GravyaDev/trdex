@@ -28,12 +28,17 @@ class Simulator(ExecutionGateway):
         self._orders: dict[str, Order] = {}
 
     async def execute(self, order: Order) -> ExecutionResult:
-        order_id = str(uuid.uuid4())[:8]
+        if order.price is None:
+            raise ValueError(
+                f"Market order for {order.symbol} has no price. "
+                "Inject current market price before calling execute()."
+            )
 
-        # For market orders, use the order price as fill price
-        # In a real simulator, this would use current market price + slippage
-        fill_price = order.price or Decimal("0")
+        order_id = str(uuid.uuid4())[:8]
+        fill_price = order.price
         fee = order.amount * fill_price * self.fee_rate
+
+        self._orders[order_id] = order
 
         result = ExecutionResult(
             order_id=order_id,
