@@ -27,10 +27,16 @@ Read in parallel:
 
 ### Step 2: Scan the project
 
-Use an Explore agent to map the project structure:
+Use an Explore agent to map the project structure.
+
+**Important:** The scan must exclude Kloudify's own infrastructure — only profile the user's project code. Ignore these paths: `.claude/`, `ai-operations-registry/`, `Daily Notes/`, `CLAUDE.md`, `CLAUDE.local.md`, `__NEEDS_ONBOARD`, `Task Board.md`, `Scratchpad.md`, `SETUP.md`, `README.md` (Kloudify's own).
 
 ```
-Agent(Explore): Scan this project thoroughly. Report:
+Agent(Explore): Scan this project thoroughly. EXCLUDE these Kloudify infrastructure paths from your scan:
+.claude/, ai-operations-registry/, Daily Notes/, CLAUDE.md, CLAUDE.local.md,
+__NEEDS_ONBOARD, Task Board.md, Scratchpad.md, SETUP.md, README.md (root-level Kloudify docs).
+
+Only profile the user's actual project code. Report:
 1. Languages and frameworks detected (with evidence: file extensions, config files)
 2. Package managers and their manifest locations
 3. Directory structure overview (depth 3)

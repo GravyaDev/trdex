@@ -80,7 +80,7 @@ for section in ('dependencies', 'devDependencies', 'peerDependencies'):
   echo "## Runtimes Detected"
   echo ""
   # Node.js — detect package manager from lockfile
-  if find "$PROJECT_DIR" -maxdepth 3 -name "package.json" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | head -1 | grep -q .; then
+  if find "$PROJECT_DIR" -maxdepth 3 -name "package.json" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/ai-operations-registry/*" -not -path "*/Daily Notes/*" 2>/dev/null | head -1 | grep -q .; then
     if [ -f "$PROJECT_DIR/pnpm-lock.yaml" ] || find "$PROJECT_DIR" -maxdepth 2 -name "pnpm-lock.yaml" 2>/dev/null | head -1 | grep -q .; then
       echo "- **Node.js** (pnpm)"
     elif [ -f "$PROJECT_DIR/yarn.lock" ] || find "$PROJECT_DIR" -maxdepth 2 -name "yarn.lock" 2>/dev/null | head -1 | grep -q .; then
@@ -92,7 +92,7 @@ for section in ('dependencies', 'devDependencies', 'peerDependencies'):
     fi
   fi
   # Python
-  if find "$PROJECT_DIR" -maxdepth 4 -name "requirements.txt" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | head -1 | grep -q .; then
+  if find "$PROJECT_DIR" -maxdepth 4 -name "requirements.txt" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/ai-operations-registry/*" -not -path "*/Daily Notes/*" 2>/dev/null | head -1 | grep -q .; then
     echo "- **Python** (pip)"
   elif [ -f "$PROJECT_DIR/pyproject.toml" ]; then
     echo "- **Python** (pyproject)"
@@ -105,7 +105,7 @@ for section in ('dependencies', 'devDependencies', 'peerDependencies'):
   # Docker
   echo "## Docker"
   echo ""
-  for f in $(find "$PROJECT_DIR" -maxdepth 3 -name "docker-compose*.yml" -o -name "docker-compose*.yaml" -o -name "Dockerfile" -o -name "Dockerfile.*" 2>/dev/null | grep -v node_modules | grep -v .git | sort); do
+  for f in $(find "$PROJECT_DIR" -maxdepth 3 \( -name "docker-compose*.yml" -o -name "docker-compose*.yaml" -o -name "Dockerfile" -o -name "Dockerfile.*" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" 2>/dev/null | sort); do
     rel="${f#$PROJECT_DIR/}"
     echo "- \`$rel\`"
   done
@@ -116,13 +116,13 @@ for section in ('dependencies', 'devDependencies', 'peerDependencies'):
   echo ""
 
   # Find all package.json (up to depth 3, skip node_modules)
-  for pj in $(find "$PROJECT_DIR" -maxdepth 3 -name "package.json" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | sort); do
+  for pj in $(find "$PROJECT_DIR" -maxdepth 3 -name "package.json" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/ai-operations-registry/*" -not -path "*/Daily Notes/*" 2>/dev/null | sort); do
     rel="${pj#$PROJECT_DIR/}"
     collect_deps "Node: $rel" "$rel"
   done
 
   # Python
-  for req in $(find "$PROJECT_DIR" -maxdepth 4 -name "requirements.txt" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | sort); do
+  for req in $(find "$PROJECT_DIR" -maxdepth 4 -name "requirements.txt" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/ai-operations-registry/*" -not -path "*/Daily Notes/*" 2>/dev/null | sort); do
     rel="${req#$PROJECT_DIR/}"
     collect_deps "Python: $rel" "$rel"
   done
@@ -135,7 +135,7 @@ for section in ('dependencies', 'devDependencies', 'peerDependencies'):
   # Config files
   echo "## Configuration Files"
   echo ""
-  for cfg in $(find "$PROJECT_DIR" -maxdepth 3 \( -name "tsconfig*.json" -o -name "*.config.js" -o -name "*.config.ts" -o -name "*.config.mjs" -o -name ".env.example" \) -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | sort); do
+  for cfg in $(find "$PROJECT_DIR" -maxdepth 3 \( -name "tsconfig*.json" -o -name "*.config.js" -o -name "*.config.ts" -o -name "*.config.mjs" -o -name ".env.example" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/ai-operations-registry/*" -not -path "*/Daily Notes/*" 2>/dev/null | sort); do
     rel="${cfg#$PROJECT_DIR/}"
     echo "- \`$rel\`"
   done

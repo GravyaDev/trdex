@@ -18,6 +18,7 @@ STRUCTURE_FILE="$PROJECT_DIR/.claude/project-structure.md"
   echo '```'
 
   # Use find to build a tree (cross-platform, no dependency on 'tree' command)
+  # Excludes Kloudify infrastructure so only the user's project is profiled.
   find "$PROJECT_DIR" -maxdepth 4 -type d \
     -not -path "*/node_modules*" \
     -not -path "*/.git/*" \
@@ -29,7 +30,9 @@ STRUCTURE_FILE="$PROJECT_DIR/.claude/project-structure.md"
     -not -path "*/dist/*" \
     -not -path "*/.next*" \
     -not -path "*/.antigravity*" \
-    -not -path "*/.claude/logs*" \
+    -not -path "*/.claude*" \
+    -not -path "*/Daily Notes*" \
+    -not -path "*/ai-operations-registry*" \
     -not -path "*/coverage*" \
     2>/dev/null \
     | sed "s|^$PROJECT_DIR/||" \
@@ -45,12 +48,21 @@ STRUCTURE_FILE="$PROJECT_DIR/.claude/project-structure.md"
   echo "| Extension | Count |"
   echo "|-----------|-------|"
 
+  # Exclude Kloudify infrastructure files from count
   find "$PROJECT_DIR" -type f \
     -not -path "*/node_modules*" \
     -not -path "*/.git/*" \
     -not -path "*/__pycache__*" \
     -not -path "*/.antigravity*" \
+    -not -path "*/.claude*" \
+    -not -path "*/Daily Notes*" \
+    -not -path "*/ai-operations-registry*" \
     -not -path "*/dist/*" \
+    -not -name "CLAUDE.md" \
+    -not -name "CLAUDE.local.md" \
+    -not -name "__NEEDS_ONBOARD" \
+    -not -name "Task Board.md" \
+    -not -name "Scratchpad.md" \
     2>/dev/null \
     | sed 's/.*\.//' \
     | sort \
