@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     # Aggregator keys
     coingecko_api_key: str = ""
 
+    # AI / Vector DB
+    jina_api_key: str = ""          # https://jina.ai — free tier, 100 req/min
+    qdrant_url: str = "http://localhost:6333"
+
     # Simulation gate criteria (Phase 5)
     gate_min_days: int = Field(default=30, description="Minimum simulation days before live")
     gate_min_sharpe: float = Field(default=1.0, description="Minimum Sharpe ratio")
@@ -65,3 +69,7 @@ def pin_event_loop_policy() -> None:
 
 
 settings = Settings()
+
+
+def get_settings() -> Settings:
+    return settings

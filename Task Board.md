@@ -20,6 +20,13 @@
 - [ ] Add app service to docker-compose.yaml
 - [ ] Stop-loss hardware/software esterno all'AI
 
+## Backlog — Telegram Signal Following
+- [ ] TelegramMonitor: Telethon client, lettura messaggi gruppi pubblici
+- [ ] Signal parser: estrai simbolo, direzione (BUY/SELL), target, stop-loss dal testo
+- [ ] SignalTracker: budget fisso per segnalatore, P&L tracking per fonte
+- [ ] Ingest segnali in Qdrant (source="telegram_signal") per contesto Scout
+- [ ] Dashboard: whitelist/blacklist segnalatori, P&L per fonte
+
 ## Backlog
 - [ ] Define `PositionSide` enum (replace plain str)
 - [ ] Pass feed/strategy registries into create_app() for /status
