@@ -1,28 +1,28 @@
-# Catena Decisionale
+# Decision Chain
 
-> Ultimo aggiornamento: {{DATE}}
+> Last updated: {{DATE}}
 
-## Flow: Richiesta utente → Risultato
+## Flow: User request → Result
 
-<!-- Adatta al flusso del tuo progetto. Questo è un template generico per sistemi AI con HITL. -->
+<!-- Adapt to your project's flow. This is a generic template for AI systems with HITL. -->
 
 ```mermaid
 flowchart TD
-    A["👤 Utente: richiesta"] --> B["Auth + Validation"]
-    B --> C["AI Orchestrator: classifica task"]
+    A["👤 User: request"] --> B["Auth + Validation"]
+    B --> C["AI Orchestrator: classify task"]
     
-    C --> D{"Agente identificato?"}
-    D -- Sì --> E["Agente: esegui task"]
-    D -- No --> F["Risposta diretta / rejection"]
+    C --> D{"Agent identified?"}
+    D -- Yes --> E["Agent: execute task"]
+    D -- No --> F["Direct response / rejection"]
     
-    E --> G{"Risultato OK?"}
-    G -- Sì --> H{"Richiede HITL?"}
+    E --> G{"Result OK?"}
+    G -- Yes --> H{"Requires HITL?"}
     G -- No, retry --> E
-    G -- No, fatal --> I["Errore + log"]
+    G -- No, fatal --> I["Error + log"]
     
-    H -- Sì --> J["👤 Umano approva/rifiuta"]
-    J --> K["Esegui / Annulla"]
-    H -- No --> L["✅ Risposta all'utente"]
+    H -- Yes --> J["👤 Human approves/rejects"]
+    J --> K["Execute / Cancel"]
+    H -- No --> L["✅ Response to user"]
     K --> L
     
     style A fill:#e1f5fe
@@ -33,17 +33,17 @@ flowchart TD
 
 ## Decision Framework
 
-<!-- Ogni decisione autonoma dell'AI segue questo framework. -->
+<!-- Every autonomous AI decision follows this framework. -->
 
 ```mermaid
 flowchart TD
-    A["Decisione da prendere"] --> B["1. Dati disponibili?"]
-    B --> C["2. Esiste una regola/direttiva?"]
-    C --> D["3. Rischio/beneficio?"]
-    D --> E{"Dentro la mia autonomia?"}
+    A["Decision to make"] --> B["1. Data available?"]
+    B --> C["2. Existing rule/directive?"]
+    C --> D["3. Risk/benefit?"]
+    D --> E{"Within my autonomy?"}
     
-    E -- Sì --> F["Esegui + Log"]
-    E -- No --> G["HITL: chiedi approvazione"]
-    G -->|"Approvato"| F
-    G -->|"Rifiutato"| H["Annullato + log"]
+    E -- Yes --> F["Execute + Log"]
+    E -- No --> G["HITL: request approval"]
+    G -->|"Approved"| F
+    G -->|"Rejected"| H["Cancelled + log"]
 ```

@@ -1,40 +1,40 @@
-# Registro Operazioni AI — {{PROJECT_NAME}}
+# AI Operations Registry — {{PROJECT_NAME}}
 
-> **Scopo:** Tracciabilità completa di ogni processo AI. Nessuna black box.
-> **Ultimo aggiornamento:** {{DATE}}
-> **Politica:** Ogni operazione AI deve essere registrata con chi, cosa, dove, come e perché.
-> **Aggiornamento:** Settimanale (venerdì, wrap-up Step 6d)
+> **Purpose:** Full traceability of every AI process. No black boxes.
+> **Last updated:** {{DATE}}
+> **Policy:** Every AI operation must be logged with who, what, where, how, and why.
+> **Update frequency:** Weekly (Friday, wrap-up Step 6d)
 
 ---
 
-## Indice
+## Index
 
-| Sezione | File | Descrizione |
+| Section | File | Description |
 |---|---|---|
-| Architettura operativa | [architecture-map.md](architecture-map.md) | Mappa mentale + albero gerarchico agenti |
-| Catena decisionale | [decision-chain.md](decision-chain.md) | Flow richiesta→risultato + decision framework |
-| Registro processi | [processes.md](processes.md) | Processi attivi e pianificati con HITL level |
-| Matrice tracciabilità | [traceability.md](traceability.md) | Dove si registra ogni tipo di evento |
-| Schema escalation | [escalation.md](escalation.md) | Albero escalation + trigger incondizionati |
-| Gap noti | [gaps.md](gaps.md) | Gap di tracciabilità con priorità fix |
+| Operational architecture | [architecture-map.md](architecture-map.md) | Mind map + agent hierarchy tree |
+| Decision chain | [decision-chain.md](decision-chain.md) | Request-to-result flow + decision framework |
+| Process registry | [processes.md](processes.md) | Active and planned processes with HITL level |
+| Traceability matrix | [traceability.md](traceability.md) | Where each event type is logged |
+| Escalation schema | [escalation.md](escalation.md) | Escalation tree + unconditional triggers |
+| Known gaps | [gaps.md](gaps.md) | Traceability gaps with fix priority |
 
 ---
 
-## Principi
+## Principles
 
-1. **Nessuna black box** — ogni decisione AI ha un log con chi, cosa, perché
-2. **HITL progressivo** — `full_manual` → `escalation` → `low_risk` → `full_auto`, promosso solo dai partner umani
-3. **Escalation incondizionata** — spese reali, impatti irreversibili e giudizi creativi vanno SEMPRE ai partner umani
-4. **Costo tracciato** — ogni chiamata LLM registra modello, token, costo
+1. **No black boxes** — every AI decision has a log with who, what, why
+2. **Progressive HITL** — `full_manual` → `escalation` → `low_risk` → `full_auto`, promoted only by human partners
+3. **Unconditional escalation** — real expenses, irreversible impacts, and creative judgments ALWAYS go to human partners
+4. **Tracked cost** — every LLM call logs model, tokens, cost
 
 ---
 
-## Cambiamenti architetturali significativi
+## Significant architectural changes
 
-| Data | Cambiamento |
+| Date | Change |
 |---|---|
-| {{DATE}} | Registro iniziale |
+| {{DATE}} | Initial registry |
 
 ---
 
-*Documento vivo — aggiornato ogni venerdì al wrap-up.*
+*Living document — updated every Friday at wrap-up.*

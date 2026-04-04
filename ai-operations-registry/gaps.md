@@ -1,10 +1,10 @@
-# Gap di Tracciabilità Noti
+# Known Traceability Gaps
 
-> Ultimo aggiornamento: {{DATE}}
+> Last updated: {{DATE}}
 
-<!-- Registra qui ogni aspetto del sistema che manca di tracciabilità. -->
-<!-- Rimuovi le righe risolte, aggiungi nuove scoperte. -->
+<!-- Log here every aspect of the system that lacks traceability. -->
+<!-- Remove resolved rows, add new discoveries. -->
 
-| # | Gap | Rischio | Priorità | Status |
+| # | Gap | Risk | Priority | Status |
 |---|---|---|---|---|
-| 1 | {{gap}} | {{rischio}} | 🔴 Alta / 🟡 Media / 🔵 Bassa | Aperto |
+| 1 | {{gap}} | {{risk}} | 🔴 High / 🟡 Medium / 🔵 Low | Open |

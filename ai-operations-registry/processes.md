@@ -1,17 +1,17 @@
-# Registro Processi Operativi
+# Operational Process Registry
 
-> Ultimo aggiornamento: {{DATE}}
+> Last updated: {{DATE}}
 
-## Processi ATTIVI
+## ACTIVE Processes
 
-<!-- Aggiungi una riga per ogni processo AI operativo nel tuo sistema. -->
+<!-- Add a row for each operational AI process in your system. -->
 
-| ID | Processo | Chi esegue | Dove (codice) | HITL Level | Tracciabilità |
+| ID | Process | Executed by | Location (code) | HITL Level | Traceability |
 |---|---|---|---|---|---|
-| `PROC-001` | {{processo}} | {{agente}} | {{path}} | {{hitl_level}} | {{tabella/log}} |
+| `PROC-001` | {{process}} | {{agent}} | {{path}} | {{hitl_level}} | {{table/log}} |
 
-## Processi PIANIFICATI
+## PLANNED Processes
 
-| ID | Processo | Status | Dipende da |
+| ID | Process | Status | Depends on |
 |---|---|---|---|
-| `PROC-P01` | {{processo}} | Non iniziato | {{dipendenza}} |
+| `PROC-P01` | {{process}} | Not started | {{dependency}} |

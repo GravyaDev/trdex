@@ -300,17 +300,16 @@ For projects with AI agents, Kloudify includes a traceability framework:
 
 ```
 ai-operations-registry/
-├── template/                  # Copy these into your project and fill placeholders
-│   ├── README.md              # Index + principles
-│   ├── architecture-map.md    # Agent hierarchy + mental map
-│   ├── decision-chain.md      # Request → result flow
-│   ├── processes.md           # Active + planned processes
-│   ├── traceability.md        # Event → log mapping
-│   ├── escalation.md          # Escalation tree + HITL levels
-│   └── gaps.md                # Known traceability gaps
+├── README.md              # Index + principles
+├── architecture-map.md    # Agent hierarchy + mental map
+├── decision-chain.md      # Request → result flow
+├── processes.md           # Active + planned processes
+├── traceability.md        # Event → log mapping
+├── escalation.md          # Escalation tree + HITL levels
+└── gaps.md                # Known traceability gaps
 ```
 
-Set up: copy `template/` contents to `ai-operations-registry/`, replace `{{placeholders}}`, and the wrap-up (Step 6d, Fridays) will keep them in sync with your code.
+Set up: replace `{{placeholders}}` in each file with your project's specifics. The wrap-up command (Step 6d, Fridays) will keep them in sync with your code.
 
 ---
 

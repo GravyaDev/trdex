@@ -1,30 +1,30 @@
-# Matrice Tracciabilità
+# Traceability Matrix
 
-> Ultimo aggiornamento: {{DATE}}
+> Last updated: {{DATE}}
 
-## Dove si registra ogni tipo di evento
+## Where each event type is logged
 
-<!-- Una riga per tipo di evento. Se non hai una tabella DB, indica file di log o "non tracciato". -->
+<!-- One row per event type. If you don't have a DB table, indicate log file or "not tracked". -->
 
-| Evento | Dove | Campi chiave | Chi logga | Retention |
+| Event | Where | Key fields | Logged by | Retention |
 |---|---|---|---|---|
-| Decisione routing | {{tabella/file}} | {{campi}} | {{componente}} | {{retention}} |
-| Sessione AI completa | {{tabella/file}} | {{campi}} | {{componente}} | {{retention}} |
-| Costo LLM | {{tabella/file}} | {{campi}} | {{componente}} | {{retention}} |
-| Azione utente | {{tabella/file}} | {{campi}} | {{componente}} | {{retention}} |
-| Errore/anomalia | {{tabella/file}} | {{campi}} | {{componente}} | {{retention}} |
+| Routing decision | {{table/file}} | {{fields}} | {{component}} | {{retention}} |
+| Complete AI session | {{table/file}} | {{fields}} | {{component}} | {{retention}} |
+| LLM cost | {{table/file}} | {{fields}} | {{component}} | {{retention}} |
+| User action | {{table/file}} | {{fields}} | {{component}} | {{retention}} |
+| Error/anomaly | {{table/file}} | {{fields}} | {{component}} | {{retention}} |
 
-## Flow tracciabilità
+## Traceability flow
 
 ```mermaid
 flowchart LR
     subgraph INPUT["📥 INPUT"]
-        U["Utente/Sistema"]
+        U["User/System"]
     end
     
     subgraph PROCESSING["⚙️ PROCESSING"]
         O["Orchestrator"]
-        A["Agente"]
+        A["Agent"]
     end
     
     subgraph LOGGING["📋 LOGGING"]
@@ -34,8 +34,8 @@ flowchart LR
     
     U --> O
     O --> A
-    O -->|"decisione"| L1
-    A -->|"risultato"| L2
+    O -->|"decision"| L1
+    A -->|"result"| L2
     
     style INPUT fill:#e3f2fd
     style PROCESSING fill:#fff3e0

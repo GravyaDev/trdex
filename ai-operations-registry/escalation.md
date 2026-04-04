@@ -1,29 +1,29 @@
-# Schema di Escalation
+# Escalation Schema
 
-> Ultimo aggiornamento: {{DATE}}
+> Last updated: {{DATE}}
 
-## Albero escalation
+## Escalation tree
 
 ```mermaid
 flowchart TD
-    E["⚙️ Agente rileva problema"] --> S{"Tipo?"}
+    E["⚙️ Agent detects problem"] --> S{"Type?"}
     
-    S -->|"Errore tecnico"| R["Retry"]
-    R --> R1{"Risolto?"}
-    R1 -- Sì --> OK["✅ Continua"]
-    R1 -- No --> F{"Critico?"}
+    S -->|"Technical error"| R["Retry"]
+    R --> R1{"Resolved?"}
+    R1 -- Yes --> OK["✅ Continue"]
+    R1 -- No --> F{"Critical?"}
     
-    F -- Sì --> FAIL["❌ Interrompi + log"]
-    F -- No --> PS{"Strategia?"}
-    PS -->|"Accetta con disclaimer"| OK
+    F -- Yes --> FAIL["❌ Stop + log"]
+    F -- No --> PS{"Strategy?"}
+    PS -->|"Accept with disclaimer"| OK
     PS -->|"Escalation"| HITL
     PS -->|"Abort"| FAIL
     
-    S -->|"Fuori autonomia"| HITL["🚨 HITL"]
+    S -->|"Outside autonomy"| HITL["🚨 HITL"]
     
-    HITL --> HUM["👤 Umano decide"]
-    HUM -->|"Approvato"| OK
-    HUM -->|"Rifiutato"| CANCEL["Annullato + log"]
+    HITL --> HUM["👤 Human decides"]
+    HUM -->|"Approved"| OK
+    HUM -->|"Rejected"| CANCEL["Cancelled + log"]
     
     style OK fill:#c8e6c9
     style HITL fill:#fff9c4
@@ -31,25 +31,25 @@ flowchart TD
     style CANCEL fill:#ffcdd2
 ```
 
-## Trigger di escalation incondizionati
+## Unconditional escalation triggers
 
-<!-- Questi trigger causano SEMPRE escalation, indipendentemente dal livello HITL. -->
-<!-- Adatta alla realtà del tuo progetto. -->
+<!-- These triggers ALWAYS cause escalation, regardless of the HITL level. -->
+<!-- Adapt to your project's reality. -->
 
-| # | Trigger | Motivazione |
+| # | Trigger | Rationale |
 |---|---|---|
-| 1 | Spesa reale coinvolta | Budget a rischio |
-| 2 | Impatto irreversibile | Invio, pubblicazione, deploy |
-| 3 | Decisione fuori direttive | Nessuna regola applicabile |
-| 4 | Situazione interpersonale | Conflitto, reclamo, negoziazione |
-| 5 | Giudizio soggettivo | Soggettività non algoritmizzabile |
-| 6 | Anomalia ripetuta (3+ volte) | Pattern di errore strutturale |
+| 1 | Real expense involved | Budget at risk |
+| 2 | Irreversible impact | Sending, publishing, deploying |
+| 3 | Decision outside directives | No applicable rule |
+| 4 | Interpersonal situation | Conflict, complaint, negotiation |
+| 5 | Subjective judgment | Subjectivity not algorithmizable |
+| 6 | Repeated anomaly (3+ times) | Structural error pattern |
 
-## Livelli HITL
+## HITL Levels
 
-| Livello | Comportamento | Chi promuove |
+| Level | Behavior | Promoted by |
 |---|---|---|
-| `full_manual` | Ogni azione richiede approvazione | Default |
-| `escalation` | Solo decisioni ad alto rischio | Partner umano |
-| `low_risk` | Solo trigger incondizionati | Partner umano |
-| `full_auto` | Nessuna interruzione (log-only) | Partner umano + review periodica |
+| `full_manual` | Every action requires approval | Default |
+| `escalation` | Only high-risk decisions | Human partner |
+| `low_risk` | Only unconditional triggers | Human partner |
+| `full_auto` | No interruption (log-only) | Human partner + periodic review |

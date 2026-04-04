@@ -95,7 +95,7 @@ Commands should be proactively invoked (not waiting for user) when:
 | Passing work to someone else | `/handoff` (which auto-invokes `:ship --dry-run`) |
 | System behaviour feels off | `/drift-detect` |
 | Code changed today at wrap-up | `/autoresearch:security --diff --depth shallow` |
-| Friday wrap-up | `/autoresearch:learn` + AI Operations Registry update |
+| Friday wrap-up | `/autoresearch:learn` + AI Operations Registry update (if present) |
 | Monthly or after major refactors | `/deep-audit` |
 | Same error hit 3+ times | `/autoresearch:debug` (via `/unstick` escalation) |
 | Shipping a release | `/autoresearch:ship --dry-run` (via `/release`) |
