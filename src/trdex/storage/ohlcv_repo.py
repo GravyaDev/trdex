@@ -43,7 +43,8 @@ class OHLCVRepository:
             {
                 "symbol": symbol,
                 "timeframe": timeframe,
-                "timestamp": c.timestamp,
+                # asyncpg + TIMESTAMPTZ requires naive UTC datetimes
+                "timestamp": c.timestamp.replace(tzinfo=None) if c.timestamp.tzinfo else c.timestamp,
                 "open": float(c.open),
                 "high": float(c.high),
                 "low": float(c.low),

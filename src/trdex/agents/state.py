@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 
@@ -13,7 +13,7 @@ class MarketSnapshot:
 
     symbol: str
     price: float
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
     volume_24h: float | None = None
     change_24h_pct: float | None = None
     # OHLCV candles: list of (ts, open, high, low, close, volume)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
@@ -54,6 +55,13 @@ class TelegramMonitor:
         await self._client.disconnect()
         logger.info("[TelegramMonitor] disconnected")
 
+    async def __aenter__(self) -> "TelegramMonitor":
+        await self.start()
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        await self.stop()
+
     async def fetch_recent(
         self,
         channels: list[str],
@@ -93,26 +101,31 @@ class TelegramMonitor:
     ) -> AsyncIterator[TelegramSignal]:
         """Real-time stream: yields new signals as messages arrive.
 
-        Registers a Telethon event handler for new messages.
+        Registers a Telethon event handler for new messages. Uses asyncio.Queue
+        for backpressure-safe, non-blocking signal delivery.
         """
         from telethon import events  # type: ignore[import-untyped]
 
-        queue: list[TelegramSignal] = []
+        queue: asyncio.Queue[TelegramSignal] = asyncio.Queue()
 
         @self._client.on(events.NewMessage(chats=channels))
-        async def _handler(event):
-            if not event.message.text:
-                return
-            sig = parse_signal(event.message.text, source=str(event.chat_id))
-            if sig:
-                queue.append(sig)
-                logger.info(
-                    "[TelegramMonitor] new signal %s %s", sig.direction, sig.symbol
-                )
+        async def _handler(event) -> None:
+            try:
+                if not event.message.text:
+                    return
+                sig = parse_signal(event.message.text, source=str(event.chat_id))
+                if sig:
+                    await queue.put(sig)
+                    logger.info(
+                        "[TelegramMonitor] new signal %s %s", sig.direction, sig.symbol
+                    )
+            except Exception:
+                logger.exception("[TelegramMonitor] error in message handler")
 
         while self._running:
-            if queue:
-                yield queue.pop(0)
-            else:
-                import asyncio
-                await asyncio.sleep(0.5)
+            try:
+                sig = await asyncio.wait_for(queue.get(), timeout=1.0)
+                yield sig
+                queue.task_done()
+            except asyncio.TimeoutError:
+                continue

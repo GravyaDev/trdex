@@ -7,7 +7,7 @@ import platform
 import sys
 from enum import StrEnum
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
 
 
@@ -25,11 +25,17 @@ class Settings(BaseSettings):
     mode: TrdexMode = TrdexMode.SIMULATION
     log_level: str = "INFO"
 
-    # Database
-    database_url: str = "postgresql+asyncpg://trdex:trdex@localhost:5432/trdex"
+    # Database — accepts DATABASE_URL (no prefix) or TRDEX_DATABASE_URL
+    database_url: str = Field(
+        default="postgresql+asyncpg://trdex:trdex@localhost:5432/trdex",
+        validation_alias=AliasChoices("TRDEX_DATABASE_URL", "DATABASE_URL"),
+    )
 
-    # Redis
-    redis_url: str = "redis://localhost:6379/0"
+    # Redis — accepts REDIS_URL or TRDEX_REDIS_URL
+    redis_url: str = Field(
+        default="redis://localhost:6379/0",
+        validation_alias=AliasChoices("TRDEX_REDIS_URL", "REDIS_URL"),
+    )
 
     # FastAPI
     api_host: str = "0.0.0.0"
@@ -43,6 +49,28 @@ class Settings(BaseSettings):
 
     # Aggregator keys
     coingecko_api_key: str = ""
+    forex_api_key: str = ""          # https://exchangerate-api.com — free tier
+    cryptocompare_api_key: str = ""  # https://cryptocompare.com — free tier
+    alphavantage_api_key: str = ""   # https://alphavantage.co — free tier
+    freecryptoapi_key: str = ""      # https://freecryptoapi.com — free tier (optional)
+
+    # News sources
+    stockdata_api_key: str = ""      # https://stockdata.org — free tier
+    ingestion_interval: int = 300    # seconds between news fetch cycles
+    ingestion_symbols: str = ""      # comma-separated symbols to track, e.g. "BTC/USDT,ETH/USDT"
+
+    @property
+    def agent_scheduler_symbols_list(self) -> list[str]:
+        if not self.agent_scheduler_symbols:
+            return []
+        return [s.strip() for s in self.agent_scheduler_symbols.split(",") if s.strip()]
+
+    @property
+    def ingestion_symbols_list(self) -> list[str]:
+        """Parse ingestion_symbols CSV into a list."""
+        if not self.ingestion_symbols:
+            return []
+        return [s.strip() for s in self.ingestion_symbols.split(",") if s.strip()]
 
     # AI / Vector DB
     jina_api_key: str = ""          # https://jina.ai — free tier, 100 req/min
@@ -53,6 +81,13 @@ class Settings(BaseSettings):
     telegram_api_hash: str = ""
     telegram_phone: str = ""
     telegram_channels: str = ""     # comma-separated, e.g. "@ch1,@ch2"
+
+    @property
+    def telegram_channels_list(self) -> list[str]:
+        """Parse telegram_channels CSV into a list, stripping whitespace."""
+        if not self.telegram_channels:
+            return []
+        return [ch.strip() for ch in self.telegram_channels.split(",") if ch.strip()]
     telegram_signal_budget: float = 100.0  # fixed budget per signal (quote currency)
 
     # Simulation gate criteria (Phase 5)
@@ -63,6 +98,17 @@ class Settings(BaseSettings):
 
     # Risk defaults
     max_position_pct: float = Field(default=0.02, description="Max % of portfolio per trade")
+
+    # Stop-loss monitor (external, independent of AI agents)
+    sl_check_interval: float = Field(default=30.0, description="Seconds between stop-loss checks")
+    sl_position_pct: float = Field(default=0.05, description="Per-position stop-loss (5% = close at -5%)")
+    sl_take_profit_pct: float = Field(default=0.10, description="Per-position take-profit (10%)")
+    sl_daily_drawdown_pct: float = Field(default=0.10, description="Daily portfolio drawdown → kill switch")
+
+    # Agent scheduler
+    agent_scheduler_enabled: bool = Field(default=False, description="Auto-run agent cycle on interval")
+    agent_scheduler_interval: int = Field(default=300, description="Seconds between agent cycles")
+    agent_scheduler_symbols: str = Field(default="", description="Comma-separated symbols for auto agent runs")
 
 
 def pin_event_loop_policy() -> None:

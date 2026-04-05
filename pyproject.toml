@@ -28,6 +28,8 @@ dependencies = [
     "qdrant-client>=1.9",
     "polars==1.33.1",           # lts-cpu variant required on Windows (cpu-check VirtualAlloc issue)
     "httpx>=0.27",
+    "streamlit>=1.56.0",
+    "plotly>=6.6.0",
 ]
 
 [project.optional-dependencies]
@@ -90,3 +92,8 @@ addopts = "-v --tb=short"
 [tool.coverage.run]
 source = ["src/trdex"]
 omit = ["tests/*"]
+
+[dependency-groups]
+dev = [
+    "alembic>=1.18.4",
+]

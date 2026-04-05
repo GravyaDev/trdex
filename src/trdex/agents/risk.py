@@ -26,6 +26,17 @@ async def risk_node(state: AgentState) -> AgentState:
 
     settings = get_settings()
 
+    # Gate 0: Kill switch — overrides everything, including the AI
+    from trdex.risk.stop_loss import get_kill_switch
+    ks = get_kill_switch()
+    if ks.active:
+        state.risk = RiskDecision(
+            approved=False,
+            reason=f"Kill switch active: {ks.status['reason']}",
+        )
+        logger.critical("[Risk] BLOCKED by kill switch — %s", ks.status["reason"])
+        return state
+
     # Gate 1: HOLD signal → nothing to approve
     if state.analysis.signal == "HOLD":
         state.risk = RiskDecision(approved=False, reason="Signal is HOLD — no trade.")
