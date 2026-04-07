@@ -5,6 +5,7 @@ CLAUDE.local.md
 .claude/agent-memory/
 .claude/backups/
 .claude/hooks/__counter
+.mcp.json
 
 # Python
 __pycache__/

@@ -40,15 +40,18 @@ Exit codes:
     3 = step 3 db replay error
     4 = step 1 external feed failure (binance unreachable)
 
-Known issues exposed (not fixed by this script):
-    - readiness.win_rate counts approved trades as wins (always = 100%).
-      Source: src/trdex/risk/readiness.py:65 - needs PnL-aware logic.
-    - backtest.sharpe annualization is wrong on hourly bars (factor of
-      sqrt(24) too small). Source: src/trdex/backtest/engine.py:166 -
-      needs timeframe-aware annualization.
+Recently fixed (do not re-introduce):
+    - readiness.win_rate now reads PnL from account_balance.amount
+      (was approving every filled run as a win). See risk/readiness.py.
+    - readiness.sharpe is now computed from the EoD ledger equity curve
+      and annualised with sqrt(252). See risk/readiness.py.
+    - backtest.sharpe is now annualised with the correct bars-per-year
+      factor for the timeframe (8760 for 1h, 365 for 1d, ...).
+      See backtest/engine.py.
 
 Modifies (in separate commits, not by this file directly):
     - src/trdex/backtest/engine.py: adds entry_idx/exit_idx to trades
+      and timeframe-aware sharpe annualisation
     - src/trdex/market/feeds/binance.py: adds since param to get_ohlcv
 """
 
@@ -176,7 +179,11 @@ async def step0_handle_reset(engine, reset: bool, yes: bool) -> bool:
     counts = await _table_counts(engine)
     print("\nWARNING: --reset will TRUNCATE these tables:")
     print(f"  ohlcv          : {counts.ohlcv} rows")
-    print(f"  account_balance: {counts.account_balance} rows  -> re-seeded to {INITIAL_BALANCE} USDT")
+    print(
+        f"  account_balance: {counts.account_balance} rows"
+        f"  -> Step 3 will then write a fresh seed deposit of {INITIAL_BALANCE} USDT"
+        " dated before the first trade"
+    )
     print(f"  agent_runs     : {counts.agent_runs} rows")
     print(f"  positions      : {counts.positions} rows")
     print("\nThe following tables will NOT be touched:")
@@ -324,7 +331,12 @@ async def step1_ensure_ohlcv(
 # ---------------------------------------------------------------------------
 
 
-def step2_run_backtest(df, symbol: str, position_size_pct: float):
+def step2_run_backtest(
+    df,
+    symbol: str,
+    position_size_pct: float,
+    timeframe: str,
+):
     from trdex.backtest.engine import run_backtest
     from trdex.strategy.backtest.sma_cross import BacktestSMACross
 
@@ -336,6 +348,7 @@ def step2_run_backtest(df, symbol: str, position_size_pct: float):
         initial_capital=float(INITIAL_BALANCE),
         position_size_pct=position_size_pct,
         fee_rate=0.001,
+        timeframe=timeframe,
     )
 
 
@@ -621,6 +634,8 @@ def print_final_report(
     step3: Step3Result,
     readiness_report,
     coherence: list[CoherenceCheck],
+    effective_position_size: float,
+    position_size_source: str,
 ) -> int:
     """Print the final structured report. Returns the exit code (0 or 1)."""
     print()
@@ -631,8 +646,8 @@ def print_final_report(
         f"strategy: sma_cross(9,21)"
     )
     print(
-        f"position_size_pct: {settings.max_position_pct * 100:.1f}% "
-        f"(from Settings.max_position_pct)"
+        f"position_size_pct: {effective_position_size * 100:.1f}% "
+        f"(from {position_size_source})"
     )
     print("=" * 64)
 
@@ -659,8 +674,8 @@ def print_final_report(
         f"  (engine, intra-bar mark-to-market)"
     )
     print(
-        f"  sharpe (raw)  : {backtest_result.sharpe_ratio:.3f}   "
-        f"KNOWN BUG: hourly bars annualized as daily"
+        f"  sharpe        : {backtest_result.sharpe_ratio:.3f}"
+        f"   (annualised, {args.timeframe} bars)"
     )
 
     # ---- step 3 ---------------------------------------------------------
@@ -695,7 +710,6 @@ def print_final_report(
             readiness_report.win_rate,
             ">=",
             readiness_report.criteria["min_win_rate"],
-            note="KNOWN BUG: counts approved as wins",
         )
     )
     print(
@@ -704,13 +718,24 @@ def print_final_report(
             readiness_report.max_drawdown_pct,
             "<=",
             readiness_report.criteria["max_drawdown"],
-            note="(realized only - readiness reads ledger peak/trough)",
+            note="(EoD equity peak-to-trough)",
         )
     )
-    print(
-        f"  {'sharpe':<18}: {'n/a':<7} (gate: >={readiness_report.criteria['min_sharpe']:.1f}    )"
-        f" [SKIP]  KNOWN BUG: readiness sharpe deferred"
-    )
+    if readiness_report.sharpe is not None:
+        print(
+            _gate_line(
+                "sharpe",
+                readiness_report.sharpe,
+                ">=",
+                readiness_report.criteria["min_sharpe"],
+            )
+        )
+    else:
+        print(
+            f"  {'sharpe':<18}: {'n/a':<7} "
+            f"(gate: >={readiness_report.criteria['min_sharpe']:.2f}  ) [SKIP]"
+            "  insufficient daily returns"
+        )
     readiness_verdict = "READY" if readiness_report.ready else "NOT READY"
     print(f"  VERDICT (readiness gate): {readiness_verdict}")
     if readiness_report.failures:
@@ -768,16 +793,6 @@ def print_final_report(
         )
     print("=" * 64)
 
-    # ---- known issues (D25) ---------------------------------------------
-    print("\nKnown issues (do not block this smoke - documented for context):")
-    print("  - readiness.win_rate is broken: counts approved trades as wins")
-    print("    impact : gate over-reports win rate, can mark systems READY incorrectly")
-    print("    fix    : src/trdex/risk/readiness.py:65 - needs PnL-aware logic")
-    print("  - backtest.sharpe annualization is wrong on hourly bars")
-    print("    impact : reported sharpe is sqrt(24) ~= 4.9x too small")
-    print("    fix    : src/trdex/backtest/engine.py:166 - needs timeframe-aware annualization")
-    print()
-
     return 0
 
 
@@ -793,7 +808,27 @@ async def main() -> int:
     parser.add_argument("--days", type=int, default=90)
     parser.add_argument("--reset", action="store_true", help="TRUNCATE ohlcv/ledger/agent_runs/positions")
     parser.add_argument("--yes", action="store_true", help="skip --reset confirmation prompt")
+    parser.add_argument(
+        "--position-size",
+        type=float,
+        default=None,
+        metavar="PCT",
+        help=(
+            "Override the position size as a fraction in (0, 1]. "
+            "Default: read from Settings.max_position_pct (typically 0.02). "
+            "Use this to explore how the strategy behaves at higher sizing "
+            "(e.g. --position-size 0.95 for near-full equity, which produces "
+            "a realistic drawdown signal)."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.position_size is not None:
+        if not (0 < args.position_size <= 1.0):
+            print(
+                f"ERROR: --position-size must be in (0, 1], got {args.position_size}"
+            )
+            return 1
 
     from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -802,6 +837,17 @@ async def main() -> int:
     from trdex.market.manager import PriceFeedManager
 
     settings = get_settings()
+
+    # Resolve effective position size: CLI override wins over settings.
+    effective_position_size = (
+        args.position_size if args.position_size is not None else settings.max_position_pct
+    )
+    position_size_source = (
+        "CLI --position-size override"
+        if args.position_size is not None
+        else "Settings.max_position_pct"
+    )
+
     print(f"\nsmoke_level3 starting (mode={settings.mode.value}, db={_redact(settings.database_url)})")
 
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
@@ -829,7 +875,9 @@ async def main() -> int:
             repo = OHLCVRepository(session)
             df = await repo.fetch_polars(args.symbol, args.timeframe, limit=args.days * 24 + 100)
 
-        backtest_result = step2_run_backtest(df, args.symbol, settings.max_position_pct)
+        backtest_result = step2_run_backtest(
+            df, args.symbol, effective_position_size, args.timeframe
+        )
 
         if backtest_result.total_trades == 0:
             print()
@@ -845,7 +893,7 @@ async def main() -> int:
         # ---- Step 3: replay to DB ------------------------------------
         _section("Step 3 / 5: replay trades to ledger and agent_runs")
         step3 = await step3_replay(
-            engine, df, backtest_result, args.symbol, settings.max_position_pct
+            engine, df, backtest_result, args.symbol, effective_position_size
         )
 
         # ---- Step 4: readiness ---------------------------------------
@@ -860,6 +908,8 @@ async def main() -> int:
         return print_final_report(
             args=args,
             settings=settings,
+            effective_position_size=effective_position_size,
+            position_size_source=position_size_source,
             step1=step1,
             backtest_result=backtest_result,
             step3=step3,

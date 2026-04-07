@@ -84,34 +84,9 @@ async def _telegram_background(monitor: TelegramMonitor, channels: list[str]) ->
         logger.exception("[telegram] background task crashed")
 
 
-async def _agent_scheduler_loop(session_factory, feed_manager, symbols: list[str], interval: int, gateway=None) -> None:
-    """Background loop: run agent cycle for each symbol every `interval` seconds."""
-    from trdex.agents.runner import AgentRunner
-    from trdex.risk.stop_loss import get_kill_switch
-    while True:
-        try:
-            if get_kill_switch().active:
-                logger.warning("[AgentScheduler] kill switch active — skipping cycle")
-            else:
-                for sym in symbols:
-                    try:
-                        async with session_factory() as session:
-                            runner = AgentRunner(session, feed_manager, session_factory=session_factory, gateway=gateway)
-                            state = await runner.run(sym)
-                            logger.info(
-                                "[AgentScheduler] %s → signal=%s order=%s",
-                                sym, state.analysis.signal, state.order.status,
-                            )
-                    except Exception:
-                        logger.exception("[AgentScheduler] cycle failed for %s", sym)
-        except asyncio.CancelledError:
-            break
-        except Exception:
-            logger.exception("[AgentScheduler] unexpected error")
-        try:
-            await asyncio.sleep(interval)
-        except asyncio.CancelledError:
-            break
+# Agent scheduler loop is now defined in trdex.agents.scheduler so it can
+# be imported by smoke_level4 (and future tests) without spinning up the
+# full FastAPI lifespan. The lifespan below imports it on demand.
 
 
 @asynccontextmanager
@@ -222,8 +197,16 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # --- Agent scheduler ---
     agent_symbols = settings.agent_scheduler_symbols_list
     if settings.agent_scheduler_enabled and agent_symbols:
+        from trdex.agents.scheduler import agent_scheduler_loop
+
         _agent_task = asyncio.create_task(
-            _agent_scheduler_loop(session_factory, feed_manager, agent_symbols, settings.agent_scheduler_interval, gateway=gateway),
+            agent_scheduler_loop(
+                session_factory,
+                feed_manager,
+                agent_symbols,
+                settings.agent_scheduler_interval,
+                gateway=gateway,
+            ),
             name="agent-scheduler",
         )
         logger.info("[AgentScheduler] started — symbols=%s interval=%ds", agent_symbols, settings.agent_scheduler_interval)

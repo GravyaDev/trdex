@@ -9,6 +9,36 @@ import polars as pl
 
 from trdex.backtest.indicators import add_indicators
 
+# Number of bars per calendar year for each supported timeframe.
+# Crypto markets trade 24/7/365, so we use 365 days/year (no 252 trading-day
+# adjustment). Sharpe annualisation = bar_sharpe * sqrt(bars_per_year). If
+# we ever add equity / forex backtests we'll need a second map keyed on
+# asset class.
+_BARS_PER_YEAR: dict[str, int] = {
+    "1m":  525_600,
+    "3m":  175_200,
+    "5m":  105_120,
+    "15m":  35_040,
+    "30m":  17_520,
+    "1h":    8_760,
+    "2h":    4_380,
+    "4h":    2_190,
+    "6h":    1_460,
+    "8h":    1_095,
+    "12h":     730,
+    "1d":      365,
+    "1w":       52,
+}
+
+
+def _bars_per_year(timeframe: str) -> int:
+    """Return the number of bars in one calendar year for ``timeframe``.
+
+    Falls back to ``8760`` (1h, the default app timeframe) for unknown
+    inputs and logs nothing — this is a hot path called once per backtest.
+    """
+    return _BARS_PER_YEAR.get(timeframe, 8_760)
+
 
 class Strategy(Protocol):
     """Strategy interface for the backtest engine.
@@ -45,6 +75,7 @@ def run_backtest(
     initial_capital: float = 10_000.0,
     position_size_pct: float = 0.02,
     fee_rate: float = 0.001,
+    timeframe: str = "1h",
 ) -> BacktestResult:
     """Run a vectorised backtest on OHLCV data.
 
@@ -55,6 +86,9 @@ def run_backtest(
         initial_capital: Starting capital in quote currency.
         position_size_pct: Fraction of capital per trade.
         fee_rate: Fee per trade (both entry and exit).
+        timeframe: bar size of ``ohlcv``, used to annualise the Sharpe ratio.
+            Crypto-correct annualisation factor (365 days/year). Defaults to
+            ``"1h"`` which matches the live agent's default timeframe.
 
     Returns:
         BacktestResult with performance metrics and equity curve.
@@ -133,7 +167,7 @@ def run_backtest(
 
     equity_series = pl.Series("equity", equity)
     max_drawdown_pct = _max_drawdown(equity_series)
-    sharpe = _sharpe_ratio(equity_series)
+    sharpe = _sharpe_ratio(equity_series, bars_per_year=_bars_per_year(timeframe))
     win_rate = wins / total_trades if total_trades > 0 else 0.0
 
     trades_df = pl.DataFrame(trade_rows) if trade_rows else pl.DataFrame(
@@ -175,8 +209,23 @@ def _max_drawdown(equity: pl.Series) -> float:
     return max_dd
 
 
-def _sharpe_ratio(equity: pl.Series, risk_free_rate: float = 0.0) -> float:
-    """Annualised Sharpe ratio from equity curve (assumes daily bars)."""
+def _sharpe_ratio(
+    equity: pl.Series,
+    *,
+    bars_per_year: int,
+    risk_free_rate: float = 0.0,
+) -> float:
+    """Annualised Sharpe ratio from an equity curve.
+
+    The equity curve is sampled at one point per bar of the original
+    OHLCV input. ``bars_per_year`` lets the caller annualise correctly
+    regardless of timeframe — e.g. 8760 for hourly bars (24 * 365),
+    365 for daily bars (crypto 24/7 calendar).
+
+    Returns ``0.0`` when there are fewer than 2 returns or when the
+    return std is zero (a flat or single-point curve has undefined
+    risk-adjusted return).
+    """
     returns = equity.pct_change().drop_nulls()
     if len(returns) < 2:
         return 0.0
@@ -184,5 +233,5 @@ def _sharpe_ratio(equity: pl.Series, risk_free_rate: float = 0.0) -> float:
     std_r = returns.std() or 0.0
     if std_r == 0:
         return 0.0
-    daily_sharpe = (mean_r - risk_free_rate) / std_r
-    return daily_sharpe * (252 ** 0.5)  # annualise
+    bar_sharpe = (mean_r - risk_free_rate) / std_r
+    return bar_sharpe * (bars_per_year ** 0.5)
