@@ -60,7 +60,8 @@ class JinaEmbedder:
             "normalized": False,
         }
 
-        assert self._client is not None, "Use JinaEmbedder as async context manager"
+        if self._client is None:
+            raise RuntimeError("Use JinaEmbedder as async context manager")
         response = await self._client.post(JINA_ENDPOINT, json=payload, headers=headers)
         if response.status_code != 200:
             raise JinaEmbeddingError(f"Jina API error {response.status_code}: {response.text}")

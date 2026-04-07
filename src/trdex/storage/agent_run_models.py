@@ -49,7 +49,7 @@ class AgentRunRecord(Base):
     take_profit_pct: Mapped[float] = mapped_column(Numeric(10, 6), nullable=False, default=0)
 
     # Order
-    order_status: Mapped[str] = mapped_column(Text, nullable=False, default="skipped")
+    order_status: Mapped[str] = mapped_column(Text, nullable=False, default="skipped")  # filled | rejected | skipped | pending
     filled_price: Mapped[float | None] = mapped_column(Numeric(28, 8), nullable=True)
     filled_qty: Mapped[float | None] = mapped_column(Numeric(28, 8), nullable=True)
     order_message: Mapped[str] = mapped_column(Text, nullable=False, default="")

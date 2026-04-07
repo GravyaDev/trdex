@@ -97,7 +97,6 @@ def run_backtest(
             capital += proceeds
             in_position = False
             total_trades += 1
-            (wins if pnl >= 0 else losses).__class__  # just to avoid walrus
             if pnl >= 0:
                 wins += 1
             else:

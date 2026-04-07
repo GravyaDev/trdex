@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from trdex.api.app import verify_api_key
+from trdex.api.validators import SymbolParam
 
 router = APIRouter(prefix="/v1/context", tags=["context"])
 
@@ -40,7 +41,7 @@ async def run_ingestion_now(_key: str = Depends(verify_api_key)) -> RunOnceRespo
 
 
 @router.post("/symbols")
-async def add_symbol(symbol: str, _key: str = Depends(verify_api_key)) -> dict:
+async def add_symbol(symbol: SymbolParam, _key: str = Depends(verify_api_key)) -> dict:
     """Add a symbol to the ingestion watchlist."""
     if _scheduler is None:
         raise HTTPException(status_code=503, detail="Scheduler not running.")

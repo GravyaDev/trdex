@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import logging
 import uuid
@@ -18,6 +19,7 @@ from trdex.agents.state import (
     AnalysisResult,
     MarketSnapshot,
     OrderResult,
+    PortfolioContext,
     RiskDecision,
     SentimentContext,
 )
@@ -42,14 +44,17 @@ def _build_graph() -> StateGraph:
     return graph
 
 
-# Compiled graph — lazy init on first call
+# Compiled graph — lazy init on first call, protected against concurrent coroutines
 _compiled = None
+_compiled_lock = asyncio.Lock()
 
 
-def _get_compiled():
+async def _get_compiled():
     global _compiled
     if _compiled is None:
-        _compiled = _build_graph().compile()
+        async with _compiled_lock:
+            if _compiled is None:  # double-checked after acquiring lock
+                _compiled = _build_graph().compile()
     return _compiled
 
 
@@ -71,6 +76,9 @@ def _dict_to_state(d: dict) -> AgentState:
         analysis=_coerce(AnalysisResult, d.get("analysis")) or AnalysisResult(),
         risk=_coerce(RiskDecision, d.get("risk")) or RiskDecision(),
         order=_coerce(OrderResult, d.get("order")) or OrderResult(),
+        portfolio=_coerce(PortfolioContext, d.get("portfolio")) or PortfolioContext(),
+        session_factory=d.get("session_factory"),
+        gateway=d.get("gateway"),
         error=d.get("error"),
         completed_at=d.get("completed_at"),
     )
@@ -79,12 +87,16 @@ def _dict_to_state(d: dict) -> AgentState:
 async def run_agent_cycle(
     symbol: str,
     market_snapshot: MarketSnapshot | None = None,
+    portfolio_context: PortfolioContext | None = None,
+    session_factory=None,
+    gateway=None,
 ) -> AgentState:
     """Run one full Scout → Analyst → Risk → Executor cycle.
 
     Args:
         symbol: Trading pair, e.g. "BTC/USDT"
         market_snapshot: Pre-fetched MarketSnapshot (injected by the feed layer).
+        portfolio_context: Live portfolio state for risk gate decisions.
 
     Returns:
         Final AgentState with all agent outputs populated.
@@ -93,10 +105,13 @@ async def run_agent_cycle(
         symbol=symbol,
         run_id=str(uuid.uuid4()),
         market=market_snapshot,
+        portfolio=portfolio_context or PortfolioContext(),
+        session_factory=session_factory,
+        gateway=gateway,
     )
     logger.info("[Graph] starting cycle run_id=%s symbol=%s", initial_state.run_id, symbol)
 
-    raw = await _get_compiled().ainvoke(initial_state)
+    raw = await (await _get_compiled()).ainvoke(initial_state)
     final_state = _dict_to_state(raw) if isinstance(raw, dict) else raw
     final_state.completed_at = datetime.now(tz=timezone.utc)
 

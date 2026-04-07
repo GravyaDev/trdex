@@ -68,6 +68,30 @@ else:
     st.error("Cannot reach the trdex API. Is it running?")
     st.stop()
 
+# ── Readiness check (sim → live gate) ──────────────────────────────────────
+
+readiness = get("/v1/system/readiness")
+if readiness:
+    verdict = readiness.get("verdict", "UNKNOWN")
+    if verdict == "READY":
+        st.success("Simulation gate: READY for live trading")
+    else:
+        failures = readiness.get("failures", [])
+        st.warning(f"Simulation gate: NOT READY — {'; '.join(failures)}")
+    with st.expander("Readiness details"):
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Sim days", readiness.get("sim_days", 0))
+        c2.metric("Trades", readiness.get("total_trades", 0))
+        c3.metric("Win rate", f"{readiness.get('win_rate', 0):.1%}")
+        c4.metric("Max DD", f"{readiness.get('max_drawdown_pct', 0):.1%}")
+        criteria = readiness.get("criteria", {})
+        st.caption(
+            f"Criteria: {criteria.get('min_days', '?')} days, "
+            f"{criteria.get('min_trades', '?')} trades, "
+            f">{criteria.get('min_win_rate', '?'):.0%} win rate, "
+            f"<{criteria.get('max_drawdown', '?'):.0%} drawdown"
+        )
+
 # ── Portfolio snapshot ──────────────────────────────────────────��─────────────
 
 st.header("Portfolio")
@@ -215,11 +239,12 @@ if risk_status:
 
     with st.expander("Stop-Loss Thresholds"):
         thresholds = risk_status.get("thresholds", {})
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("Position SL", f"{thresholds.get('position_sl_pct', 0):.1%}")
         c2.metric("Position TP", f"{thresholds.get('position_tp_pct', 0):.1%}")
-        c3.metric("Daily DD limit", f"{thresholds.get('daily_drawdown_pct', 0):.1%}")
-        c4.metric("Max DD limit", f"{thresholds.get('max_drawdown_pct', 0):.1%}")
+        c3.metric("Trailing Stop", f"{thresholds.get('trailing_stop_pct', 0):.1%}")
+        c4.metric("Daily DD limit", f"{thresholds.get('daily_drawdown_pct', 0):.1%}")
+        c5.metric("Max DD limit", f"{thresholds.get('max_drawdown_pct', 0):.1%}")
 
     col_check, col_kill = st.columns(2)
     with col_check:
@@ -258,12 +283,95 @@ with st.expander("📰 News Ingestion Status"):
             if data is not None:
                 st.success(f"Ingested {data.get('docs_ingested', 0)} documents.")
 
+# ── Symbol Watchlist Management ───────────────────────────────────────────────
+
+with st.expander("Symbol Watchlist"):
+    ctx_status_wl = get("/v1/context/status")
+    current_symbols = ctx_status_wl.get("symbols", []) if ctx_status_wl else []
+
+    if current_symbols:
+        st.write("**Active symbols:**")
+        cols = st.columns(min(len(current_symbols), 6))
+        for i, sym in enumerate(current_symbols):
+            with cols[i % len(cols)]:
+                if st.button(f"X {sym}", key=f"rm_{sym}"):
+                    import httpx as _httpx
+                    headers = {"X-API-Key": api_key} if api_key else {}
+                    try:
+                        _httpx.delete(f"{base_url}/v1/context/symbols/{sym}", headers=headers, timeout=10)
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to remove {sym}: {e}")
+    else:
+        st.info("No symbols in watchlist.")
+
+    col_add, col_btn = st.columns([3, 1])
+    with col_add:
+        new_symbol = st.text_input("Add symbol (e.g. BTC/USDT)", key="new_sym", value="")
+    with col_btn:
+        st.write("")
+        if st.button("+ Add", key="add_sym") and new_symbol:
+            result = post("/v1/context/symbols", params={"symbol": new_symbol})
+            if result is not None:
+                st.success(f"Added {new_symbol}")
+                st.cache_data.clear()
+                st.rerun()
+
 # ── Status ────────────────────────────────────────────────────────────────────
 
 with st.expander("System Status"):
     status = get("/v1/status")
     if status:
         st.json(status)
+
+# ── Debug Section (collapsible) ──────────────────────────────────────────────
+
+st.divider()
+show_debug = st.checkbox("Show debug panels", value=False, key="debug_toggle")
+
+if show_debug:
+    st.header("Debug")
+
+    # Balance Ledger History
+    with st.expander("Balance Ledger (raw events)"):
+        ledger_data = get("/v1/debug/balance-ledger?limit=100")
+        if ledger_data and ledger_data.get("entries"):
+            import pandas as pd
+            df_ledger = pd.DataFrame(ledger_data["entries"])
+            df_ledger["amount"] = pd.to_numeric(df_ledger["amount"], errors="coerce")
+            df_ledger["balance_after"] = pd.to_numeric(df_ledger["balance_after"], errors="coerce")
+            st.dataframe(df_ledger, use_container_width=True)
+        else:
+            st.info("No balance events recorded yet.")
+
+    # Entity Graph Viewer
+    with st.expander("Entity Graph (active facts)"):
+        col_st, col_si, col_pr = st.columns(3)
+        with col_st:
+            eg_subject_type = st.text_input("Subject type", value="", key="eg_st", placeholder="e.g. symbol")
+        with col_si:
+            eg_subject_id = st.text_input("Subject ID", value="", key="eg_si", placeholder="e.g. BTC/USDT")
+        with col_pr:
+            eg_predicate = st.text_input("Predicate", value="", key="eg_pr", placeholder="e.g. volatility_regime")
+
+        params = {}
+        if eg_subject_type:
+            params["subject_type"] = eg_subject_type
+        if eg_subject_id:
+            params["subject_id"] = eg_subject_id
+        if eg_predicate:
+            params["predicate"] = eg_predicate
+
+        query_str = "&".join(f"{k}={v}" for k, v in params.items())
+        eg_url = f"/v1/debug/entity-graph?{query_str}" if query_str else "/v1/debug/entity-graph"
+        eg_data = get(eg_url)
+        if eg_data and eg_data.get("facts"):
+            import pandas as pd
+            df_eg = pd.DataFrame(eg_data["facts"])
+            st.dataframe(df_eg, use_container_width=True)
+        else:
+            st.info("No active facts match the filter.")
 
 # ── Auto-refresh ──────────────────────────────────────────────────────────────
 

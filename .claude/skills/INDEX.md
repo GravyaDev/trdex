@@ -64,6 +64,18 @@ Every skill:
 | [Startup & Entrepreneurship](./startup/) | 63 | Business planning, fundraising, validation, growth |
 | [Travel & Hospitality](./travel/) | 54 | Trip planning, hospitality operations, guest experience |
 
+## Dedicated Skills (project-specific, standalone)
+
+| Skill | Description |
+|-------|-------------|
+| [persistent-memory-stack](./persistent-memory-stack/SKILL.md) | Bootstrap 6-tier persistent memory for AI agent systems — PostgreSQL + pgvector + Python templates |
+| [multi-agent-brainstorming](./multi-agent-brainstorming/SKILL.md) | Structured design review with enforced agent roles |
+| [brainstorming](./brainstorming/SKILL.md) | Single-agent ideation with Understanding Lock |
+| [autoresearch](./autoresearch/SKILL.md) | Autonomous deep research with source validation |
+| [web-fetch](./web-fetch/SKILL.md) | Fetch and extract structured content from web pages |
+
+---
+
 ## Quick Start
 
 1. Run any skill by asking Claude to perform the task (skills auto-detect)

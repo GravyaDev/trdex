@@ -22,10 +22,13 @@ Every entry MUST cite its source using one of:
 - **Windows + pnpm: inline env vars don't work.** `VAR=value docker compose up` fails on Windows. Always use a `.env` file in the project root. [Source: empirical 2026-03-27]
 
 ## Project Patterns
-- (none yet)
+- **RSI deve usare Wilder smoothing** (`com=period-1` in Polars), non EWM standard (`span=period`). Wilder è lo standard di TradingView, Bloomberg e MetaTrader. EWM standard diverge di 2-5 punti RSI in periodi volatili e produce segnali non comparabili con dati esterni. [Source: user override 2026-04-05]
+- **Spiegare concetti tecnici a Daniele con esempi numerici concreti**, non con formule o descrizioni algoritmiche. Esempio corretto: "BTC a $90.000, equity $10.000 → compra 0.00222 BTC". Esempio sbagliato: "qty = equity × position_size / price". [Source: user override 2026-04-05]
+- **SQLAlchemy `default=` su colonne timestamp: usare funzioni module-level con nome**, non lambda definite dentro classi. SA può iniettare `ctx` come argomento alle lambda con `argcount==1`, causando errori silenziosi. Pattern corretto: `def _utcnow_naive() -> datetime: return datetime.now(tz=timezone.utc).replace(tzinfo=None)` a livello modulo. [Source: empirical 2026-04-05]
 
 ## Dynamic Architecture Rules
-- (none yet)
+- **Il balance del portfolio va persistito su ledger DB** (`account_balance` con `balance_after` per ogni evento — deposit, withdrawal, trade_fill). Non tenere il saldo in memoria. Permette di recuperare saldo reale e picco storico dopo qualsiasi riavvio. [Source: empirical 2026-04-05]
+- **La skill `persistent-memory-stack` non è applicabile as-is a trdex** — usa pgvector (noi Qdrant) e psycopg3 (noi asyncpg). Solo il Tier 5 (Entity Graph) è applicabile ed è stato estratto e adattato. [Source: agent inference 2026-04-05]
 
 ## Known Failure Modes
 - (none yet)

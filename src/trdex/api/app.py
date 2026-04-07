@@ -84,7 +84,7 @@ async def _telegram_background(monitor: TelegramMonitor, channels: list[str]) ->
         logger.exception("[telegram] background task crashed")
 
 
-async def _agent_scheduler_loop(session_factory, feed_manager, symbols: list[str], interval: int) -> None:
+async def _agent_scheduler_loop(session_factory, feed_manager, symbols: list[str], interval: int, gateway=None) -> None:
     """Background loop: run agent cycle for each symbol every `interval` seconds."""
     from trdex.agents.runner import AgentRunner
     from trdex.risk.stop_loss import get_kill_switch
@@ -96,7 +96,7 @@ async def _agent_scheduler_loop(session_factory, feed_manager, symbols: list[str
                 for sym in symbols:
                     try:
                         async with session_factory() as session:
-                            runner = AgentRunner(session, feed_manager)
+                            runner = AgentRunner(session, feed_manager, session_factory=session_factory, gateway=gateway)
                             state = await runner.run(sym)
                             logger.info(
                                 "[AgentScheduler] %s → signal=%s order=%s",
@@ -118,6 +118,25 @@ async def _agent_scheduler_loop(session_factory, feed_manager, symbols: list[str
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     global _telegram_task, _scheduler, _agent_task
 
+    # --- Session factory (needed early for tracker load) ---
+    session_factory = get_session_factory()
+
+    # --- Security check ---
+    if not settings.api_key:
+        logger.warning(
+            "[security] TRDEX_API_KEY is not set — API is unauthenticated. "
+            "Set TRDEX_API_KEY before deploying to production."
+        )
+
+    # --- Restore KillSwitch state from DB (survives restarts) ---
+    from trdex.risk.stop_loss import get_kill_switch
+    ks = get_kill_switch()
+    ks.configure(session_factory)
+    await ks.load_from_db()
+
+    # --- Restore SignalTracker history from DB ---
+    await _tracker.load_from_db(session_factory)
+
     # --- Price feed manager ---
     feed_manager = PriceFeedManager()
     feed_manager.register(BinanceFeed())
@@ -132,13 +151,14 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     ws_feed = BinanceWSFeed()
     feed_manager.register(ws_feed)
 
-    # --- Portfolio service (session created per-call inside the service) ---
-    session_factory = get_session_factory()
+    # --- Execution gateway (shared by SL monitor + agent runner + routes) ---
+    from trdex.execution.default_gateway import DefaultExecutionGateway
+    gateway = DefaultExecutionGateway.create()
 
     from trdex.api.routes import portfolio as portfolio_routes
     from trdex.api.routes import agent as agent_routes
     portfolio_routes.set_service_factory(session_factory, feed_manager)
-    agent_routes.set_agent_factory(session_factory, feed_manager)
+    agent_routes.set_agent_factory(session_factory, feed_manager, gateway=gateway)
 
     # Subscribe WS feed for existing open positions
     async with session_factory() as _session:
@@ -188,9 +208,11 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     sl_monitor = StopLossMonitor(
         session_factory=session_factory,
         feed_manager=feed_manager,
+        gateway=gateway,
         check_interval=settings.sl_check_interval,
         position_sl_pct=settings.sl_position_pct,
         position_tp_pct=settings.sl_take_profit_pct,
+        trailing_stop_pct=settings.sl_trailing_stop_pct,
         daily_drawdown_pct=settings.sl_daily_drawdown_pct,
         max_drawdown_pct=settings.gate_max_drawdown,
     )
@@ -201,7 +223,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     agent_symbols = settings.agent_scheduler_symbols_list
     if settings.agent_scheduler_enabled and agent_symbols:
         _agent_task = asyncio.create_task(
-            _agent_scheduler_loop(session_factory, feed_manager, agent_symbols, settings.agent_scheduler_interval),
+            _agent_scheduler_loop(session_factory, feed_manager, agent_symbols, settings.agent_scheduler_interval, gateway=gateway),
             name="agent-scheduler",
         )
         logger.info("[AgentScheduler] started — symbols=%s interval=%ds", agent_symbols, settings.agent_scheduler_interval)
@@ -228,8 +250,13 @@ async def verify_api_key(api_key: str | None = Security(API_KEY_HEADER)) -> str:
     """Verify API key for authenticated endpoints.
 
     If TRDEX_API_KEY is not set, authentication is disabled (dev mode).
+    WARNING: running without an API key exposes all endpoints to unauthenticated access.
     """
     if not settings.api_key:
+        logger.warning(
+            "[security] TRDEX_API_KEY is not set — all endpoints are unauthenticated (dev mode). "
+            "Set TRDEX_API_KEY in production."
+        )
         return "dev-mode"
     if not api_key or not secrets.compare_digest(api_key, settings.api_key):
         raise HTTPException(status_code=403, detail="Invalid or missing API key")
@@ -244,6 +271,15 @@ def create_app() -> FastAPI:
         lifespan=_lifespan,
     )
 
+    # --- API rate limiting (per client IP) ---
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.util import get_remote_address
+    from slowapi.errors import RateLimitExceeded
+
+    limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
     from trdex.api.routes.portfolio import router as portfolio_router
     from trdex.api.routes.context import router as context_router
     from trdex.api.routes.agent import router as agent_router
@@ -255,10 +291,32 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[settings.cors_origins] if settings.cors_origins else [],
+        allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()] if settings.cors_origins else [],
         allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["X-API-Key"],
     )
+
+    # --- Request logging middleware ---
+    import hashlib
+    import time as _time
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request as StarletteRequest
+    from starlette.responses import Response as StarletteResponse
+
+    class _RequestLoggingMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: StarletteRequest, call_next) -> StarletteResponse:
+            start = _time.monotonic()
+            response = await call_next(request)
+            latency_ms = (_time.monotonic() - start) * 1000
+            api_key = request.headers.get("X-API-Key", "")
+            key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:8] if api_key else "none"
+            logger.info(
+                "[api] %s %s → %d (%.0fms) key=%s",
+                request.method, request.url.path, response.status_code, latency_ms, key_hash,
+            )
+            return response
+
+    app.add_middleware(_RequestLoggingMiddleware)
 
     # --- Public endpoints (no auth) ---
 
@@ -286,5 +344,97 @@ def create_app() -> FastAPI:
     async def signals(_key: str = Depends(verify_api_key)) -> dict[str, object]:
         """Returns signal tracker report: P&L per source."""
         return {"report": _tracker.report()}
+
+    @app.get("/v1/system/readiness")
+    async def system_readiness(_key: str = Depends(verify_api_key)) -> dict[str, object]:
+        """Check whether the system meets simulation gate criteria for live trading.
+
+        Returns a clear READY / NOT READY verdict with details on each criterion.
+        """
+        from trdex.risk.readiness import evaluate_readiness
+        from trdex.storage.db import get_session_factory
+
+        sf = get_session_factory()
+        async with sf() as session:
+            report = await evaluate_readiness(session, settings)
+
+        return {
+            "verdict": "READY" if report.ready else "NOT READY",
+            "sim_days": report.sim_days,
+            "total_trades": report.total_trades,
+            "win_rate": report.win_rate,
+            "sharpe": report.sharpe,
+            "max_drawdown_pct": report.max_drawdown_pct,
+            "kill_switch_events": report.kill_switch_events,
+            "criteria": report.criteria,
+            "failures": report.failures,
+        }
+
+    # --- Debug endpoints ---
+
+    @app.get("/v1/debug/balance-ledger")
+    async def balance_ledger(
+        limit: int = 50,
+        _key: str = Depends(verify_api_key),
+    ) -> dict[str, object]:
+        """Return the raw balance ledger (deposits, fills, fees)."""
+        from trdex.storage.balance_repo import BalanceRepository
+        from trdex.storage.db import get_session_factory
+
+        sf = get_session_factory()
+        async with sf() as session:
+            repo = BalanceRepository(session)
+            records = await repo.history(limit=min(limit, 500))
+
+        return {
+            "entries": [
+                {
+                    "id": r.id,
+                    "event_type": r.event_type,
+                    "amount": float(r.amount),
+                    "balance_after": float(r.balance_after),
+                    "note": r.note or "",
+                    "recorded_at": r.recorded_at.isoformat() if r.recorded_at else None,
+                }
+                for r in records
+            ],
+        }
+
+    @app.get("/v1/debug/entity-graph")
+    async def entity_graph(
+        subject_type: str | None = None,
+        subject_id: str | None = None,
+        predicate: str | None = None,
+        limit: int = 50,
+        _key: str = Depends(verify_api_key),
+    ) -> dict[str, object]:
+        """Query active facts from the entity graph."""
+        from trdex.storage.entity_graph_repo import EntityGraphRepository
+        from trdex.storage.db import get_session_factory
+
+        sf = get_session_factory()
+        async with sf() as session:
+            repo = EntityGraphRepository(session)
+            facts = await repo.get_active(
+                subject_type=subject_type,
+                subject_id=subject_id,
+                predicate=predicate,
+            )
+
+        return {
+            "facts": [
+                {
+                    "id": f.id,
+                    "subject_type": f.subject_type,
+                    "subject_id": f.subject_id,
+                    "predicate": f.predicate,
+                    "object_value": f.object_value,
+                    "confidence": f.confidence,
+                    "source": f.source,
+                    "valid_from": f.valid_from.isoformat() if f.valid_from else None,
+                }
+                for f in facts[:limit]
+            ],
+        }
 
     return app

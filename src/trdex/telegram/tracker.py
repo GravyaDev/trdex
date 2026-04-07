@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -63,10 +66,14 @@ class SourceStats:
 class SignalTracker:
     """Tracks signal outcomes and computes per-source reliability metrics.
 
+    In-memory store backed by DB persistence.
+    Call `load_from_db(session_factory)` at startup to restore history.
+    Call `record_and_persist(outcome, session_factory)` to record + save atomically.
+
     Usage:
         tracker = SignalTracker(default_budget=Decimal("100"))
-        tracker.record(outcome)
-        stats = tracker.stats("my_channel")
+        await tracker.load_from_db(session_factory)
+        await tracker.record_and_persist(outcome, session_factory)
         report = tracker.report()
     """
 
@@ -75,8 +82,52 @@ class SignalTracker:
         self._outcomes: list[SignalOutcome] = []
 
     def record(self, outcome: SignalOutcome) -> None:
-        """Record the result of a closed signal."""
+        """Record in memory only (no DB write)."""
         self._outcomes.append(outcome)
+
+    async def record_and_persist(self, outcome: SignalOutcome, session_factory) -> None:
+        """Record in memory and persist to DB atomically."""
+        self._outcomes.append(outcome)
+        try:
+            from trdex.storage.signal_outcome_repo import SignalOutcomeRepository
+            async with session_factory() as session:
+                repo = SignalOutcomeRepository(session)
+                await repo.save(
+                    source=outcome.source,
+                    symbol=outcome.symbol,
+                    direction=outcome.direction,
+                    entry_price=outcome.entry_price,
+                    exit_price=outcome.exit_price,
+                    budget=outcome.budget,
+                    executed_at=outcome.executed_at,
+                    closed_at=outcome.closed_at,
+                )
+        except Exception:
+            logger.exception("[SignalTracker] failed to persist outcome for %s", outcome.source)
+
+    async def load_from_db(self, session_factory) -> None:
+        """Reload all historical outcomes from DB into memory (call once at startup)."""
+        try:
+            from trdex.storage.signal_outcome_repo import SignalOutcomeRepository
+            async with session_factory() as session:
+                repo = SignalOutcomeRepository(session)
+                records = await repo.all()
+            self._outcomes = [
+                SignalOutcome(
+                    source=r.source,
+                    symbol=r.symbol,
+                    direction=r.direction,
+                    entry_price=r.entry_price,
+                    exit_price=r.exit_price,
+                    budget=r.budget,
+                    executed_at=r.executed_at.replace(tzinfo=timezone.utc) if r.executed_at else datetime.now(tz=timezone.utc),
+                    closed_at=r.closed_at.replace(tzinfo=timezone.utc) if r.closed_at else None,
+                )
+                for r in records
+            ]
+            logger.info("[SignalTracker] loaded %d outcomes from DB", len(self._outcomes))
+        except Exception:
+            logger.exception("[SignalTracker] failed to load from DB — starting with empty history")
 
     def stats(self, source: str) -> SourceStats:
         """Compute stats for a specific signal source."""

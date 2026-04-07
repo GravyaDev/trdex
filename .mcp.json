@@ -2,13 +2,33 @@
   "mcpServers": {
     "context7": {
       "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp@latest"],
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ],
       "description": "Live library documentation (Next.js, React, any npm package)"
     },
     "memory": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
       "description": "Persistent knowledge graph for cross-session facts"
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ]
+    },
+    "notebooklm": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "notebooklm-mcp@latest"
+      ],
+      "env": {}
     }
   }
 }

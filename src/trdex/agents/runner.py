@@ -8,10 +8,12 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trdex.agents.graph import run_agent_cycle
-from trdex.agents.state import AgentState, MarketSnapshot
+from trdex.agents.state import AgentState, MarketSnapshot, PortfolioContext
 from trdex.market.manager import PriceFeedManager
 from trdex.storage.agent_run_models import AgentRunRecord
 from trdex.storage.ohlcv_repo import OHLCVRepository
+from trdex.storage.balance_repo import BalanceRepository
+from trdex.storage.portfolio_repo import PortfolioRepository
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +29,46 @@ class AgentRunner:
         state = await runner.run("BTC/USDT")
     """
 
-    def __init__(self, session: AsyncSession, feed_manager: PriceFeedManager) -> None:
+    def __init__(self, session: AsyncSession, feed_manager: PriceFeedManager, session_factory=None, gateway=None) -> None:
         self._session = session
         self._feeds = feed_manager
         self._ohlcv_repo = OHLCVRepository(session)
+        self._session_factory = session_factory
+        self._gateway = gateway
+
+    async def _load_portfolio_context(self) -> PortfolioContext:
+        """Load live portfolio state from DB for risk gate decisions."""
+        try:
+            pos_repo = PortfolioRepository(self._session)
+            bal_repo = BalanceRepository(self._session)
+
+            open_positions = await pos_repo.get_open_positions()
+            open_symbols = [p.symbol for p in open_positions]
+
+            unrealized_pnl = sum(
+                (float(p.exit_price or 0) - float(p.entry_price)) * float(p.amount)
+                if p.side == "BUY"
+                else (float(p.entry_price) - float(p.exit_price or 0)) * float(p.amount)
+                for p in open_positions
+            )
+
+            # Cash balance from ledger (authoritative source)
+            balance = float(await bal_repo.current_balance())
+            peak_balance = float(await bal_repo.peak_balance())
+            equity = balance + unrealized_pnl
+            peak_equity = peak_balance  # peak is tracked via ledger entries at fill time
+            drawdown_pct = max(0.0, (peak_equity - equity) / peak_equity) if peak_equity > 0 else 0.0
+
+            return PortfolioContext(
+                equity=equity,
+                open_position_symbols=open_symbols,
+                unrealized_pnl=unrealized_pnl,
+                realized_pnl=balance - peak_balance,  # net change from peak
+                drawdown_pct=drawdown_pct,
+            )
+        except Exception:
+            logger.exception("[runner] failed to load portfolio context — using empty defaults")
+            return PortfolioContext()
 
     async def run(
         self,
@@ -86,8 +124,17 @@ class AgentRunner:
             candles=candles_raw,
         )
 
-        # 3. Run agent cycle
-        state = await run_agent_cycle(symbol=symbol, market_snapshot=snapshot)
+        # 3. Load portfolio context for risk gate decisions
+        portfolio_ctx = await self._load_portfolio_context()
+
+        # 4. Run agent cycle
+        state = await run_agent_cycle(
+            symbol=symbol,
+            market_snapshot=snapshot,
+            portfolio_context=portfolio_ctx,
+            session_factory=self._session_factory,
+            gateway=self._gateway,
+        )
 
         # 4. Persist result
         await self._persist(state)

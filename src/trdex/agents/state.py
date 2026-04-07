@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Any, Literal
 
 
 @dataclass
@@ -56,10 +56,21 @@ class OrderResult:
     """Executor agent output."""
 
     order_id: str = ""
-    status: Literal["filled", "rejected", "skipped"] = "skipped"
+    status: Literal["filled", "rejected", "skipped", "pending"] = "skipped"
     filled_price: float | None = None
     filled_qty: float | None = None
     message: str = ""
+
+
+@dataclass
+class PortfolioContext:
+    """Live portfolio state injected into the agent cycle for risk decisions."""
+
+    equity: float = 0.0                # total equity (cash + unrealized P&L)
+    open_position_symbols: list[str] = field(default_factory=list)  # symbols with open positions
+    unrealized_pnl: float = 0.0        # aggregate unrealized P&L across all open positions
+    realized_pnl: float = 0.0          # total realized P&L (session)
+    drawdown_pct: float = 0.0          # current drawdown from peak equity (0.0–1.0)
 
 
 @dataclass
@@ -76,6 +87,17 @@ class AgentState:
     analysis: AnalysisResult = field(default_factory=AnalysisResult)
     risk: RiskDecision = field(default_factory=RiskDecision)
     order: OrderResult = field(default_factory=OrderResult)
+
+    # Live portfolio context — injected by AgentRunner before the cycle
+    portfolio: PortfolioContext = field(default_factory=PortfolioContext)
+
+    # DB session factory — injected by AgentRunner, used by nodes to persist facts.
+    # Not serialized by LangGraph (Any type, excluded from repr).
+    session_factory: Any = field(default=None, repr=False)
+
+    # Execution gateway — injected by AgentRunner. DefaultExecutionGateway if None.
+    # Not serialized by LangGraph (Any type, excluded from repr).
+    gateway: Any = field(default=None, repr=False)  # DefaultExecutionGateway | None
 
     # Control
     error: str | None = None

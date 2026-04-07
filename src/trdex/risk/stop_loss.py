@@ -17,7 +17,6 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from decimal import Decimal
 from enum import StrEnum
 
 logger = logging.getLogger(__name__)
@@ -26,6 +25,7 @@ logger = logging.getLogger(__name__)
 class StopReason(StrEnum):
     POSITION_STOP_LOSS = "position_stop_loss"    # single position hit SL %
     POSITION_TAKE_PROFIT = "position_take_profit"  # single position hit TP %
+    TRAILING_STOP = "trailing_stop"              # price retraced from high-water mark
     DAILY_DRAWDOWN = "daily_drawdown"             # total portfolio daily loss exceeded
     MAX_DRAWDOWN = "max_drawdown"                 # all-time drawdown exceeded config limit
     KILL_SWITCH = "kill_switch"                   # manual override via API
@@ -51,6 +51,9 @@ class KillSwitch:
     through regardless of AI agent approval. Must be manually reset.
 
     Thread/async-safe: all state mutations are protected by an asyncio.Lock.
+
+    State is persisted to DB (kill_switch_state table) so that a process
+    restart does not silently re-enable trading after a drawdown event.
     """
 
     def __init__(self) -> None:
@@ -58,6 +61,56 @@ class KillSwitch:
         self._reason: str = ""
         self._activated_at: datetime | None = None
         self._lock = asyncio.Lock()
+        self._session_factory = None  # Set via configure() at app startup
+
+    def configure(self, session_factory) -> None:
+        """Inject the DB session factory for persistence. Called once at app startup."""
+        self._session_factory = session_factory
+
+    async def load_from_db(self) -> None:
+        """Restore kill switch state from DB. Call at app startup after configure()."""
+        if self._session_factory is None:
+            return
+        try:
+            from sqlalchemy import text
+            async with self._session_factory() as session:
+                row = (await session.execute(
+                    text("SELECT active, reason, activated_at FROM kill_switch_state WHERE id = 1")
+                )).first()
+                if row and row.active:
+                    self._active = True
+                    self._reason = row.reason or ""
+                    self._activated_at = row.activated_at
+                    logger.critical(
+                        "[KillSwitch] RESTORED from DB — was active since %s: %s",
+                        self._activated_at, self._reason,
+                    )
+        except Exception:
+            logger.exception("[KillSwitch] failed to load state from DB — defaulting to inactive")
+
+    async def _persist(self) -> None:
+        """Save current state to DB."""
+        if self._session_factory is None:
+            return
+        try:
+            from sqlalchemy import text
+            async with self._session_factory() as session:
+                await session.execute(
+                    text(
+                        "UPDATE kill_switch_state "
+                        "SET active = :active, reason = :reason, "
+                        "    activated_at = :activated_at, updated_at = NOW() "
+                        "WHERE id = 1"
+                    ),
+                    {
+                        "active": self._active,
+                        "reason": self._reason,
+                        "activated_at": self._activated_at,
+                    },
+                )
+                await session.commit()
+        except Exception:
+            logger.exception("[KillSwitch] failed to persist state to DB")
 
     async def activate_async(self, reason: str) -> None:
         async with self._lock:
@@ -66,6 +119,7 @@ class KillSwitch:
                 self._reason = reason
                 self._activated_at = datetime.now(tz=timezone.utc)
                 logger.critical("[KillSwitch] ACTIVATED — %s", reason)
+                await self._persist()
 
     def activate(self, reason: str) -> None:
         """Synchronous activate for use outside async context (e.g. startup)."""
@@ -81,6 +135,7 @@ class KillSwitch:
             self._reason = ""
             self._activated_at = None
             logger.warning("[KillSwitch] reset — trading re-enabled")
+            await self._persist()
 
     def reset(self) -> None:
         """Synchronous reset for use outside async context."""
@@ -128,24 +183,29 @@ class StopLossMonitor:
         self,
         session_factory,
         feed_manager,
+        gateway=None,
         check_interval: float = 30.0,
         position_sl_pct: float = 0.05,       # 5% loss per position → close
         position_tp_pct: float = 0.10,       # 10% gain per position → close
+        trailing_stop_pct: float = 0.03,     # 3% retrace from high-water mark → close
         daily_drawdown_pct: float = 0.10,    # 10% portfolio daily loss → kill switch
         max_drawdown_pct: float = 0.20,      # 20% all-time drawdown → kill switch
     ) -> None:
         self._session_factory = session_factory
         self._feeds = feed_manager
+        self._gateway = gateway  # DefaultExecutionGateway for auto-close
         self._interval = check_interval
         self._sl_pct = position_sl_pct
         self._tp_pct = position_tp_pct
+        self._trailing_pct = trailing_stop_pct
         self._daily_dd_pct = daily_drawdown_pct
         self._max_dd_pct = max_drawdown_pct
         self._task: asyncio.Task[None] | None = None
         self._callbacks: list = []
         self._events: list[StopLossEvent] = []
-        self._peak_equity: float | None = None
+        self._peak_equity: float | None = None  # loaded from DB on first check
         self._last_check: datetime | None = None
+        self._trailing_highs: dict[int, float] = {}  # position_id → high-water mark price
 
     def on_event(self, callback) -> None:
         """Register an async callback fired on every StopLossEvent."""
@@ -154,15 +214,94 @@ class StopLossMonitor:
     async def start(self) -> None:
         self._task = asyncio.create_task(self._loop(), name="stoploss-monitor")
         logger.info(
-            "[StopLoss] monitor started — interval=%.0fs sl=%.1f%% tp=%.1f%% daily_dd=%.1f%% max_dd=%.1f%%",
+            "[StopLoss] monitor started — interval=%.0fs sl=%.1f%% tp=%.1f%% trailing=%.1f%% daily_dd=%.1f%% max_dd=%.1f%%",
             self._interval, self._sl_pct * 100, self._tp_pct * 100,
-            self._daily_dd_pct * 100, self._max_dd_pct * 100,
+            self._trailing_pct * 100, self._daily_dd_pct * 100, self._max_dd_pct * 100,
         )
 
     async def stop(self) -> None:
         if self._task:
             self._task.cancel()
             await asyncio.gather(self._task, return_exceptions=True)
+
+    async def _init_peak_equity(self) -> None:
+        """Load peak equity from DB balance ledger on first check."""
+        try:
+            from trdex.storage.balance_repo import BalanceRepository
+            async with self._session_factory() as session:
+                bal_repo = BalanceRepository(session)
+                self._peak_equity = float(await bal_repo.peak_balance())
+            logger.info("[StopLoss] peak_equity initialised from DB: %.2f", self._peak_equity)
+        except Exception:
+            logger.exception("[StopLoss] could not load peak_equity from DB — will derive from current positions")
+
+    async def _auto_close(self, position, price: float, reason: str, price_age: datetime | None = None) -> None:
+        """Attempt to close a position via the execution gateway.
+
+        If no gateway is injected, logs a warning with manual close instruction.
+        If the close order fails, activates kill switch as fail-safe.
+        If price is stale (>60s), refetches before submitting.
+        """
+        if self._gateway is None:
+            logger.warning(
+                "[StopLoss] AUTO-CLOSE unavailable (no gateway). "
+                "MANUAL CLOSE REQUIRED for %s position %s.",
+                position.symbol, position.id,
+            )
+            return
+
+        # Staleness check: refetch price if older than 60 seconds
+        if price_age is not None:
+            age_seconds = (datetime.now(tz=timezone.utc) - price_age).total_seconds()
+            if age_seconds > 60:
+                try:
+                    ticker = await self._feeds.get_ticker(position.symbol)
+                    fresh_price = float(ticker.price)
+                    logger.info(
+                        "[StopLoss] refetched stale price for %s: %.4f → %.4f (was %.0fs old)",
+                        position.symbol, price, fresh_price, age_seconds,
+                    )
+                    price = fresh_price
+                except Exception:
+                    logger.warning("[StopLoss] could not refetch price for %s — using stale price", position.symbol)
+
+        # Determine close direction: opposite of position side
+        close_direction = "SELL" if position.side == "BUY" else "BUY"
+        qty = float(position.amount)
+
+        logger.info(
+            "[StopLoss] auto-closing %s position %s: %s %.6f @ %.4f (%s)",
+            position.symbol, position.id, close_direction, qty, price, reason,
+        )
+        try:
+            result = await self._gateway.place(
+                symbol=position.symbol,
+                direction=close_direction,
+                qty=qty,
+                price=price,
+                idempotency_key=f"close:{position.id}",
+            )
+            if result.status == "filled":
+                logger.info(
+                    "[StopLoss] auto-close FILLED for %s position %s: %s",
+                    position.symbol, position.id, result.message,
+                )
+            else:
+                logger.error(
+                    "[StopLoss] auto-close FAILED for %s position %s: %s — activating kill switch",
+                    position.symbol, position.id, result.message,
+                )
+                await _kill_switch.activate_async(
+                    f"Auto-close failed for {position.symbol} position {position.id}: {result.message}"
+                )
+        except Exception as exc:
+            logger.critical(
+                "[StopLoss] auto-close CRASHED for %s position %s: %s — activating kill switch",
+                position.symbol, position.id, exc,
+            )
+            await _kill_switch.activate_async(
+                f"Auto-close crashed for {position.symbol}: {exc}"
+            )
 
     async def check_now(self) -> list[StopLossEvent]:
         """Run a single check cycle. Returns any events fired."""
@@ -171,6 +310,10 @@ class StopLossMonitor:
         # Skip all checks if kill switch is already active
         if _kill_switch.active:
             return new_events
+
+        # First run: initialise peak equity from DB rather than current positions
+        if self._peak_equity is None:
+            await self._init_peak_equity()
 
         from trdex.storage.portfolio_repo import PortfolioRepository
 
@@ -182,12 +325,15 @@ class StopLossMonitor:
             self._last_check = datetime.now(tz=timezone.utc)
             return new_events
 
-        # Fetch current prices for all unique symbols
+        # Fetch current prices for all unique symbols (with timestamp for staleness check)
         prices: dict[str, float] = {}
+        price_times: dict[str, datetime] = {}
+        now = datetime.now(tz=timezone.utc)
         for sym in {p.symbol for p in open_positions}:
             try:
                 ticker = await self._feeds.get_ticker(sym)
                 prices[sym] = float(ticker.price)
+                price_times[sym] = now
             except Exception:
                 logger.warning("[StopLoss] could not fetch price for %s", sym)
 
@@ -212,6 +358,20 @@ class StopLossMonitor:
             total_unrealized += unrealized
             total_cost += cost
 
+            # Update trailing stop high-water mark
+            pos_id = pos.id
+            if pos.side == "BUY":
+                hwm = self._trailing_highs.get(pos_id, price)
+                if price > hwm:
+                    self._trailing_highs[pos_id] = price
+                    hwm = price
+            else:
+                # For SHORT positions, track the low-water mark (lowest price is best)
+                hwm = self._trailing_highs.get(pos_id, price)
+                if price < hwm:
+                    self._trailing_highs[pos_id] = price
+                    hwm = price
+
             # Per-position stop-loss
             if pnl_pct <= -self._sl_pct:
                 event = StopLossEvent(
@@ -228,6 +388,7 @@ class StopLossMonitor:
                 )
                 new_events.append(event)
                 logger.warning("[StopLoss] POSITION SL: %s", event.message)
+                await self._auto_close(pos, price, "stop_loss", price_age=price_times.get(pos.symbol))
 
             # Per-position take-profit
             elif pnl_pct >= self._tp_pct:
@@ -245,6 +406,33 @@ class StopLossMonitor:
                 )
                 new_events.append(event)
                 logger.info("[StopLoss] POSITION TP: %s", event.message)
+                await self._auto_close(pos, price, "take_profit", price_age=price_times.get(pos.symbol))
+
+            # Trailing stop: price retraced from high-water mark
+            elif pnl_pct > 0 and pos_id in self._trailing_highs:
+                hwm = self._trailing_highs[pos_id]
+                if pos.side == "BUY":
+                    retrace = (hwm - price) / hwm if hwm > 0 else 0.0
+                else:
+                    retrace = (price - hwm) / hwm if hwm > 0 else 0.0
+
+                if retrace >= self._trailing_pct:
+                    event = StopLossEvent(
+                        reason=StopReason.TRAILING_STOP,
+                        symbol=pos.symbol,
+                        position_id=pos_id,
+                        trigger_price=price,
+                        entry_price=entry,
+                        loss_pct=pnl_pct,
+                        message=(
+                            f"{pos.symbol} position {pos_id} trailing stop: "
+                            f"retraced {retrace:.2%} from peak {hwm:.4f} (limit: {self._trailing_pct:.2%})"
+                        ),
+                    )
+                    new_events.append(event)
+                    logger.warning("[StopLoss] TRAILING STOP: %s", event.message)
+                    await self._auto_close(pos, price, "trailing_stop", price_age=price_times.get(pos.symbol))
+                    del self._trailing_highs[pos_id]  # Clean up after close
 
         # Portfolio-level: daily drawdown
         if total_cost > 0:
@@ -327,6 +515,7 @@ class StopLossMonitor:
             "thresholds": {
                 "position_sl_pct": self._sl_pct,
                 "position_tp_pct": self._tp_pct,
+                "trailing_stop_pct": self._trailing_pct,
                 "daily_drawdown_pct": self._daily_dd_pct,
                 "max_drawdown_pct": self._max_dd_pct,
             },

@@ -6,7 +6,11 @@ import polars as pl
 
 
 def rsi(df: pl.DataFrame, period: int = 14, col: str = "close") -> pl.Series:
-    """Relative Strength Index.
+    """Relative Strength Index — Wilder smoothing (α = 1/period).
+
+    Matches TradingView, Bloomberg, and all standard institutional platforms.
+    Use this when comparing signals with external data or calibrating thresholds
+    on historical datasets.
 
     Returns a Series of the same length as df (first `period` rows are null).
     """
@@ -14,11 +18,27 @@ def rsi(df: pl.DataFrame, period: int = 14, col: str = "close") -> pl.Series:
     gain = delta.clip(lower_bound=0)
     loss = (-delta).clip(lower_bound=0)
 
-    avg_gain = gain.ewm_mean(span=period, adjust=False)
-    avg_loss = loss.ewm_mean(span=period, adjust=False)
+    # Wilder smoothing: α = 1/period, equivalent to EWM with com=period-1
+    avg_gain = gain.ewm_mean(com=period - 1, adjust=False)
+    avg_loss = loss.ewm_mean(com=period - 1, adjust=False)
 
     rs = avg_gain / avg_loss
     return (100 - (100 / (1 + rs))).alias("rsi")
+
+
+def rsi_from_list(closes: list[float], period: int = 14) -> float | None:
+    """Compute the most recent RSI value from a list of closing prices.
+
+    Uses the same Wilder EWM smoothing as :func:`rsi`.
+    Returns ``None`` if there are fewer than ``period + 1`` data points.
+    """
+    if len(closes) < period + 1:
+        return None
+    series = pl.Series("close", closes)
+    df = pl.DataFrame({"close": series})
+    rsi_series = rsi(df, period=period)
+    last = rsi_series[-1]
+    return None if last is None else float(last)
 
 
 def macd(

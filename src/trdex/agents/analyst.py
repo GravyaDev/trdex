@@ -6,24 +6,50 @@ import logging
 import statistics
 
 from trdex.agents.state import AgentState, AnalysisResult
+from trdex.backtest.indicators import rsi_from_list
 
 logger = logging.getLogger(__name__)
 
 
-def _compute_rsi(closes: list[float], period: int = 14) -> float | None:
-    """Compute RSI from a list of closing prices."""
-    if len(closes) < period + 1:
-        return None
-    gains, losses = [], []
-    for i in range(1, len(closes)):
-        delta = closes[i] - closes[i - 1]
-        (gains if delta > 0 else losses).append(abs(delta))
-    avg_gain = statistics.mean(gains[-period:]) if gains else 0.0
-    avg_loss = statistics.mean(losses[-period:]) if losses else 0.0
-    if avg_loss == 0:
-        return 100.0
-    rs = avg_gain / avg_loss
-    return 100.0 - (100.0 / (1.0 + rs))
+def _classify_volatility(closes: list[float]) -> str:
+    """Classify recent volatility regime from close prices.
+
+    Returns one of: "low", "medium", "high".
+    Uses coefficient of variation (std/mean) over the last 20 candles.
+    Thresholds: <1% low, 1-3% medium, >3% high.
+    """
+    window = closes[-20:] if len(closes) >= 20 else closes
+    if len(window) < 3:
+        return "unknown"
+    mean = statistics.mean(window)
+    if mean == 0:
+        return "unknown"
+    cv = statistics.stdev(window) / mean
+    if cv < 0.01:
+        return "low"
+    if cv < 0.03:
+        return "medium"
+    return "high"
+
+
+async def _write_volatility_regime(state: AgentState, regime: str, cv: float | None = None) -> None:
+    """Persist volatility_regime fact for this symbol in the entity graph."""
+    if state.session_factory is None:
+        return
+    try:
+        from trdex.storage.entity_graph_repo import EntityGraphRepository
+        async with state.session_factory() as session:
+            repo = EntityGraphRepository(session)
+            await repo.upsert(
+                subject_type="symbol",
+                subject_id=state.symbol,
+                predicate="volatility_regime",
+                object_value={"regime": regime, "cv": cv},
+                source="analyst",
+                note=f"run_id={state.run_id}",
+            )
+    except Exception:
+        logger.exception("[Analyst] failed to write volatility_regime to entity graph")
 
 
 def _compute_sma(closes: list[float], period: int) -> float | None:
@@ -97,9 +123,17 @@ async def analyst_node(state: AgentState) -> AgentState:
     closes = [c[4] for c in state.market.candles]  # index 4 = close
     price = state.market.price
 
-    rsi = _compute_rsi(closes)
+    rsi = rsi_from_list(closes)
     sma_short = _compute_sma(closes, 9)
     sma_long = _compute_sma(closes, 21)
+
+    # Classify and persist volatility regime
+    regime = _classify_volatility(closes)
+    window = closes[-20:] if len(closes) >= 20 else closes
+    mean = statistics.mean(window) if window else 0
+    cv = statistics.stdev(window) / mean if mean and len(window) >= 3 else None
+    await _write_volatility_regime(state, regime, cv)
+    logger.debug("[Analyst] volatility_regime=%s cv=%s", regime, f"{cv:.4f}" if cv else "n/a")
 
     # Average sentiment from context
     sentiments = [

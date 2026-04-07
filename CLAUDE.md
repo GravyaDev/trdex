@@ -3,6 +3,16 @@
 This project uses Kloudify, a professional operating system for Claude Code.
 Always read `.claude/memory.md` before taking action.
 
+## ⛔ HARD RULES — Enforced by hooks, no exceptions
+
+These rules are checked mechanically by `.claude/hooks/guard-bash.sh`. Violating them blocks the command.
+
+| Rule | What to do instead |
+|------|-------------------|
+| **Never call third-party APIs directly** (curl/wget/requests/httpx/fetch to any external platform API) | Always use a python tool that handles rate-limiting, throttle headers, retries, auth |
+| **Never read official API docs from secondary sources** (articles, blog posts) | Always fetch `/docs` or `/openapi.json` from the official endpoint first, then ask user if nothing was found |
+| **Never write outside `trdex/`** | This applies to ALL repos and directories, no exceptions. Any repo outside trdex is an independent product. Writing there from a trdex session causes cross-contamination and violates repo isolation. The user has stated this constraint clearly multiple times. Before every Read/Write/Edit/Bash, verify the target path starts with `trdex/`. If it doesn't, stop and ask the user for clarification before proceeding.
+
 ## First-Run Onboarding
 
 If the file `__NEEDS_ONBOARD` exists in the project root, execute `/onboard-init` before any other action. This runs the automated first-time setup: project scan, profile generation, and system configuration.

@@ -30,7 +30,7 @@ class ContextIngestionPipeline:
         """Embed and store a batch of context documents."""
         if not docs:
             return
-        async with JinaEmbedder() as embedder:
+        async with self._embedder as embedder:
             vectors = await embedder.embed([doc.text for doc in docs])
         await self._store.upsert(docs, vectors)
 
@@ -41,7 +41,7 @@ class ContextIngestionPipeline:
         limit: int = 5,
     ) -> list[dict]:
         """Retrieve the top-k most relevant context documents for a query."""
-        async with JinaEmbedder() as embedder:
+        async with self._embedder as embedder:
             query_vector = await embedder.embed_query(text)
         hits = await self._store.search(query_vector, symbol=symbol, limit=limit)
         return [

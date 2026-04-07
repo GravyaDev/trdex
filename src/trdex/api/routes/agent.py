@@ -2,23 +2,36 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import select
 
 from trdex.api.app import verify_api_key
+from trdex.api.validators import (
+    CandleLimitParam,
+    LimitParam,
+    SymbolParam,
+    SymbolParamOptional,
+    TimeframeParam,
+)
+
+_limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/v1/agent", tags=["agent"])
 
 # Injected at startup by app.py
 _session_factory = None
 _feed_manager = None
+_gateway = None
 
 
-def set_agent_factory(session_factory, feed_manager) -> None:  # type: ignore[no-untyped-def]
-    global _session_factory, _feed_manager
+def set_agent_factory(session_factory, feed_manager, gateway=None) -> None:  # type: ignore[no-untyped-def]
+    global _session_factory, _feed_manager, _gateway
     _session_factory = session_factory
     _feed_manager = feed_manager
+    _gateway = gateway
 
 
 class AgentRunResponse(BaseModel):
@@ -46,10 +59,12 @@ class AgentRunSummary(BaseModel):
 
 
 @router.post("/run")
+@_limiter.limit("10/minute")
 async def run_agent(
-    symbol: str,
-    timeframe: str = "1h",
-    candle_limit: int = 100,
+    request: Request,
+    symbol: SymbolParam,
+    timeframe: TimeframeParam = "1h",
+    candle_limit: CandleLimitParam = 100,
     _key: str = Depends(verify_api_key),
 ) -> AgentRunResponse:
     """Trigger a full agent cycle for the given symbol.
@@ -63,7 +78,7 @@ async def run_agent(
     from trdex.agents.runner import AgentRunner
 
     async with _session_factory() as session:
-        runner = AgentRunner(session, _feed_manager)
+        runner = AgentRunner(session, _feed_manager, session_factory=_session_factory)
         state = await runner.run(symbol, timeframe=timeframe, candle_limit=candle_limit)
 
     return AgentRunResponse(
@@ -83,8 +98,8 @@ async def run_agent(
 
 @router.get("/history")
 async def agent_history(
-    symbol: str | None = None,
-    limit: int = 50,
+    symbol: SymbolParamOptional = None,
+    limit: LimitParam = 50,
     _key: str = Depends(verify_api_key),
 ) -> list[AgentRunSummary]:
     """Return recent agent run history, optionally filtered by symbol."""

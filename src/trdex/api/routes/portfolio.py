@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, AsyncIterator
 from fastapi import APIRouter, Depends, HTTPException
 
 from trdex.api.app import verify_api_key
+from trdex.api.validators import DaysParam
 from trdex.portfolio.service import PortfolioService
 from trdex.storage.portfolio_repo import PortfolioRepository
 
@@ -80,7 +81,7 @@ async def pnl_by_source(_key: str = Depends(verify_api_key)) -> dict:
 
 @router.get("/pnl_history")
 async def pnl_history(
-    days: int = 30,
+    days: DaysParam = 30,
     _key: str = Depends(verify_api_key),
 ) -> dict:
     async with _service() as svc:

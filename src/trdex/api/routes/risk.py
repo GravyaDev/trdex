@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from trdex.api.app import verify_api_key
+
+_limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/v1/risk", tags=["risk"])
 
@@ -34,7 +38,8 @@ async def risk_events(_key: str = Depends(verify_api_key)) -> dict:
 
 
 @router.post("/check")
-async def run_check_now(_key: str = Depends(verify_api_key)) -> dict:
+@_limiter.limit("10/minute")
+async def run_check_now(request: Request, _key: str = Depends(verify_api_key)) -> dict:
     """Trigger an immediate stop-loss check cycle."""
     if _monitor is None:
         raise HTTPException(status_code=503, detail="Stop-loss monitor not running.")
@@ -43,7 +48,9 @@ async def run_check_now(_key: str = Depends(verify_api_key)) -> dict:
 
 
 @router.post("/kill-switch/activate")
+@_limiter.limit("5/minute")
 async def activate_kill_switch(
+    request: Request,
     reason: str = "Manual override via API",
     _key: str = Depends(verify_api_key),
 ) -> dict:
@@ -54,7 +61,8 @@ async def activate_kill_switch(
 
 
 @router.post("/kill-switch/reset")
-async def reset_kill_switch(_key: str = Depends(verify_api_key)) -> dict:
+@_limiter.limit("5/minute")
+async def reset_kill_switch(request: Request, _key: str = Depends(verify_api_key)) -> dict:
     """Reset the kill switch — re-enables trading. Use with caution."""
     from trdex.risk.stop_loss import get_kill_switch
     await get_kill_switch().reset_async()

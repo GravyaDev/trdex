@@ -10,11 +10,11 @@ if TYPE_CHECKING:
 
 
 class ExecutionGateway(ABC):
-    """Abstract gateway for order execution."""
+    """Abstract gateway for low-level order execution (Simulator, LiveExecutor)."""
 
     @abstractmethod
     async def execute(self, order: Order) -> ExecutionResult:
-        """Execute an order and return the result."""
+        """Execute a low-level Order and return a raw ExecutionResult."""
         ...
 
     @abstractmethod
