@@ -1,82 +1,103 @@
 # Task Board
 
-## Today — 2026-04-06 (Tomorrow's priorities)
-- [x] Wire EntityGraphRepository nel ciclo agente: analyst scrive `volatility_regime`, risk scrive `last_signal`
-- [x] Test Telegram con canali reali — completato 2026-04-05
-- [x] Wilder RSI implementato, soglie 30/70 confermate (best practice settore)
+## Today — 2026-04-07 (chiusa)
+Tutto fatto, vedi sezione Done sotto.
 
-## Tomorrow — 2026-04-07
-- [ ] Phase 1 modello 6-tier memoria: Tier 1 loader (parser .md) + Tier 6 repo + Migration 008 + Tier 2 ORM/repo
-- [ ] Test della Phase 1 (loader, repo, integration)
+## Tomorrow — 2026-04-08
+- [ ] **PRIORITY 1**: Implementare refactor Intent enum (Opzione 2)
+  - Seguire `.claude/reports/brainstorm-2026-04-07-intent-enum.md`
+  - 24 decisioni numerate, ~7h focused work
+  - Sequenza: Step 0 grep → enum+translator+tests → state.py → analyst → risk → runner → executor → PortfolioService atomicity → tests update → inspect_runs → smoke level 4 verify
+  - NON iniziare a fine sessione: il refactor richiede focus continuativo
+- [ ] **PRIORITY 2**: dopo il refactor, accendere scheduler per Phase 2 osservazione
+  - Aggiungere a `.env`: `TRDEX_AGENT_SCHEDULER_ENABLED=true`, `TRDEX_AGENT_SCHEDULER_SYMBOLS=BTC/USDT,ETH/USDT`, `TRDEX_AGENT_SCHEDULER_INTERVAL=300`
+  - Lanciare `uv run python -m trdex.main`
+  - Lasciare girare per 3-5 giorni, monitorare con `inspect_runs`
 
-## This Week
-- [x] Implement DefaultExecutionGateway con sim/live routing + gate check
-- [x] Tier 1 hardening: RateLimiter wired, KillSwitch persistente, SL auto-close, slowapi, idempotenza ordini
-- [x] Tier 2 hardening: Input validation, request logging, staleness check, trailing stop, simulation gate, readiness endpoint
-- [x] Dashboard: readiness widget, trailing stop, symbol watchlist, debug panels
-- [x] Trading KB agent-ready in Riferimenti/agents/ (5 file autosufficienti)
-- [x] Piano modello 6-tier persistent memory architettato
-- [ ] Phase 2 6-tier: Tier 3 nominations + Tier 5 writers extension
-- [ ] Phase 3 6-tier: MemoryContext aggregator + analyst migration
-- [ ] Phase 4 6-tier: Tier 4 Qdrant trade narratives
-- [ ] Phase 5 6-tier: Rollout in Risk/Executor/Scout
-- [ ] Define `PositionSide` enum (replace plain str in ORM)
+## This Week (post-refactor)
+- [ ] Phase 2 osservazione vera: 3-5 giorni di scheduler live in simulation
+- [ ] Daily check con `inspect_runs --hours 24` e `--hours 72`
+- [ ] Sentinella: se zero trade in 48h sul mercato corrente, capire perché (mercato lateral? bug del traduttore?)
+- [ ] Sentinella: monitorare `agent_runs` count cresce ~288 al giorno per simbolo
 
-## Backlog
+## Backlog (consolidato)
+- [ ] **Phase 3 (post-osservazione)**: iterazione sulla strategia
+  - Solo dopo aver capito i numeri di Phase 2
+  - Variazioni SMA cross (parametri diversi), poi RSI threshold, poi MACD divergence
+  - Tutte trend-following parametriche, compatibili con il refactor Intent + close-on-signal
 - [ ] Pass feed/strategy registries into create_app() for /status
 - [ ] Reject default DB creds in non-dev modes
 - [ ] Live executor test su Binance testnet
 - [ ] Alembic migration runner nel lifespan
 - [ ] Circuit breaker IngestionScheduler per Qdrant failures
+- [ ] Define `PositionSide` enum (replace plain str in ORM) — minore dopo il refactor Intent
+- [ ] Phase 2 6-tier: Tier 3 nominations writer extensions
+- [ ] Phase 4 6-tier: Tier 4 Qdrant trade narratives uso reale (oggi solo schema)
+- [ ] Forex weekend gap closure rule
+- [ ] Persistent stop-loss event log
+- [ ] Tier 3+4 features (kline WS stream, CoinGecko screener, hyperopt, Redis cache, Ollama LLM, Alembic auto-migration)
 
-## Done — 2026-04-06
-- [x] Wire EntityGraphRepository nel ciclo agente (analyst volatility_regime, risk last_signal)
-- [x] DefaultExecutionGateway con sim/live routing + kill switch gate
-- [x] 3 report comparativi (repo riferimento, indicazioni API, trading vs HFT)
-- [x] Multi-agent brainstorming strutturato — APPROVED con 13 revisioni
-- [x] Tier 1 — RateLimiter wired ai 7 feed con RPM verificati online
-- [x] Tier 1 — KillSwitch persistente su DB (migration 007)
-- [x] Tier 1 — StopLossMonitor auto-close via gateway iniettato
-- [x] Tier 1 — slowapi API rate limiting (10/min agent, 5/min kill-switch)
-- [x] Tier 1 — Order idempotency (key+TTL 5min)
-- [x] Tier 2 — Input validation Pydantic (regex symbol, bounds limit/days)
-- [x] Tier 2 — Request logging middleware (method/path/status/latency/key hash)
-- [x] Tier 2 — Staleness check SL (refetch >60s)
-- [x] Tier 2 — Trailing stop (high-water mark, 3% retracement)
-- [x] Tier 2 — Simulation gate dinamico (sostituito Gate 5 hardcoded)
-- [x] Tier 2 — `GET /v1/system/readiness` endpoint
-- [x] Dashboard — readiness widget, trailing stop, symbol watchlist, debug panels
-- [x] Trading KB agent-ready in `Riferimenti/agents/` (scout, analyst, risk_manager, executor, stop_loss_monitor, INDEX)
+## Future / Long-term
+- [ ] Opzione 4 (ExitPolicy) — solo se vorrai strategie di famiglie strutturalmente diverse (mean reversion, breakout, scalping)
+- [ ] `fill_reconciliation` table per riconciliazione local DB ↔ exchange (live mode)
+- [ ] Fast brain / WebSocket Binance ticker live
+- [ ] Multi-symbol portfolio rotation
+- [ ] Multi-timeframe confirmation rules
+
+## Done — 2026-04-07
+### Mattina/pomeriggio (commit 5d1ff2c, 54 file)
+- [x] Smoke level 1 — infrastructure sanity check (9 check)
+- [x] Smoke level 2 — single agent cycle on BTC/USDT live
+- [x] Smoke level 3 — backtest end-to-end (90gg × 1h) + ledger replay + readiness + coherence
+- [x] Migration runner `apply_migrations.py` con dollar-quote/comment-aware splitter
+- [x] Fix migration 001 (TimescaleDB compression) + migration 008 (index predicate immutable)
+- [x] Fix Qdrant client v1.13 (server up + check_compatibility=False) + query_points migration
+- [x] Fix Decimal precision nel simulator log
+- [x] BacktestSMACross strategy + 7 unit test
+- [x] Fix engine PnL semantics (sum(pnl) == final_capital - initial_capital)
+- [x] Fix engine entry_idx/exit_idx per replay timestamping
+- [x] BinanceFeed since param + propagation through PriceFeedManager + 6 feed signature update
+
+### Pomeriggio (commit aaae052, 11 file)
+- [x] Task 1 — Readiness gate v2: win_rate vero da PnL, sharpe da EoD ledger sqrt(252), 19 unit test
+- [x] Task 2 — Backtest engine timeframe-aware sharpe annualization, _BARS_PER_YEAR mapping, 12 unit test
+- [x] Task 2.5 — Smoke level 3 flag --position-size con validazione + sourcetrack
+- [x] Task 3a — agent_scheduler_loop estratto da app.py in agents/scheduler.py
+- [x] Task 3b — app.py importa il loop invece di definirlo inline
+- [x] Task 3c — Smoke level 4 (scheduler bounded smoke), 4 assertion verde
+- [x] .gitignore aggiunge .mcp.json + remove from index (token Hostinger)
+
+### Sera (commit 815614d, WIP)
+- [x] Discovery: PortfolioService write path mai chiamato — agent_runs cresce ma positions/account_balance vuoti
+- [x] PortfolioService.record_open_fill (long-only, refusa SELL)
+- [x] PortfolioService.record_close_fill (chiude + scrive PnL ledger)
+- [x] AgentRunner._persist_open_fill wired (best-effort)
+- [x] StopLossMonitor wired post auto-close
+- [x] inspect_runs.py — read-only 8-section observability dashboard
+- [x] 6 unit test PortfolioService write path
+- [x] Manual end-to-end verifica del fill persistence (apertura+chiusura, +1.93 USDT in ledger)
+
+### Sera tarda (no commit, da implementare prossima sessione)
+- [x] Multi-agent brainstorming per il refactor Intent enum: Phase 0+1+2+3 completate
+- [x] Decision log brainstorming salvato in `.claude/reports/brainstorm-2026-04-07-intent-enum.md`
+- [x] Memory + Task Board + Daily Note aggiornati per wrap-up
+
+## Done — 2026-04-06 (precedente)
+- [x] Tier 1 + Tier 2 hardening (RateLimiter, KillSwitch persistente, slowapi, idempotency)
+- [x] Trading KB agent-ready in `Riferimenti/agents/`
 - [x] Piano modello 6-tier persistent memory architettato
+- [x] Phase 1 6-tier model (Tier 1 loader, Tier 6 narrative_context)
 
 ## Done — 2026-04-05
-- [x] Audit esterno processato — tutti i P0/P1 applicati
-- [x] MED-7 CORS: split comma-separated origins
-- [x] SEC-4: assert → raise RuntimeError in embeddings.py
-- [x] MED-3: ingestion.py usa self._embedder (no dead code)
-- [x] MED-1: dead code rimosso da engine.py
-- [x] MED-8: graph lazy init thread-safe con asyncio.Lock
-- [x] SEC-1: warning startup + per-request se api_key vuota
-- [x] MED-2: RSI unificato — analyst usa rsi_from_list da indicators.py
-- [x] RSI → Wilder smoothing (com=period-1), allineato a TradingView
-- [x] ARCH: PortfolioContext iniettato nel ciclo agente
-- [x] Risk Manager: gate drawdown + gate no-pyramiding su posizioni reali
-- [x] account_balance: ORM + repo + migration 004 (ledger persistente)
-- [x] Executor: sizing reale (equity × position_size / price)
-- [x] StopLossMonitor: _peak_equity inizializzato da DB
-- [x] SignalTracker: persistito su DB (migration 005 + repo + load_from_db al boot)
-- [x] OrderResult: stato `pending` aggiunto
-- [x] Entity Graph (Tier 5): ORM + repo + migration 006
+- [x] Audit esterno processato, fix P0/P1
+- [x] Account_balance ledger persistente
+- [x] Entity Graph (Tier 5) implementato
+- [x] SignalTracker persistito su DB
 
 ## Done — storico
 - [x] Onboarding + Kloudify setup (2026-04-04)
-- [x] Stack decision + architecture doc (2026-04-04)
-- [x] Phase 1 scaffold: 38 .py files, 20 test passing (2026-04-04)
-- [x] Deep audit + fix F1-F4 (2026-04-04)
-- [x] Phase 2: LangGraph + 4 agents + Qdrant + Jina (2026-04-04)
-- [x] Phase 3: RSI/MACD/Bollinger + backtest engine polars (2026-04-04)
-- [x] Phase 3: OHLCV persistence TimescaleDB (2026-04-04)
-- [x] Phase 4: Portfolio tracker + Streamlit dashboard + Feeds WS (2026-04-05)
-- [x] Phase 5: Agent scheduler + news ingestion + risk monitor (2026-04-05)
-- [x] Audit 2026-04-05 P0+P1: auth su 11 endpoint, session leak, env.example (2026-04-05)
-- [x] 140/140 test passing (2026-04-05)
+- [x] Phase 1 scaffold (2026-04-04)
+- [x] Phase 2 LangGraph + 4 agents + Qdrant + Jina (2026-04-04)
+- [x] Phase 3 RSI/MACD/Bollinger + backtest engine polars (2026-04-04)
+- [x] Phase 4 Portfolio tracker + Streamlit dashboard + Feeds WS (2026-04-05)
+- [x] Phase 5 Agent scheduler + news ingestion + risk monitor (2026-04-05)
