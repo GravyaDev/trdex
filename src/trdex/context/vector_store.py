@@ -49,7 +49,14 @@ class QdrantStore:
     async def _get_client(self) -> AsyncQdrantClient:
         if self._client is None:
             settings = get_settings()
-            self._client = AsyncQdrantClient(url=settings.qdrant_url)
+            # check_compatibility=False suppresses the noisy "minor version
+            # difference > 1" warning. We only use stable API surface
+            # (ensure_collection / upsert / query_points) that has been
+            # consistent across v1.9 → v1.17, so the strict-version sanity
+            # check the client enforces by default is overconservative.
+            self._client = AsyncQdrantClient(
+                url=settings.qdrant_url, check_compatibility=False
+            )
         return self._client
 
     async def ensure_collection(self) -> None:
@@ -97,7 +104,12 @@ class QdrantStore:
         symbol: str | None = None,
         limit: int = 5,
     ) -> list[ScoredPoint]:
-        """Semantic search. Optionally filter by symbol."""
+        """Semantic search. Optionally filter by symbol.
+
+        Uses ``query_points`` (the API since qdrant-client 1.10) which replaced
+        the removed ``search`` method. The response object exposes ``.points``
+        as the ``list[ScoredPoint]`` we return to keep the upstream contract.
+        """
         client = await self._get_client()
         query_filter = None
         if symbol:
@@ -106,12 +118,14 @@ class QdrantStore:
             query_filter = Filter(
                 must=[FieldCondition(key="symbol", match=MatchValue(value=symbol))]
             )
-        return await client.search(
+        response = await client.query_points(
             collection_name=COLLECTION_NAME,
-            query_vector=query_vector,
+            query=query_vector,
             query_filter=query_filter,
             limit=limit,
+            with_payload=True,
         )
+        return response.points
 
     async def close(self) -> None:
         if self._client:

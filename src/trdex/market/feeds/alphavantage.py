@@ -147,7 +147,13 @@ class AlphaVantageFeed(PriceFeed):
     #  OHLCV                                                               #
     # ------------------------------------------------------------------ #
 
-    async def get_ohlcv(self, symbol: str, timeframe: str = "1d", limit: int = 100) -> list[OHLCV]:
+    async def get_ohlcv(
+        self,
+        symbol: str,
+        timeframe: str = "1d",
+        limit: int = 100,
+        since: int | None = None,  # noqa: ARG002 - aggregator API does not honour since
+    ) -> list[OHLCV]:
         if _is_crypto(symbol):
             return await self._ohlcv_crypto(symbol, timeframe, limit)
         if _is_fx(symbol):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from trdex.agents.memory_helpers import attach_memory_snapshot
 from trdex.agents.state import AgentState, RiskDecision
 from trdex.config import get_settings
 
@@ -50,6 +51,10 @@ async def risk_node(state: AgentState) -> AgentState:
     """
     logger.info("[Risk] evaluating signal=%s confidence=%.2f",
                 state.analysis.signal, state.analysis.confidence)
+
+    # Attach risk-agent memory snapshot for observability/prompt material only.
+    # NOTE: hard rules below MUST remain rule-based — never branch on memory.
+    await attach_memory_snapshot(state, "risk")
 
     settings = get_settings()
 

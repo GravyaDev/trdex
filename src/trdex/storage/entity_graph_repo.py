@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trdex.storage.entity_graph_models import EntityGraphRecord
@@ -117,3 +117,89 @@ class EntityGraphRepository:
             .limit(limit)
         )
         return list(result.scalars().all())
+
+    # ---- Tier 5 extensions (Phase 2 6-tier model) -------------------------
+
+    async def bundle(
+        self,
+        subject_type: str,
+        subject_id: str,
+    ) -> dict[str, Any]:
+        """Return all currently active facts for a subject as ``{predicate: object_value}``.
+
+        Convenience helper for agents that want a flat snapshot of "everything
+        we currently know about BTC/USDT" to inject into a prompt.
+        """
+        facts = await self.get_active(subject_type=subject_type, subject_id=subject_id)
+        bundle: dict[str, Any] = {}
+        for f in facts:
+            if f.predicate in bundle:
+                continue  # get_active already orders newest first
+            bundle[f.predicate] = (
+                f.object_value
+                if f.object_value is not None
+                else (f.object_id if f.object_id is not None else None)
+            )
+        return bundle
+
+    async def time_window(
+        self,
+        subject_type: str,
+        subject_id: str,
+        predicate: str,
+        *,
+        since: datetime,
+        until: datetime | None = None,
+    ) -> list[EntityGraphRecord]:
+        """Return facts whose validity overlaps the given window.
+
+        A fact overlaps ``[since, until]`` if it was valid at any point in the
+        window: ``valid_from <= until`` AND ``(valid_until IS NULL OR valid_until >= since)``.
+        ``until`` defaults to "now".
+        """
+        if until is None:
+            until = _utcnow()
+        if until < since:
+            raise ValueError("until must be >= since")
+
+        result = await self._session.execute(
+            select(EntityGraphRecord)
+            .where(
+                EntityGraphRecord.subject_type == subject_type,
+                EntityGraphRecord.subject_id == subject_id,
+                EntityGraphRecord.predicate == predicate,
+                EntityGraphRecord.valid_from <= until,
+                or_(
+                    EntityGraphRecord.valid_until.is_(None),
+                    EntityGraphRecord.valid_until >= since,
+                ),
+            )
+            .order_by(EntityGraphRecord.valid_from.asc())
+        )
+        return list(result.scalars().all())
+
+    async def invalidate(
+        self,
+        subject_type: str,
+        subject_id: str,
+        predicate: str,
+    ) -> int:
+        """Mark the currently active fact for a triple as superseded.
+
+        Returns the number of rows invalidated (0 or 1 in normal usage).
+        Useful when an agent wants to retract a fact without writing a new
+        value (e.g. removing a stale ``kill_switch_reason``).
+        """
+        now = _utcnow()
+        result = await self._session.execute(
+            update(EntityGraphRecord)
+            .where(
+                EntityGraphRecord.subject_type == subject_type,
+                EntityGraphRecord.subject_id == subject_id,
+                EntityGraphRecord.predicate == predicate,
+                EntityGraphRecord.valid_until.is_(None),
+            )
+            .values(valid_until=now)
+        )
+        await self._session.commit()
+        return result.rowcount or 0

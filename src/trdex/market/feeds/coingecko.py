@@ -90,7 +90,13 @@ class CoinGeckoFeed(PriceFeed):
         logger.debug("[CoinGecko] %s = %s", symbol, price)
         return Ticker(symbol=symbol, price=price, timestamp=timestamp, source=self.name)
 
-    async def get_ohlcv(self, symbol: str, timeframe: str = "1d", limit: int = 100) -> list[OHLCV]:
+    async def get_ohlcv(
+        self,
+        symbol: str,
+        timeframe: str = "1d",
+        limit: int = 100,
+        since: int | None = None,  # noqa: ARG002 - aggregator API does not honour since
+    ) -> list[OHLCV]:
         cg_id = self._cg_id(symbol)
         days = _TIMEFRAME_DAYS.get(timeframe, 30)
         resp = await self._client.get(

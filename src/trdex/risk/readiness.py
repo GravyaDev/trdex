@@ -54,6 +54,11 @@ async def evaluate_readiness(session: AsyncSession, settings) -> ReadinessReport
             criteria=_criteria_dict(settings), failures=["No simulation data."],
         )
 
+    # Postgres TIMESTAMPTZ returns tz-aware datetimes; the previous code
+    # mixed a naive `now()` with a possibly-aware `first_run` and crashed
+    # whenever the column was aware. Normalise both to naive UTC.
+    if first_run.tzinfo is not None:
+        first_run = first_run.astimezone(timezone.utc).replace(tzinfo=None)
     sim_days = (datetime.now(tz=timezone.utc).replace(tzinfo=None) - first_run).days
 
     # 2. Total filled trades

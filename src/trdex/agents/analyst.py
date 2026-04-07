@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import statistics
 
+from trdex.agents.memory_helpers import attach_memory_snapshot
 from trdex.agents.state import AgentState, AnalysisResult
 from trdex.backtest.indicators import rsi_from_list
 
@@ -119,6 +120,9 @@ async def analyst_node(state: AgentState) -> AgentState:
     if state.market is None:
         state.analysis = AnalysisResult(signal="HOLD", reasoning="No market data.")
         return state
+
+    # Pull aggregated memory snapshot from the 6-tier stack (best-effort).
+    await attach_memory_snapshot(state, "analyst")
 
     closes = [c[4] for c in state.market.candles]  # index 4 = close
     price = state.market.price

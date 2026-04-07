@@ -110,15 +110,29 @@ class PriceFeedManager:
         raise FeedError(msg) from last_error
 
     async def get_ohlcv(
-        self, symbol: str, timeframe: str = "1m", limit: int = 100, source: str | None = None
+        self,
+        symbol: str,
+        timeframe: str = "1m",
+        limit: int = 100,
+        source: str | None = None,
+        since: int | None = None,
     ) -> list[OHLCV]:
-        """Get OHLCV from a specific source, or try all feeds."""
+        """Get OHLCV from a specific source, or try all feeds.
+
+        ``since`` is an optional millisecond UTC timestamp forwarded to the
+        underlying feed. Feeds that ignore the parameter (most aggregators)
+        will return their default range; feeds that honour it (Binance,
+        CryptoCompare) use it as the lower bound for the returned candles.
+        """
         self._check_feeds()
 
         if source and source in self._feeds:
             try:
                 return await self._rate_limited_call(
-                    source, self._feeds[source].get_ohlcv(symbol, timeframe, limit),
+                    source,
+                    self._feeds[source].get_ohlcv(
+                        symbol, timeframe, limit, since=since
+                    ),
                 )
             except Exception as e:
                 logger.warning("Feed %s failed for OHLCV %s: %s", source, symbol, e)
@@ -128,7 +142,8 @@ class PriceFeedManager:
         for feed in self._feeds.values():
             try:
                 return await self._rate_limited_call(
-                    feed.name, feed.get_ohlcv(symbol, timeframe, limit),
+                    feed.name,
+                    feed.get_ohlcv(symbol, timeframe, limit, since=since),
                 )
             except Exception as e:
                 last_error = e

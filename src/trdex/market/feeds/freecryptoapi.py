@@ -62,7 +62,13 @@ class FreeCryptoAPIFeed(PriceFeed):
             source=self.name,
         )
 
-    async def get_ohlcv(self, symbol: str, timeframe: str = "1h", limit: int = 100) -> list[OHLCV]:
+    async def get_ohlcv(
+        self,
+        symbol: str,
+        timeframe: str = "1h",
+        limit: int = 100,
+        since: int | None = None,  # noqa: ARG002 - aggregator API does not honour since
+    ) -> list[OHLCV]:
         """FreeCryptoAPI provides OHLCV via historical endpoint."""
         sym = self._normalize_symbol(symbol)
         interval_map = {

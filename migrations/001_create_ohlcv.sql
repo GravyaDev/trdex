@@ -25,17 +25,36 @@ SELECT create_hypertable(
     migrate_data  => TRUE
 );
 
--- Unique constraint to support upsert idempotency
-ALTER TABLE ohlcv
-    DROP CONSTRAINT IF EXISTS uq_ohlcv_symbol_tf_ts;
-
-ALTER TABLE ohlcv
-    ADD CONSTRAINT uq_ohlcv_symbol_tf_ts
-    UNIQUE (symbol, timeframe, timestamp);
+-- Unique constraint to support upsert idempotency.
+-- Wrapped in a DO block so the migration stays idempotent: once compression
+-- is enabled below, ALTER TABLE ADD CONSTRAINT is rejected by TimescaleDB,
+-- so we only attempt it if the constraint isn't already there.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'uq_ohlcv_symbol_tf_ts'
+          AND conrelid = 'ohlcv'::regclass
+    ) THEN
+        ALTER TABLE ohlcv
+            ADD CONSTRAINT uq_ohlcv_symbol_tf_ts
+            UNIQUE (symbol, timeframe, timestamp);
+    END IF;
+END$$;
 
 -- Covering index for common queries
 CREATE INDEX IF NOT EXISTS ix_ohlcv_symbol_tf_ts
     ON ohlcv (symbol, timeframe, timestamp ASC);
+
+-- Enable compression on the hypertable (required before add_compression_policy
+-- on TimescaleDB >= 2.11). segmentby groups rows that compress and decompress
+-- together: every query on this table filters by symbol+timeframe, so this is
+-- the natural grouping.
+ALTER TABLE ohlcv
+    SET (
+        timescaledb.compress,
+        timescaledb.compress_segmentby = 'symbol,timeframe'
+    );
 
 -- Compression policy: compress chunks older than 7 days
 SELECT add_compression_policy('ohlcv', INTERVAL '7 days', if_not_exists => TRUE);

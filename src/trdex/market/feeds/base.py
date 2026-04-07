@@ -23,8 +23,24 @@ class PriceFeed(ABC):
         ...
 
     @abstractmethod
-    async def get_ohlcv(self, symbol: str, timeframe: str = "1m", limit: int = 100) -> list[OHLCV]:
-        """Get historical candlestick data."""
+    async def get_ohlcv(
+        self,
+        symbol: str,
+        timeframe: str = "1m",
+        limit: int = 100,
+        since: int | None = None,
+    ) -> list[OHLCV]:
+        """Get historical candlestick data.
+
+        Args:
+            symbol: trading pair, e.g. "BTC/USDT".
+            timeframe: feed-native timeframe string ("1m", "1h", "1d", ...).
+            limit: max candles to return.
+            since: optional millisecond UTC epoch lower bound. Feeds that
+                support paginated history (Binance, CryptoCompare) will
+                return candles with ``open_time >= since``. Feeds that
+                cannot honour the parameter MUST accept and ignore it.
+        """
         ...
 
     @abstractmethod

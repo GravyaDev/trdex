@@ -75,6 +75,8 @@ def run_backtest(
     in_position = False
     entry_price = 0.0
     entry_qty = 0.0
+    entry_cost = 0.0  # cash debited from the portfolio at entry, including the entry fee
+    entry_idx = 0  # row index in df where the current open position started
     wins = losses = total_trades = 0
     trade_rows: list[dict] = []
 
@@ -87,13 +89,21 @@ def run_backtest(
             cost = capital * position_size_pct
             entry_qty = (cost / price) * (1 - fee_rate)
             entry_price = price
+            entry_cost = cost
+            entry_idx = i
             capital -= cost
             in_position = True
 
         elif sig == -1 and in_position:
             # SELL
             proceeds = entry_qty * price * (1 - fee_rate)
-            pnl = proceeds - (entry_qty * entry_price)
+            # Net PnL = cash returned - cash invested (entry_cost includes
+            # both the position value and the entry fee, so the net pnl
+            # already accounts for both fees and matches the change in
+            # capital). Summing pnl across closed trades therefore equals
+            # `final_capital - initial_capital` whenever the last position
+            # is closed.
+            pnl = proceeds - entry_cost
             capital += proceeds
             in_position = False
             total_trades += 1
@@ -102,6 +112,8 @@ def run_backtest(
             else:
                 losses += 1
             trade_rows.append({
+                "entry_idx": entry_idx,
+                "exit_idx": i,
                 "entry_price": entry_price,
                 "exit_price": price,
                 "qty": entry_qty,
@@ -109,6 +121,8 @@ def run_backtest(
             })
             entry_price = 0.0
             entry_qty = 0.0
+            entry_cost = 0.0
+            entry_idx = 0
 
         # Mark-to-market equity
         mtm = capital + (entry_qty * price if in_position else 0.0)
@@ -123,7 +137,14 @@ def run_backtest(
     win_rate = wins / total_trades if total_trades > 0 else 0.0
 
     trades_df = pl.DataFrame(trade_rows) if trade_rows else pl.DataFrame(
-        {"entry_price": [], "exit_price": [], "qty": [], "pnl": []}
+        {
+            "entry_idx": [],
+            "exit_idx": [],
+            "entry_price": [],
+            "exit_price": [],
+            "qty": [],
+            "pnl": [],
+        }
     )
 
     return BacktestResult(

@@ -79,6 +79,9 @@ def _dict_to_state(d: dict) -> AgentState:
         portfolio=_coerce(PortfolioContext, d.get("portfolio")) or PortfolioContext(),
         session_factory=d.get("session_factory"),
         gateway=d.get("gateway"),
+        memory_loader=d.get("memory_loader"),
+        memory_snapshot_text=d.get("memory_snapshot_text", ""),
+        memory_snapshots=d.get("memory_snapshots") or {},
         error=d.get("error"),
         completed_at=d.get("completed_at"),
     )
@@ -90,6 +93,7 @@ async def run_agent_cycle(
     portfolio_context: PortfolioContext | None = None,
     session_factory=None,
     gateway=None,
+    memory_loader=None,
 ) -> AgentState:
     """Run one full Scout → Analyst → Risk → Executor cycle.
 
@@ -108,6 +112,7 @@ async def run_agent_cycle(
         portfolio=portfolio_context or PortfolioContext(),
         session_factory=session_factory,
         gateway=gateway,
+        memory_loader=memory_loader,
     )
     logger.info("[Graph] starting cycle run_id=%s symbol=%s", initial_state.run_id, symbol)
 

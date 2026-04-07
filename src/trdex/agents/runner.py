@@ -29,12 +29,20 @@ class AgentRunner:
         state = await runner.run("BTC/USDT")
     """
 
-    def __init__(self, session: AsyncSession, feed_manager: PriceFeedManager, session_factory=None, gateway=None) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        feed_manager: PriceFeedManager,
+        session_factory=None,
+        gateway=None,
+        memory_loader=None,
+    ) -> None:
         self._session = session
         self._feeds = feed_manager
         self._ohlcv_repo = OHLCVRepository(session)
         self._session_factory = session_factory
         self._gateway = gateway
+        self._memory_loader = memory_loader
 
     async def _load_portfolio_context(self) -> PortfolioContext:
         """Load live portfolio state from DB for risk gate decisions."""
@@ -134,6 +142,7 @@ class AgentRunner:
             portfolio_context=portfolio_ctx,
             session_factory=self._session_factory,
             gateway=self._gateway,
+            memory_loader=self._memory_loader,
         )
 
         # 4. Persist result

@@ -94,7 +94,13 @@ class BinanceWSFeed(PriceFeed):
                 return self._cache[symbol]
         raise RuntimeError(f"BinanceWSFeed: no tick received for {symbol} within timeout")
 
-    async def get_ohlcv(self, symbol: str, timeframe: str = "1h", limit: int = 100) -> list[OHLCV]:
+    async def get_ohlcv(
+        self,
+        symbol: str,
+        timeframe: str = "1h",
+        limit: int = 100,
+        since: int | None = None,  # noqa: ARG002 - WS feed does not honour historical since
+    ) -> list[OHLCV]:
         """OHLCV via REST — WS feed is for tickers only."""
         import ccxt.async_support as ccxt_rest
 

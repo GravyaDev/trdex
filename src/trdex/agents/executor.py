@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from trdex.agents.memory_helpers import attach_memory_snapshot
 from trdex.agents.state import AgentState, OrderResult
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,9 @@ async def executor_node(state: AgentState) -> AgentState:
     Falls back to a freshly created DefaultExecutionGateway if none is injected,
     which preserves backward-compatibility with tests that don't inject a gateway.
     """
+    # Attach executor-agent memory snapshot for traceability (read-only).
+    await attach_memory_snapshot(state, "executor")
+
     if not state.risk.approved:
         state.order = OrderResult(
             status="skipped",

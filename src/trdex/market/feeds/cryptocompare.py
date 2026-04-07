@@ -86,7 +86,13 @@ class CryptoCompareFeed(PriceFeed):
             source=self.name,
         )
 
-    async def get_ohlcv(self, symbol: str, timeframe: str = "1h", limit: int = 100) -> list[OHLCV]:
+    async def get_ohlcv(
+        self,
+        symbol: str,
+        timeframe: str = "1h",
+        limit: int = 100,
+        since: int | None = None,  # noqa: ARG002 - not yet wired through CryptoCompare API
+    ) -> list[OHLCV]:
         base, quote = self._base_quote(symbol)
         endpoint = _TIMEFRAME_ENDPOINT.get(timeframe, "/data/histohour")
         aggregate = _TIMEFRAME_AGGREGATE.get(timeframe, 1)

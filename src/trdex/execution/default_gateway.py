@@ -11,7 +11,7 @@ from trdex.agents.state import OrderResult
 from trdex.config import TrdexMode, get_settings
 from trdex.execution.gateway import ExecutionGateway
 from trdex.execution.models import ExecutionResult, Order, OrderType, Side
-from trdex.execution.simulator import Simulator
+from trdex.execution.simulator import _FEE_Q, _PRICE_Q, _QTY_Q, Simulator, _fmt
 
 # Idempotency window: reject duplicate keys within this TTL (seconds)
 _IDEMPOTENCY_TTL = 300.0  # 5 minutes
@@ -25,7 +25,12 @@ logger = logging.getLogger(__name__)
 
 
 def _to_order_result(result: ExecutionResult) -> OrderResult:
-    """Convert a low-level ExecutionResult to an agent-domain OrderResult."""
+    """Convert a low-level ExecutionResult to an agent-domain OrderResult.
+
+    The human-readable message uses the same quantization helpers as the
+    simulator log so logs and downstream messages stay consistent. The
+    numeric ``filled_*`` fields keep float precision for the API surface.
+    """
     return OrderResult(
         order_id=result.order_id,
         status="filled",
@@ -33,8 +38,8 @@ def _to_order_result(result: ExecutionResult) -> OrderResult:
         filled_qty=float(result.filled_amount),
         message=(
             f"{'Simulated' if result.simulated else 'Live'} fill: "
-            f"{result.side.value.upper()} {result.filled_amount} {result.symbol} "
-            f"@ {result.filled_price} (fee {result.fee})"
+            f"{result.side.value.upper()} {_fmt(result.filled_amount, _QTY_Q)} {result.symbol} "
+            f"@ {_fmt(result.filled_price, _PRICE_Q)} (fee {_fmt(result.fee, _FEE_Q)})"
         ),
     )
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_EVEN, Decimal
 
 from trdex.execution.gateway import ExecutionGateway
 from trdex.execution.models import ExecutionResult, Order
@@ -14,6 +14,18 @@ logger = logging.getLogger(__name__)
 
 # Default simulated fee rate (0.1% taker fee, Binance standard)
 DEFAULT_FEE_RATE = Decimal("0.001")
+
+# Cosmetic quantization used ONLY for log output. The values stored on
+# ExecutionResult keep full precision so downstream consumers (ledger, P&L,
+# Sharpe calc) operate on the exact Decimals.
+_QTY_Q = Decimal("0.00000001")  # 8 decimals — satoshi resolution
+_PRICE_Q = Decimal("0.01")      # 2 decimals — quote currency cents
+_FEE_Q = Decimal("0.0001")      # 4 decimals — sub-cent fee precision
+
+
+def _fmt(value: Decimal, quant: Decimal) -> str:
+    """Quantize a Decimal to a fixed scale for human-readable logging."""
+    return str(value.quantize(quant, rounding=ROUND_HALF_EVEN))
 
 
 class Simulator(ExecutionGateway):
@@ -54,10 +66,10 @@ class Simulator(ExecutionGateway):
         logger.info(
             "[SIM] %s %s %s @ %s (fee: %s) [%s]",
             order.side.value.upper(),
-            order.amount,
+            _fmt(order.amount, _QTY_Q),
             order.symbol,
-            fill_price,
-            fee,
+            _fmt(fill_price, _PRICE_Q),
+            _fmt(fee, _FEE_Q),
             order_id,
         )
 

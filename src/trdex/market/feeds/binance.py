@@ -69,11 +69,24 @@ class BinanceFeed(PriceFeed):
         )
 
     async def get_ohlcv(
-        self, symbol: str, timeframe: str = "1h", limit: int = 100
+        self,
+        symbol: str,
+        timeframe: str = "1h",
+        limit: int = 100,
+        since: int | None = None,
     ) -> list[OHLCV]:
-        """Fetch historical OHLCV candles."""
+        """Fetch historical OHLCV candles.
+
+        Args:
+            symbol: Trading pair, e.g. "BTC/USDT".
+            timeframe: CCXT timeframe string, e.g. "1h".
+            limit: Maximum number of candles to return (Binance caps at 1000).
+            since: Optional millisecond UTC timestamp. If provided, only candles
+                with ``open_time >= since`` are returned. Used by callers that
+                paginate over a large date range.
+        """
         raw: list[list[Any]] = await self._exchange.fetch_ohlcv(
-            symbol, timeframe=timeframe, limit=limit
+            symbol, timeframe=timeframe, limit=limit, since=since
         )
         candles = []
         for entry in raw:

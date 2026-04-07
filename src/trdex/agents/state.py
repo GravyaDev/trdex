@@ -99,6 +99,21 @@ class AgentState:
     # Not serialized by LangGraph (Any type, excluded from repr).
     gateway: Any = field(default=None, repr=False)  # DefaultExecutionGateway | None
 
+    # Memory context loader — injected by AgentRunner. MemoryContextLoader | None.
+    # Used by nodes to read aggregated context from the 6-tier memory stack.
+    memory_loader: Any = field(default=None, repr=False)
+
+    # Pre-built memory snapshot text from the 6-tier stack, set by the first
+    # node that loads it (typically Analyst). Downstream nodes can read it
+    # without rebuilding. Kept for backward compatibility — equal to
+    # ``memory_snapshots.get("analyst", "")`` after Analyst runs.
+    memory_snapshot_text: str = ""
+
+    # Per-agent memory snapshots populated as the cycle progresses.
+    # Key = agent name (scout, analyst, risk, executor).
+    # Value = MemoryContext.to_prompt_text() for that agent.
+    memory_snapshots: dict[str, str] = field(default_factory=dict)
+
     # Control
     error: str | None = None
     completed_at: datetime | None = None

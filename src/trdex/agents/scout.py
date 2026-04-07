@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from trdex.agents.memory_helpers import attach_memory_snapshot
 from trdex.agents.state import AgentState, SentimentContext
 from trdex.context.ingestion import ContextIngestionPipeline
 
@@ -17,6 +18,9 @@ async def scout_node(state: AgentState) -> AgentState:
     Falls back gracefully if Qdrant is unreachable.
     """
     logger.info("[Scout] querying context for %s", state.symbol)
+
+    # Attach the 6-tier memory snapshot for the scout agent (best-effort).
+    await attach_memory_snapshot(state, "scout")
 
     try:
         pipeline = ContextIngestionPipeline()
