@@ -286,6 +286,31 @@ class StopLossMonitor:
                     "[StopLoss] auto-close FILLED for %s position %s: %s",
                     position.symbol, position.id, result.message,
                 )
+                # Persist the close: update positions.status='closed' and
+                # write realised PnL to the account_balance ledger. Best
+                # effort — a persistence failure here MUST NOT prevent the
+                # fact that the close already happened on the exchange.
+                try:
+                    from decimal import Decimal
+
+                    from trdex.portfolio.service import PortfolioService
+                    from trdex.storage.portfolio_repo import PortfolioRepository
+
+                    fill_price = Decimal(str(result.filled_price)) if result.filled_price is not None else Decimal(str(price))
+                    async with self._session_factory() as session:
+                        repo = PortfolioRepository(session)
+                        service = PortfolioService(repo, self._feeds)
+                        await service.record_close_fill(
+                            position=position,
+                            exit_price=fill_price,
+                            fee=Decimal("0"),  # sim fee is cosmetic in log
+                        )
+                except Exception:
+                    logger.exception(
+                        "[StopLoss] failed to persist close of %s position %s — "
+                        "exchange state and ledger are now out of sync",
+                        position.symbol, position.id,
+                    )
             else:
                 logger.error(
                     "[StopLoss] auto-close FAILED for %s position %s: %s — activating kill switch",

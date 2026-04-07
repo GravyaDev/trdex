@@ -145,10 +145,67 @@ class AgentRunner:
             memory_loader=self._memory_loader,
         )
 
-        # 4. Persist result
+        # 5. Persist the agent run row (audit trail)
         await self._persist(state)
 
+        # 6. Persist the open-position side effect if the fill succeeded.
+        # Without this, the readiness gate would never see any trades and
+        # the StopLossMonitor would never find anything to supervise.
+        await self._persist_open_fill(state)
+
         return state
+
+    async def _persist_open_fill(self, state: AgentState) -> None:
+        """Record a new open position in the portfolio when the executor
+        has filled an approved BUY order.
+
+        Best-effort: any failure here is logged and swallowed so it
+        cannot break the cycle. Long-only by construction: SELL fills
+        are refused by ``PortfolioService.record_open_fill`` itself.
+        """
+        if state.order.status != "filled":
+            return
+        if not state.risk.approved:
+            # Defensive: the executor should not be called on a blocked
+            # run, but if it happens we don't want to persist the effect.
+            return
+        if state.order.filled_price is None or state.order.filled_qty is None:
+            logger.warning(
+                "[runner] filled order missing price/qty for %s — skipping position persist",
+                state.symbol,
+            )
+            return
+
+        try:
+            from decimal import Decimal
+
+            from trdex.portfolio.service import PortfolioService
+            from trdex.storage.portfolio_repo import PortfolioRepository
+
+            repo = PortfolioRepository(self._session)
+            service = PortfolioService(repo, self._feeds)
+
+            # Budget is the cash committed to the position at entry:
+            # price * qty (fees are paid on top by the simulator and
+            # accounted for at close time).
+            filled_price_dec = Decimal(str(state.order.filled_price))
+            filled_qty_dec = Decimal(str(state.order.filled_qty))
+            budget = filled_price_dec * filled_qty_dec
+
+            await service.record_open_fill(
+                symbol=state.symbol,
+                side=state.analysis.signal,  # BUY or SELL
+                amount=filled_qty_dec,
+                entry_price=filled_price_dec,
+                budget=budget,
+                source="agent",
+                signal_id=state.run_id,
+            )
+        except Exception:
+            logger.exception(
+                "[runner] failed to persist open fill for %s — cycle result unaffected",
+                state.symbol,
+            )
 
     async def _persist(self, state: AgentState) -> None:
         """Save agent run result to agent_runs table."""

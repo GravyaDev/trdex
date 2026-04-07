@@ -1,4 +1,21 @@
-"""PortfolioService: mark-to-market and portfolio snapshot."""
+"""PortfolioService: mark-to-market, snapshot, and fill persistence.
+
+This service is the single choke point for every mutation of the
+portfolio state. The execution gateway (Simulator or LiveExecutor)
+produces raw ``ExecutionResult`` objects without knowing anything about
+positions or the ledger — it's this service's job to translate a fill
+into:
+
+    - a new ``positions`` row (on position open)
+    - an updated ``positions`` row + ``account_balance`` trade_fill row
+      (on position close, with realised PnL computed here)
+
+Call sites:
+
+    - ``agents/runner.py`` after a successful agent cycle BUY fill
+    - ``risk/stop_loss.py`` after a successful auto-close
+    - ``telegram/tracker.py`` (future) for telegram-signal fills
+"""
 
 from __future__ import annotations
 
@@ -8,6 +25,8 @@ from decimal import Decimal
 
 from trdex.market.manager import FeedError, PriceFeedManager
 from trdex.portfolio.models import Portfolio, Position
+from trdex.storage.balance_models import BalanceRecord
+from trdex.storage.balance_repo import BalanceRepository
 from trdex.storage.portfolio_models import PositionRecord
 from trdex.storage.portfolio_repo import PortfolioRepository
 
@@ -58,6 +77,120 @@ class PortfolioService:
 
     async def _fetch_price(self, symbol: str):  # type: ignore[return]
         return await self._feeds.get_ticker(symbol)
+
+    # ── write path: persist fills ─────────────────────────────────────────
+
+    async def record_open_fill(
+        self,
+        *,
+        symbol: str,
+        side: str,
+        amount: Decimal,
+        entry_price: Decimal,
+        budget: Decimal,
+        source: str = "agent",
+        signal_id: str | None = None,
+    ) -> PositionRecord | None:
+        """Persist an open position after a successful fill.
+
+        This is the single write path for "the executor filled an order
+        and we now own a position". Long-only by design: a ``SELL`` fill
+        without an existing open position is logged as a warning and
+        ignored (opening a short is out of scope for the current system).
+
+        Returns the newly created ``PositionRecord`` or ``None`` if the
+        fill was skipped.
+        """
+        if side == "SELL":
+            logger.warning(
+                "[PortfolioService] refusing to open SHORT position on %s "
+                "(sell fill without existing long) — system is long-only",
+                symbol,
+            )
+            return None
+
+        if side != "BUY":
+            logger.warning(
+                "[PortfolioService] unknown side %r for %s — ignoring fill",
+                side, symbol,
+            )
+            return None
+
+        record = await self._repo.open_position(
+            symbol=symbol,
+            side=side,
+            entry_price=entry_price,
+            amount=amount,
+            budget=budget,
+            source=source,
+            signal_id=signal_id,
+        )
+        logger.info(
+            "[PortfolioService] opened %s position %d: %s qty=%s @ %s (source=%s)",
+            symbol,
+            record.id,
+            side,
+            amount,
+            entry_price,
+            source,
+        )
+        return record
+
+    async def record_close_fill(
+        self,
+        *,
+        position: PositionRecord,
+        exit_price: Decimal,
+        fee: Decimal = Decimal("0"),
+    ) -> tuple[PositionRecord, BalanceRecord]:
+        """Persist the closing of a position and write realised PnL to ledger.
+
+        Updates ``positions.status = 'closed'`` and writes one
+        ``account_balance`` row with ``event_type = 'trade_fill'`` whose
+        ``amount`` is the realised PnL net of ``fee``.
+
+        The PnL formula mirrors the one in ``_realized_pnl``:
+            BUY  : (exit - entry) * amount - fee
+            SELL : (entry - exit) * amount - fee
+
+        Returns the updated position and the new balance ledger row.
+        """
+        closed = await self._repo.close_position(
+            position_id=position.id, exit_price=exit_price
+        )
+        if closed is None:
+            raise RuntimeError(
+                f"close_position({position.id}) returned None — position vanished?"
+            )
+
+        # Compute realised PnL net of the fee paid on close.
+        entry = Decimal(str(position.entry_price))
+        amt = Decimal(str(position.amount))
+        if position.side == "BUY":
+            gross = (exit_price - entry) * amt
+        else:  # SELL / short leg (kept for completeness, not reachable today)
+            gross = (entry - exit_price) * amt
+        pnl = gross - fee
+
+        # Ledger write via raw BalanceRepository so we can use the same
+        # session as the position update. The balance_after is computed
+        # as (current balance + pnl).
+        bal_repo = BalanceRepository(self._repo._session)  # share session
+        balance_row = await bal_repo.record_event(
+            event_type="trade_fill",
+            amount=pnl,
+            note=(
+                f"close {closed.side} {closed.symbol} "
+                f"position {closed.id} @ {exit_price} "
+                f"(entry {entry}, qty {amt}, fee {fee})"
+            ),
+        )
+
+        logger.info(
+            "[PortfolioService] closed %s position %d: pnl=%s new_balance=%s",
+            closed.symbol, closed.id, pnl, balance_row.balance_after,
+        )
+        return closed, balance_row
 
 
 # ── helpers ────────────────────────────────────────────────────────────────
