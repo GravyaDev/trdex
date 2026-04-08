@@ -56,6 +56,39 @@ Lavoro completato:
     - Il plan deve includere: snapshot dello stato reale del VPS al momento del deploy, elenco skill da creare con template, CLAUDE.md draft, profilo memoria iniziale, convenzioni, SOP
     - Un'altra istanza Claude Code (non questa) aprirà una sessione dedicata in `gravya-platform/` e userà quel file come input per costruire l'agente
     - Zero interazione tra le due sessioni, zero contaminazione
+- [ ] **Dashboard feature: gestione simboli watchlist (add/remove + rate limit estimate live)**
+  - **Motivazione**: oggi per cambiare i symboli monitorati devo modificare `TRDEX_AGENT_SCHEDULER_SYMBOLS` + `TRDEX_INGESTION_SYMBOLS` in Coolify UI e fare Restart. Da dashboard sarebbe nativo, e potrebbe mostrare in tempo reale il consumo del rate limit Binance (oggi 120 rpm budget) per evitare di aggiungere troppi simboli per errore.
+  - **Scope frontend (Streamlit)**:
+    - Sezione "Watchlist Management" già esiste (`with st.expander("Symbol Watchlist")`, riga ~288 di `dashboard/app.py`) ma chiama solo `/v1/context/symbols` (ingestion). Va estesa per gestire **anche** scheduler symbols.
+    - Aggiungere widget "Rate limit budget" che mostra: `current_load_rpm / 120 rpm Binance budget` con barra di progresso colorata (verde <50%, giallo 50-80%, rosso >80%).
+    - Calcolo stima rpm: `(num_symbols * 2 / scheduler_interval_minutes) + (num_open_positions * 2 / 0.5_min)` (agent + stoploss monitor).
+  - **Scope backend (FastAPI)**:
+    - Nuovo endpoint `POST /v1/agent/scheduler/symbols` che accetta `{"symbols": ["BTC/USDT", ...]}`, valida ogni symbol (es. esiste su Binance?), e aggiorna runtime sia `agent_scheduler_loop` sia `IngestionScheduler` senza restart del container.
+    - Il problema: oggi i simboli sono letti **una volta** dal `Settings` object al lifespan startup. Per renderli dinamici serve trasformare `agent_scheduler_loop` in un loop che rilegge la lista a ogni tick (o subscription a un event bus). Refactor di ~1-2h.
+    - Persistenza: la nuova lista deve sopravvivere a restart container — opzioni: (1) tabella DB `system_config` con key/value; (2) file JSON in volume condiviso; (3) writeback dell'env var via Coolify API (non praticabile, troppo accoppiato).
+  - **Effort**: ~3-5 ore totali (frontend + backend + persistenza + test).
+  - **Trigger**: dopo 1-2 settimane di Phase 2 stabile, quando le decisioni di "quali simboli" vorrai prenderle più frequentemente e l'attrito di Coolify UI Restart inizia a pesare.
+- [ ] **Dashboard feature: edit thresholds da UI (StopLoss / TakeProfit / TrailingStop / drawdown limits)**
+  - **Motivazione**: oggi i parametri di rischio sono in env var Coolify (`TRDEX_SL_POSITION_PCT`, `TRDEX_SL_TAKE_PROFIT_PCT`, `TRDEX_SL_TRAILING_STOP_PCT`, `TRDEX_SL_DAILY_DRAWDOWN_PCT`, `TRDEX_GATE_MAX_DRAWDOWN`, `TRDEX_MAX_POSITION_PCT`, ecc). Da dashboard sarebbe utile per A/B testing veloce dei parametri durante Phase 2.
+  - **Già parzialmente esistente**: la sezione "🛡️ Risk Monitor" del dashboard (riga ~225-247) ha già un expander "Stop-Loss Thresholds" che **mostra** i valori correnti via `risk_status.thresholds`. Manca il **lato write**.
+  - **Scope frontend**: aggiungere modal "Edit Thresholds" con st.number_input per ogni parametro, validation client-side (range 0-1), button "Save & Apply" con conferma esplicita.
+  - **Scope backend**: nuovo endpoint `POST /v1/risk/thresholds` che accetta i nuovi valori, valida (es. `daily_dd > 0`, `max_dd > daily_dd`, ecc), e aggiorna runtime il `StopLossMonitor` senza restart. Stessa sfida di persistenza del task precedente (dove memorizzare?).
+  - **Considerazione di rischio**: cambiare le soglie a runtime su un sistema in production è pericoloso — un errore di battitura può attivare il KillSwitch o aprire la porta a perdite. Mitigazione:
+    - **Audit log**: ogni cambio threshold viene loggato in tabella `threshold_changes` con before/after/timestamp/user.
+    - **Cooldown**: max 1 cambio threshold ogni 5 minuti per evitare panico.
+    - **Sanity check**: rifiutare valori fuori range realistico (es. `position_sl_pct > 0.20` rifiutato perché irragionevole).
+  - **Effort**: ~2-3 ore (backend dell'audit log è la parte più delicata).
+  - **Trigger**: dopo Phase 2 baseline (1-2 settimane) quando avrai dati per giudicare se i parametri default sono troppo conservativi o aggressivi.
+- [ ] **Bug 11 (cosmetic dashboard)**: la tabella "Recent Agent History" mostra `risk_approved=❌` su tutte le righe HOLD, suggerendo che il sistema rifiuti qualcosa, mentre per HOLD non c'è ordine da approvare. La X rossa è semantica fuorviante.
+  - **Fix**: in `src/trdex/dashboard/app.py` riga ~211, modificare il map per `risk_approved`:
+    ```python
+    df_agent["risk_approved"] = df_agent.apply(
+        lambda row: "—" if row["signal"] == "HOLD" else ("✅" if row["risk_approved"] else "❌"),
+        axis=1,
+    )
+    ```
+  - Oppure (più robusto): aggiungere un campo `intent` separato in `AgentRunRecord` e mostrare quello, leggendo dal DB il vero Intent enum invece del legacy `signal` field.
+  - **Effort**: ~10 min frontend-only, no DB migration. Bug cosmetic, non blocca Phase 2 — da fare quando si tocca prossima volta il dashboard.
 - [ ] **Setup monitoring esterno del deploy VPS** — dopo che gravya-ops è attivo (diventa un caso d'uso di gravya-ops)
   - Opzioni: uptime kuma self-hosted su VPS stesso, healthcheck.io, o alert Telegram via app stesso
   - Deve coprire: `/v1/health` uptime, disco VPS, RAM, kill-switch activation, scheduler tick drift

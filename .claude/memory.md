@@ -2,82 +2,83 @@
 
 ## Now
 
-- Sessione 2026-04-08 chiusa alle ~15:30 UTC con deploy trdex su VPS **IN PROGRESS, bloccato da 2 bug** (4+5). VPS hardening completato, Kloud user creato, Coolify configurato, secondo deploy attempt fallito per bug app lifespan.
-- **Non iniziare nessun altro lavoro prima di aver letto `.claude/reports/session-handoff-2026-04-08-deploy-wip.md`** — contiene lo stato completo, i bug aperti con fix plan dettagliato, la cleanup checklist, e le lessons learned.
-- Prossima sessione: open fresh Claude Code, leggi memory.md → handoff file → esegui "Next session — resume plan" dal handoff. Stima: 45-90 min di focus fresco.
+- **trdex è LIVE in production** su `https://trdex.gravya.it` (FastAPI) + `https://trdex.gravya.it/dashboard/` (Streamlit, basic auth `daniele`).
+- **Phase 2 observation iniziata 2026-04-08 17:42 UTC**: scheduler agent attivo BTC+ETH (5min interval), oggi già 2 trade chiusi (BTC +0.73%, ETH -0.13%, net +$1.22 su seed $10k). Win rate 50%, drawdown 0%.
+- **Sessione 2026-04-08 chiusa al wrap-up**: nessun lavoro tecnico aperto, niente bug blocker, sistema in osservazione passiva.
+- **Prossima sessione**: NON serve rush. Quando rientri: leggi memory.md, poi `inspect_runs --hours 24` dal container app per vedere quanti trade ha fatto la notte/giornata, poi decidi cosa fare in base ai dati.
 
 ## Project: trdex
+
 - **What**: AI-driven trading automation platform (crypto, FX, stocks)
-- **Phase**: Phase 1+2+3+4+5 + Intent refactor completato + deploy VPS WIP (bloccato bug 4+5)
-- **Stack**: Python 3.12+, LangGraph, Qdrant 1.13, Jina (httpx), CCXT, asyncio, Pydantic v2, FastAPI, PG+TimescaleDB, polars==1.33.1, telethon
+- **Phase**: Phase 2 observation LIVE in production (simulation mode, scheduler 5min, 2 symbols)
+- **Stack**: Python 3.12+, LangGraph, Qdrant 1.13, Jina, CCXT, FastAPI, asyncpg, PG+TimescaleDB, polars==1.33.1, telethon (disabilitato), Streamlit+plotly (dashboard)
 - **Architecture**: Clean Arch + DDD + Multi-Agent System (Scout → Analyst → Risk → Executor)
 - **Owner**: Daniele (daniele@gravya.it), app privata (no MiFID)
-- **Tests**: 308/308 passing (era 280, +28 dal refactor Intent)
+- **Tests**: 312/312 passing (308 + 4 nuovi Bug 8 regression)
+- **Identity for commits**: `Author: GravyaDev <dev@gravya.it>`, trailer `Co-Authored-By: Kloud <kloud@gravya.it>`. **Mai usare Claude trailer** (regola hard KB).
 
-## Architecture
-- **AI Agent Layer**: LangGraph state machine, 4 agents (Scout, Analyst, Risk, Executor)
-- **Context Ingestion**: News/social → Jina embeddings → Qdrant 1.13 (`trdex_context`)
-- **Data Layer**: Binance REST/WS (CCXT) + rate limiter
-- **Backtest Engine**: polars vectorised, RSI Wilder/MACD/Bollinger, Sharpe annualizzato per timeframe
-- **Storage**: TimescaleDB OHLCV + positions + agent_runs + account_balance + signal_outcomes + entity_graph + agent_memory
-- **Risk**: StopLossMonitor + KillSwitch persistente + readiness gate v2 (legge ledger)
-- **Execution**: Simulator + DefaultExecutionGateway + LiveExecutor scaffold + idempotency keys
-- **Memory 6-tier**: Tier 1 KB loader, Tier 2 agent_memory, Tier 3 nominations, Tier 4 trade narratives, Tier 5 entity graph, Tier 6 agent_runs narrative
-- **Intent model**: `agents/intent.py` con StrEnum 5 valori (OPEN_LONG, CLOSE_LONG, OPEN_SHORT, CLOSE_SHORT, HOLD) + `signal_to_intent` translator. Risolve il runner long-only / signal-vs-close paradox di ieri.
-- **Portfolio**: `PortfolioService.record_close_fill` atomic single-commit (D17), `closed_by` tag (D20)
+## Production state (2026-04-08 wrap-up)
 
-## VPS Deploy Target (NEW 2026-04-08)
+- **Domain**: `https://trdex.gravya.it` (Traefik + Let's Encrypt via Coolify)
+- **Containers** (5/5 healthy su VPS srv.gravya.it):
+  - `db` — TimescaleDB 2.17.2-pg16, migrations 001-008 applied (Bug 5 fix)
+  - `redis` — 7.x
+  - `qdrant` — 1.13.0, collection `trdex_context` ensured
+  - `app` — FastAPI uvicorn :8000, scheduler ON, last commit `3415587`
+  - `dashboard` — Streamlit :8501, served at `/dashboard/` (Bug "deploy dashboard" fix)
+- **Auth**:
+  - API: `TRDEX_API_KEY` set in Coolify env, X-API-Key header required
+  - Dashboard: Traefik basic-auth middleware, hash hardcoded in `docker-compose.yaml` (Coolify non interpola env vars dentro labels — vedi commit `3415587`)
+- **Scheduler config (Coolify env)**:
+  - `TRDEX_AGENT_SCHEDULER_ENABLED=true`
+  - `TRDEX_AGENT_SCHEDULER_INTERVAL=300` (5 min)
+  - `TRDEX_AGENT_SCHEDULER_SYMBOLS=BTC/USDT,ETH/USDT` (utente cambia da Coolify UI quando vuole più symbols, max ~20 prima di rate limit Binance)
+  - `TRDEX_INGESTION_SYMBOLS=BTC/USDT,ETH/USDT`
+- **News sources attive**: CryptoCompare + StockData (chiavi in Coolify env, ingestion ogni 5 min)
+- **Telegram disabilitato**: `TRDEX_TELEGRAM_API_ID=0`
+- **Trade fatti oggi**: 2 (BTC apertura 16:37 chiusura 18:03 +0.73%, ETH apertura 17:42 chiusura 18:03 -0.13%). Entrambi chiusi da SELL signal SMA cross sincrono. Net P&L +$1.22.
 
-- **VPS**: Hostinger KVM 2 (id 1495221), `srv.gravya.it`, Ubuntu 24.04 + Coolify
-- **IP**: `187.124.166.189` (v4), `2a02:4780:79:e9b8::1` (v6)
-- **Hardening**: swap 4GB + swappiness 10, fail2ban aggressive sshd, UFW informative, sshd PermitRootLogin prohibit-password + Match User kloud
-- **User `kloud`**: uid 1002, locked password, groups dev+docker, sudoers scoped, SSH key-only (trdex_deploy)
-- **Git identity su VPS**: `Kloud <kloud@gravya.it>`, primo commit `dffe2fb` in `/opt/gravya/`
-- **Coolify Project**: `trdex` con Application da `github.com/GravyaDev/trdex.git`, dominio `https://trdex.gravya.it`, port host 8500 → container 8000
-- **Deploy status**: ❌ BLOCCATO dal bug 4+5 (vedi handoff file)
+## Architecture (invariata da pre-deploy)
 
-## Key Files (post refactor + deploy prep)
-- `src/trdex/agents/intent.py` — Intent enum + signal_to_intent translator (NEW, commit 9ec41be)
-- `src/trdex/agents/state.py, analyst.py, risk.py, executor.py, runner.py` — refactored per Intent
-- `src/trdex/portfolio/service.py` — record_close_fill atomic + closed_by
-- `src/trdex/scripts/inspect_runs.py` — Intent distribution + closed_by breakdown (D22)
-- `docker-compose.yaml` — Coolify-compliant (commit 1fa0dca) + qdrant bash /dev/tcp healthcheck (commit 5dc584a)
-- `docker-compose.override.yaml` — dev-only host port bindings
-- `.dockerignore` — esclude .env, .mcp.json, .claude, tests, docs
-- `Dockerfile` — README + curl (commit c42c641) **MANCA COPY migrations/ (bug 4)**
-- `.claude/reports/session-handoff-2026-04-08-deploy-wip.md` — **LEGGI QUESTO PRIMO**
-- `.claude/reports/brainstorm-2026-04-07-intent-enum.md` — decision log Intent refactor
+- **AI Agent Layer**: LangGraph state machine, 4 agents (Scout → Analyst → Risk → Executor)
+- **Intent model**: `agents/intent.py` con StrEnum 5 valori (OPEN_LONG, CLOSE_LONG, OPEN_SHORT, CLOSE_SHORT, HOLD) + `signal_to_intent` translator
+- **Risk gates**: 4 gates (KillSwitch / sizing / confidence / pyramiding-block via Gate 4 post-Intent)
+- **StopLossMonitor**: tick 30s, params position_sl=5%, position_tp=10%, trailing=3%, daily_dd=10%, max_dd=20% (Bug 8 fix: max_dd realised-only)
+- **Memory 6-tier**: KB / agent_memory / nominations / trade narratives / entity graph / agent_runs
 
-## Migrations
-- 001-008: tutte applicate (dev locale), in VPS db fresco NON ancora applicate (bug 5)
+## Backlog priority (vedi Task Board.md)
 
-## Known Issues
+1. **Bug 11 (cosmetic)**: dashboard `risk_approved=❌` su tutti gli HOLD è semantica fuorviante — fix 10 min
+2. **Dashboard feature**: gestione symbols watchlist add/remove + rate limit estimate live (~3-5h)
+3. **Dashboard feature**: edit thresholds da UI con audit log + cooldown (~2-3h)
+4. **Upgrade auth dashboard**: Cloudflare Access / Tailscale / oauth2-proxy (sostituisce basic auth) — trigger dopo 1 settimana stabile, prima di live mode
+5. **Perplexity Sonar news source**: sostituisce CryptoCompare/StockData (~$20/mese, ~45-90 min effort) — trigger dopo Phase 2 baseline
+6. **Phase 3**: iterazione strategia (variazioni SMA, RSI, MACD divergence) — solo dopo 7-14 giorni Phase 2 dati
+7. **gravya-ops agent**: deferred fino alla decisione `pleng vs custom` (sessione dedicata)
+
+## Known Issues (production-relevant)
+
+- **Coolify non interpola env vars dentro Traefik labels** del compose. Workaround usato: hardcode dell'hash basicauth in `docker-compose.yaml` con single quotes. Documentato in commit `3415587`.
+- **`risk_approved=❌` su righe HOLD**: cosmetic bug dashboard, in backlog come Bug 11
+- **Dashboard "Run Agent Now" mostra ancora `signal` field** invece di `intent` post-refactor — minor cosmetic, in Bug 11
+- **Daily drawdown check è mark-to-market** mentre max drawdown è realised-only (Bug 8 fix). Sono gate diversi con scope diverso, non bug — by design.
+
+## Known Issues (dev locale, invariati)
+
 - polars deve restare ==1.33.1 (lts-cpu) su Windows
 - aiohttp non funziona nel venv (DLL rotta su Windows) — usiamo httpx ovunque
 - telethon: pyaes si compila da source, install lento su Windows
-- **BUG 4 (deploy)**: Dockerfile non copia `migrations/` — fix: aggiungi `COPY migrations/ migrations/` dopo linea 24
-- **BUG 5 (deploy)**: FastAPI lifespan non applica migrations → app crash su DB fresco — fix Option C: chiama `apply_migrations.run_migrations()` all'inizio del lifespan
-- **BUG 6 (speculative)**: Qdrant collection `trdex_context` probabilmente non creata al primo boot — fix preventivo: init in lifespan dopo migrations
 
 ## Scelte tecniche fisse
+
 - RSI: Wilder smoothing (com=period-1) — allineato a TradingView
 - Balance persistito su ledger account_balance
 - Peak equity da DB, KillSwitch persistente DB
-- API rate limiting con slowapi
 - Order idempotency: `agent:{run_id}` (open) o `close:{position_id}` (close), TTL 5min
 - Trailing stop high-water mark 3%
 - Sharpe annualization crypto-correct (365 days/year)
 - Readiness gate legge da account_balance (single source of truth)
 - Intent enum: 5 valori (long+short reserved), Strada B traduttore, Strada α backtest immutato
-- **trdex VPS port**: 8500 host → 8000 container (per evitare collision con Coolify UI su 8000)
-- **Kloud identity on VPS**: modello B (key-per-context), chiave corrente `trdex-deploy-2026-04-08`, altre chiavi (gravya-ops, ecc.) verranno aggiunte in futuro come righe supplementari in `/home/kloud/.ssh/authorized_keys`
-
-## Next Session (priority order)
-
-1. **Fix bug 4+5+6** seguendo il "Next session — resume plan" nel handoff file. Commit + push + Coolify redeploy.
-2. **Verify deploy success**: tutti i 4 container healthy, `inspect_runs --hours 1` dal container mostra lo scheduler disattivo, 0 trade.
-3. **Enable scheduler**: flip `TRDEX_AGENT_SCHEDULER_ENABLED=true` in Coolify UI, restart, monitora primi tick.
-4. **Write backup script**: `/opt/gravya/backup/trdex/backup.sh` mirror di `n8n-postgres/backup.sh`, aggiungere a `backup-all.sh`, commit come Kloud.
-5. **Cleanup**: vedere checklist nel handoff file (elimina `.trdex-secrets-DELETE-AFTER-USE.env`, clean `/etc/*.bak.*`, etc.)
-6. **Decision task**: valutare `pleng` vs custom gravya-ops agent (vedi handoff sezione dedicata). Fare in sessione fresca dedicata, NON oggi.
-7. **Handoff gravya-ops**: il design del custom agent è SOSPESO fino alla decisione pleng-vs-custom.
+- Max drawdown realised-only (Bug 8 fix), daily drawdown mark-to-market (by design)
+- **trdex VPS port**: 8500 host → 8000 container app, 8501 host → 8501 container dashboard
+- **Dashboard symbols/thresholds**: gestiti via Coolify UI finché non c'è feature dashboard nativa (single source of truth = Coolify env)
