@@ -5,7 +5,32 @@
 - **trdex è LIVE in production** su `https://trdex.gravya.it` (FastAPI) + `https://trdex.gravya.it/dashboard/` (Streamlit, basic auth `daniele`).
 - **Phase 2 observation iniziata 2026-04-08 17:42 UTC**: scheduler agent attivo BTC+ETH (5min interval), oggi già 2 trade chiusi (BTC +0.73%, ETH -0.13%, net +$1.22 su seed $10k). Win rate 50%, drawdown 0%.
 - **Sessione 2026-04-08 chiusa al wrap-up**: nessun lavoro tecnico aperto, niente bug blocker, sistema in osservazione passiva.
-- **Prossima sessione**: NON serve rush. Quando rientri: leggi memory.md, poi `inspect_runs --hours 24` dal container app per vedere quanti trade ha fatto la notte/giornata, poi decidi cosa fare in base ai dati.
+
+## ⚠️ Sister branch LLM dev — `llm-agents`
+
+- **Branch**: `llm-agents` (pushato su `origin/llm-agents`)
+- **Worktree locale**: `C:\Users\Daniele\Antigravity\trdex-llm\` (sister directory di questa, creata via `git worktree add` il 2026-04-08)
+- **Motivo**: rifacimento di Phase 2 con LLM veri dentro gli agent (Scout/Analyst/Risk/Executor). Il `main` attuale usa rule engine deterministico — non è l'AI promessa dal pitch. Il branch `llm-agents` trasforma questo.
+- **Decisioni di design (già prese)**:
+  1. **Provider**: LangChain abstractions (Anthropic + OpenAI + Google Gemini tutti supportati, swap-able)
+  2. **Dashboard**: 4 pagine config (una per agente) con prompt editabili + parametri (temperature, max_tokens, ecc) + LLM model selector. Default pre-popolati
+  3. **Active hours**: scheduler skippa fuori da fascia oraria configurable (default 8-22 UTC)
+  4. **Reflection memory**: ogni agent legge la propria storia di trade dal day 1
+  5. **Multi-agent reale**: 4 LLM call separate (non un monolith), day 1
+- **Design doc**: **DA SCRIVERE nella prossima sessione** aprendo Claude Code su `trdex-llm/` (non qui). Path: `trdex-llm/.claude/reports/llm-agents-design-2026-04-08.md`
+- **Workflow fix**: i bug di production scoperti su `main` vanno fixati qui, poi merged forward nel branch (`cd ../trdex-llm && git merge origin/main`). MAI il contrario.
+- **Da QUESTA sessione (main) NON modificare `../trdex-llm/`**: usa sessione separata.
+
+## Prossima sessione (due vie possibili)
+
+**Via A — Continuare su main (production/rule-engine)**:
+- Leggi `inspect_runs --hours 24` per vedere trade della notte, Bug 11 cosmetic, o feature dashboard backlog
+- Lavora su questa directory `trdex/`
+
+**Via B — Iniziare il lavoro LLM**:
+- Apri Claude Code in `C:\Users\Daniele\Antigravity\trdex-llm\` (nuova sessione, fresca)
+- Scrivi il design doc completo `llm-agents-design-2026-04-08.md` dal contesto delle 5 decisioni sopra
+- Solo DOPO il design, inizia a toccare codice agenti
 
 ## Project: trdex
 
@@ -38,47 +63,36 @@
 - **Telegram disabilitato**: `TRDEX_TELEGRAM_API_ID=0`
 - **Trade fatti oggi**: 2 (BTC apertura 16:37 chiusura 18:03 +0.73%, ETH apertura 17:42 chiusura 18:03 -0.13%). Entrambi chiusi da SELL signal SMA cross sincrono. Net P&L +$1.22.
 
-## Architecture (invariata da pre-deploy)
+## Architecture (snapshot)
 
-- **AI Agent Layer**: LangGraph state machine, 4 agents (Scout → Analyst → Risk → Executor)
-- **Intent model**: `agents/intent.py` con StrEnum 5 valori (OPEN_LONG, CLOSE_LONG, OPEN_SHORT, CLOSE_SHORT, HOLD) + `signal_to_intent` translator
-- **Risk gates**: 4 gates (KillSwitch / sizing / confidence / pyramiding-block via Gate 4 post-Intent)
-- **StopLossMonitor**: tick 30s, params position_sl=5%, position_tp=10%, trailing=3%, daily_dd=10%, max_dd=20% (Bug 8 fix: max_dd realised-only)
-- **Memory 6-tier**: KB / agent_memory / nominations / trade narratives / entity graph / agent_runs
+- LangGraph state machine (Scout→Analyst→Risk→Executor), oggi rule-engine deterministico (non LLM, vedi branch `llm-agents`)
+- Intent enum 5 valori + `signal_to_intent` translator, Risk Gate 4 blocca pyramiding
+- StopLossMonitor tick 30s (sl=5% tp=10% trail=3% dd_daily=10% dd_max=20% realised-only)
+- Memory 6-tier: KB / agent_memory / nominations / trade narratives / entity graph / agent_runs
 
-## Backlog priority (vedi Task Board.md)
+## Backlog priority (vedi Task Board.md per dettagli)
 
-1. **Bug 11 (cosmetic)**: dashboard `risk_approved=❌` su tutti gli HOLD è semantica fuorviante — fix 10 min
-2. **Dashboard feature**: gestione symbols watchlist add/remove + rate limit estimate live (~3-5h)
-3. **Dashboard feature**: edit thresholds da UI con audit log + cooldown (~2-3h)
-4. **Upgrade auth dashboard**: Cloudflare Access / Tailscale / oauth2-proxy (sostituisce basic auth) — trigger dopo 1 settimana stabile, prima di live mode
-5. **Perplexity Sonar news source**: sostituisce CryptoCompare/StockData (~$20/mese, ~45-90 min effort) — trigger dopo Phase 2 baseline
-6. **Phase 3**: iterazione strategia (variazioni SMA, RSI, MACD divergence) — solo dopo 7-14 giorni Phase 2 dati
-7. **gravya-ops agent**: deferred fino alla decisione `pleng vs custom` (sessione dedicata)
+1. Bug 11 cosmetic (HOLD risk_approved=❌) — 10 min
+2. Dashboard symbols management + rate limit live — ~3-5h
+3. Dashboard thresholds edit + audit log — ~2-3h
+4. Upgrade auth dashboard (Cloudflare Access / Tailscale) — trigger dopo 1 settimana stabile
+5. Perplexity Sonar news source — trigger dopo baseline
+6. Phase 3 strategy iteration — solo dopo 7-14 giorni dati
+7. gravya-ops agent — deferred fino decisione `pleng vs custom`
 
-## Known Issues (production-relevant)
+## Known Issues
 
-- **Coolify non interpola env vars dentro Traefik labels** del compose. Workaround usato: hardcode dell'hash basicauth in `docker-compose.yaml` con single quotes. Documentato in commit `3415587`.
-- **`risk_approved=❌` su righe HOLD**: cosmetic bug dashboard, in backlog come Bug 11
-- **Dashboard "Run Agent Now" mostra ancora `signal` field** invece di `intent` post-refactor — minor cosmetic, in Bug 11
-- **Daily drawdown check è mark-to-market** mentre max drawdown è realised-only (Bug 8 fix). Sono gate diversi con scope diverso, non bug — by design.
-
-## Known Issues (dev locale, invariati)
-
-- polars deve restare ==1.33.1 (lts-cpu) su Windows
-- aiohttp non funziona nel venv (DLL rotta su Windows) — usiamo httpx ovunque
-- telethon: pyaes si compila da source, install lento su Windows
+- **Coolify non interpola env vars dentro Traefik labels** → basicauth hash hardcoded in compose (commit `3415587`)
+- `risk_approved=❌` su HOLD: Bug 11 cosmetic
+- Dashboard "Run Agent Now" mostra `signal` invece di `intent` (Bug 11)
+- Daily dd mtm vs max dd realised-only: by design, non bug
+- **Dev locale**: polars==1.33.1 obbligatorio Windows, aiohttp rotto usa httpx, telethon pyaes compile-from-source
 
 ## Scelte tecniche fisse
 
-- RSI: Wilder smoothing (com=period-1) — allineato a TradingView
-- Balance persistito su ledger account_balance
-- Peak equity da DB, KillSwitch persistente DB
-- Order idempotency: `agent:{run_id}` (open) o `close:{position_id}` (close), TTL 5min
-- Trailing stop high-water mark 3%
-- Sharpe annualization crypto-correct (365 days/year)
-- Readiness gate legge da account_balance (single source of truth)
-- Intent enum: 5 valori (long+short reserved), Strada B traduttore, Strada α backtest immutato
-- Max drawdown realised-only (Bug 8 fix), daily drawdown mark-to-market (by design)
-- **trdex VPS port**: 8500 host → 8000 container app, 8501 host → 8501 container dashboard
-- **Dashboard symbols/thresholds**: gestiti via Coolify UI finché non c'è feature dashboard nativa (single source of truth = Coolify env)
+- RSI Wilder smoothing, SMA cross 50/200, Sharpe 365 days/year
+- Balance ledger source of truth, idempotency `agent:{run_id}` / `close:{pos_id}`
+- Intent enum con short reserved, backtest immutato, readiness gate legge da ledger
+- Commits: `Author: GravyaDev <dev@gravya.it>`, trailer `Co-Authored-By: Kloud <kloud@gravya.it>`, MAI Claude
+- VPS ports: 8500→8000 (app), 8501→8501 (dashboard)
+- Symbols/thresholds config via Coolify UI (single source of truth) fino a dashboard native feature

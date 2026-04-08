@@ -1,5 +1,19 @@
 # Task Board
 
+## ⚠️ Sister branch in development — `llm-agents`
+
+- **Branch**: `llm-agents` (pushato su `origin/llm-agents` il 2026-04-08 sera)
+- **Worktree**: `C:\Users\Daniele\Antigravity\trdex-llm\` (sister directory creata via `git worktree add`)
+- **Scopo**: rifacimento di Phase 2 con LLM veri dentro gli agent (Scout/Analyst/Risk/Executor). Il `main` attuale è rule-engine deterministico, non AI reale come promesso dal pitch.
+- **Workflow fix**: i bug di production si fixano su `main` e vengono merged forward nel branch (`cd ../trdex-llm && git merge origin/main`). **Mai il contrario** finché LLM non è ufficialmente promosso a production.
+- **Design doc**: DA SCRIVERE nella prossima sessione su `trdex-llm/`, path `trdex-llm/.claude/reports/llm-agents-design-2026-04-08.md`. Le 5 decisioni di design già prese:
+  1. LangChain abstractions (provider-agnostic Claude/GPT/Gemini)
+  2. Dashboard pages per i 4 agenti con prompt + parametri + LLM model configurable
+  3. Active hours (8-22 UTC default)
+  4. Reflection memory dal day 1
+  5. Multi-agent reale (4 LLM call separate) dal day 1
+- **NON modificare `../trdex-llm/` da questa sessione**: usa sessione separata aperta su quel worktree.
+
 ## Today — 2026-04-08 (chiusa ~15:30 UTC, deploy WIP)
 
 Tutta la giornata su refactor Intent enum + deploy trdex su VPS. Deploy bloccato da bug 4+5 scoperti nel secondo deploy attempt. Sessione chiusa per context saturation. **Dettagli completi in `.claude/reports/session-handoff-2026-04-08-deploy-wip.md`.**
@@ -79,6 +93,19 @@ Lavoro completato:
     - **Sanity check**: rifiutare valori fuori range realistico (es. `position_sl_pct > 0.20` rifiutato perché irragionevole).
   - **Effort**: ~2-3 ore (backend dell'audit log è la parte più delicata).
   - **Trigger**: dopo Phase 2 baseline (1-2 settimane) quando avrai dati per giudicare se i parametri default sono troppo conservativi o aggressivi.
+- [ ] **"Active hours" mode per lo scheduler (opzionale, valutare dopo 7 giorni Phase 2)**
+  - **Motivazione**: lo scheduler gira H24 ma il crypto market di notte UTC ha basso volume, segnali rumorosi, e contamina le statistiche di Phase 2. Costa praticamente nulla in termini economici (~$1-2/mese di Jina embeddings sprecati) ma genera rumore cognitivo nei log e potenzialmente trade subottimali in fasce di scarsa liquidità.
+  - **Trigger**: dopo 7 giorni di osservazione baseline H24. Guarda `inspect_runs --hours 168`, calcola % di trade significativi in fascia 8-22 UTC vs notte. Se >70% del valore è in fascia attiva → vale la pena implementare.
+  - **Opzione A — Skip in-process** (~30 min effort):
+    - Aggiungere env var `TRDEX_AGENT_SCHEDULER_ACTIVE_HOURS=08:00-22:00`
+    - In `agent_scheduler_loop` aggiungere `is_active_window()` helper e `if not active: skip cycle, sleep, continue`
+    - Stesso per `IngestionScheduler` (risparmio Jina coordinato)
+    - **NON** applicare a `StopLossMonitor`: deve continuare a vigilare le posizioni aperte H24, altrimenti rischio sblocco di stop loss notturni che diventerebbero perdite più grandi. Eccezione: skip stoploss solo se zero posizioni aperte (edge case complicato, valutare bene).
+  - **Opzione B — Filter a lettura** (~10 min effort):
+    - Aggiungere flag `--active-hours 08-22` a `inspect_runs.py` che filtra le righe `agent_runs` per `EXTRACT(hour FROM ran_at)`
+    - Zero modifiche al runtime, dati notturni restano nel DB come baseline, solo lettura filtrata
+    - Più sicuro, reversibile, non tocca infrastruttura
+  - **Raccomandazione**: partire con Opzione B (10 min, zero rischio). Solo se dopo 1 mese si conferma che il rumore notturno è significativo, considerare Opzione A.
 - [ ] **Bug 11 (cosmetic dashboard)**: la tabella "Recent Agent History" mostra `risk_approved=❌` su tutte le righe HOLD, suggerendo che il sistema rifiuti qualcosa, mentre per HOLD non c'è ordine da approvare. La X rossa è semantica fuorviante.
   - **Fix**: in `src/trdex/dashboard/app.py` riga ~211, modificare il map per `risk_approved`:
     ```python
