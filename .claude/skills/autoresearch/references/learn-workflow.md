@@ -442,7 +442,7 @@ Where:
 ## Output Directory
 
 ```
-learn/{YYMMDD}-{HHMM}-{slug}/
+learn/{YYYY-MM-DD}-{HHMM}-{slug}/
 ├── learn-results.tsv     # iteration log (tsv)
 ├── summary.md            # executive summary
 ├── validation-report.md  # last validation output

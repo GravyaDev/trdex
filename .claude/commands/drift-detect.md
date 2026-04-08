@@ -18,7 +18,8 @@ Self-monitoring command. Scans your entire Claude Code configuration for drift �
 Read all configuration sources simultaneously:
 - `CLAUDE.md` — project instructions
 - `.claude/memory.md` — active memory
-- `.claude/knowledge-base.md` — learned rules
+- `.claude/universal-rules.md` — cross-project rules (shipped with Kloudify)
+- `.claude/knowledge-base.md` — project-specific rules
 - `.claude/settings.json` — hooks configuration
 - `.claude/command-index.md` — command registry (if exists)
 

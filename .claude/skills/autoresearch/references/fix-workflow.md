@@ -610,7 +610,7 @@ Iterations: 20
 
 ## Output Directory
 
-Creates `fix/{YYMMDD}-{HHMM}-{fix-slug}/` with:
+Creates `fix/{YYYY-MM-DD}-{HHMM}-{fix-slug}/` with:
 - `fix-results.tsv` — iteration log
 - `summary.md` — what was fixed, what remains, stats
 - `blocked.md` — errors that needed 3+ attempts and were escalated

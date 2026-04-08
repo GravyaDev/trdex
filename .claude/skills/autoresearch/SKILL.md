@@ -69,7 +69,7 @@ Load: `references/security-workflow.md` for full protocol.
 - Every finding requires **code evidence** (file:line + attack scenario) — no theoretical fluff
 - Tracks OWASP Top 10 + STRIDE coverage, prints coverage summary every 5 iterations
 - Composite metric: `(owasp_tested/10)*50 + (stride_tested/6)*30 + min(findings, 20)` — higher is better
-- Creates `security/{YYMMDD}-{HHMM}-{audit-slug}/` folder with structured reports:
+- Creates `security/{YYYY-MM-DD}-{HHMM}-{audit-slug}/` folder with structured reports:
   `overview.md`, `threat-model.md`, `attack-surface-map.md`, `findings.md`, `owasp-coverage.md`, `dependency-audit.md`, `recommendations.md`, `security-audit-results.tsv`
 
 **Flags:**
@@ -201,7 +201,7 @@ ship_score = (checklist_passing / checklist_total) * 80
 ```
 Score of 100 = fully ready. Below 80 = not shippable.
 
-**Output directory:** Creates `ship/{YYMMDD}-{HHMM}-{ship-slug}/` with `checklist.md`, `ship-log.tsv`, `summary.md`.
+**Output directory:** Creates `ship/{YYYY-MM-DD}-{HHMM}-{ship-slug}/` with `checklist.md`, `ship-log.tsv`, `summary.md`.
 
 ### /autoresearch:scenario — Scenario-Driven Use Case Generator
 
@@ -225,7 +225,7 @@ Load: `references/scenario-workflow.md` for full protocol.
 - Domain-specific templates (software, product, business, security, marketing)
 - Every situation requires concrete trigger, flow, and expected outcome — no vague "something goes wrong"
 - Composite metric: `scenarios_generated*10 + edge_cases_found*15 + (dimensions_covered/12)*30 + unique_actors*5`
-- Creates `scenario/{YYMMDD}-{HHMM}-{slug}/` with: `scenarios.md`, `use-cases.md`, `edge-cases.md`, `scenario-results.tsv`, `summary.md`
+- Creates `scenario/{YYYY-MM-DD}-{HHMM}-{slug}/` with: `scenarios.md`, `use-cases.md`, `edge-cases.md`, `scenario-results.tsv`, `summary.md`
 
 **Flags:**
 
@@ -287,7 +287,7 @@ Load: `references/predict-workflow.md` for full protocol.
 - Anti-herd mechanism: Devil's Advocate mandatory, groupthink detection via flip rate + entropy
 - Empirical evidence always trumps swarm prediction when chained with autoresearch loop
 - Composite metric: `findings_confirmed*15 + findings_probable*8 + minority_preserved*3 + (personas/total)*20 + (rounds/planned)*10 + anti_herd_passed*5`
-- Creates `predict/{YYMMDD}-{HHMM}-{slug}/` folder with: `overview.md`, `codebase-analysis.md`, `dependency-map.md`, `component-clusters.md`, `persona-debates.md`, `hypothesis-queue.md`, `findings.md`, `predict-results.tsv`, `handoff.json`
+- Creates `predict/{YYYY-MM-DD}-{HHMM}-{slug}/` folder with: `overview.md`, `codebase-analysis.md`, `dependency-map.md`, `component-clusters.md`, `persona-debates.md`, `hypothesis-queue.md`, `findings.md`, `predict-results.tsv`, `handoff.json`
 
 **Flags:**
 
@@ -366,7 +366,7 @@ Load: `references/learn-workflow.md` for full protocol.
 - Validation-fix loop capped at 3 retries — escalates to user if unresolved
 - Scale-aware scouting — adjusts parallelism for 5k+ file codebases
 - Composite metric: `learn_score = validation%×0.5 + coverage%×0.3 + size_compliance%×0.2`
-- Creates `learn/{YYMMDD}-{HHMM}-{slug}/` with: `learn-results.tsv`, `summary.md`, `validation-report.md`, `scout-context.md`
+- Creates `learn/{YYYY-MM-DD}-{HHMM}-{slug}/` with: `learn-results.tsv`, `summary.md`, `validation-report.md`, `scout-context.md`
 
 **Flags:**
 
@@ -595,6 +595,24 @@ See `references/core-principles.md` for the 7 generalizable principles from auto
 | Documentation | Validation pass rate (higher) | `docs/*.md` | `/autoresearch:learn` | `npm test` |
 
 Adapt the loop to your domain. The PRINCIPLES are universal; the METRICS are domain-specific.
+
+## Output Directory Naming Convention
+
+All autoresearch subcommands that produce structured output use this pattern for their top-level directory:
+
+```
+{category}/{YYYY-MM-DD}-{HHMM}-{slug}/
+```
+
+Where:
+- `{category}` is one of: `security`, `ship`, `scenario`, `predict`, `learn`, `fix`, `debug`
+- `{YYYY-MM-DD}` is the ISO 8601 date (e.g. `2026-04-09`)
+- `{HHMM}` is the 24-hour time without separator (e.g. `1430` for 14:30)
+- `{slug}` is a kebab-case descriptor of what the run was about (e.g. `auth-audit`, `q1-release`)
+
+**Slug rule — MUST NOT begin with a digit**: this keeps the 4-segment date+time prefix unambiguously parseable. A filename like `security/2026-04-09-1430-42-hotfixes/` would be ambiguous (is `42` part of the time or the slug?); `security/2026-04-09-1430-hotfixes-42/` is fine. When generating a slug, prepend a descriptive word if the natural name starts with a number.
+
+Rationale: ISO 8601 dates are the project-wide standard (see CLAUDE.md § Date Format). Using `-` as separator throughout keeps tooling simple (single regex `\d{4}-\d{2}-\d{2}-\d{4}-.+` matches all output dirs across subcommands) and matches the rest of Kloudify's naming style.
 
 ## Post-Completion: Support Prompt (Once Per Project)
 

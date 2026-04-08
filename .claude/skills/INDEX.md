@@ -7,7 +7,7 @@
 
 Skills are invoked automatically when Claude detects a relevant task, or manually via `/skill-name`.
 Every skill:
-- Reads your project context from `memory.md` and `knowledge-base.md`
+- Reads your project context from `memory.md`, `universal-rules.md`, and `knowledge-base.md`
 - Follows a structured process with named frameworks
 - Produces a defined output format
 - Validates quality before delivery
@@ -73,6 +73,10 @@ Every skill:
 | [brainstorming](./brainstorming/SKILL.md) | Single-agent ideation with Understanding Lock |
 | [autoresearch](./autoresearch/SKILL.md) | Autonomous deep research with source validation |
 | [web-fetch](./web-fetch/SKILL.md) | Fetch and extract structured content from web pages |
+| [scaffold-cli](./scaffold-cli/SKILL.md) | Spec-first CLI scaffolding via OpenCLI (ocli) — generates validated spec, framework code, and docs |
+| [report-writing](./report-writing/SKILL.md) | Audience-aware narrative reports — adapts tone and depth for executive, technical, client, board, or general readers |
+| [competitive-intel](./competitive-intel/SKILL.md) | Deep competitive analysis with comparison matrix, gap/threat identification, and strategic recommendations |
+| [ai-operations-audit](./ai-operations-audit/SKILL.md) | On-demand multi-agent audit of AI operations in the project — architecture, HITL, traceability, escalation, cost, gaps. Interactive briefing, persistent report, delta vs. previous audit, nominates recurring patterns |
 
 ---
 

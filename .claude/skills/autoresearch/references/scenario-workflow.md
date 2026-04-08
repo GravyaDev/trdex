@@ -282,7 +282,7 @@ Higher = more thorough. Incentivizes breadth (cover dimensions) AND depth (find 
 
 ## Output Directory
 
-Creates `scenario/{YYMMDD}-{HHMM}-{scenario-slug}/` with:
+Creates `scenario/{YYYY-MM-DD}-{HHMM}-{scenario-slug}/` with:
 - `scenarios.md` — all generated scenarios grouped by dimension, with full situation format
 - `use-cases.md` — formal use cases (Given/When/Then) derived from scenarios
 - `edge-cases.md` — edge cases and failure modes with severity ratings

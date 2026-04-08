@@ -1,0 +1,30 @@
+# Knowledge Base — {{PROJECT_NAME}}
+
+Project-specific learned rules. Read by ALL agents and sessions at startup,
+**after** `universal-rules.md`. Written ONLY by the auditor after confirming
+learnings. Entries are mandatory constraints, not suggestions.
+
+**Scope**: rules that apply to THIS project only. Cross-project rules belong
+in `.claude/universal-rules.md` (maintained at the Kloudify base repo level).
+
+If a rule you're about to add would apply to other projects too, consider
+nominating it for the universal rules file instead — put a note in
+`.claude/knowledge-nominations.md` tagged as `UNIVERSAL_CANDIDATE`.
+
+## Provenance Hierarchy
+Every entry MUST cite its source using one of:
+- `[Source: user override YYYY-MM-DD]` — User explicitly corrected something
+- `[Source: empirical YYYY-MM-DD]` — Verified through testing or data
+- `[Source: agent inference YYYY-MM-DD]` — Pattern observed by an agent, confirmed by auditor
+
+## Hard Rules
+- (populated by /onboard-init and by the auditor)
+
+## Project Patterns
+- (none yet)
+
+## Dynamic Architecture Rules
+- (none yet)
+
+## Known Failure Modes
+- (none yet)

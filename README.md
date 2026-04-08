@@ -79,7 +79,8 @@ your-project/
 │
 └── .claude/
     ├── memory.md                # Active session context (<100 lines)
-    ├── knowledge-base.md        # System-wide learned rules (auditor-gated)
+    ├── universal-rules.md       # Cross-project rules (shipped with Kloudify, versioned)
+    ├── knowledge-base.md        # Project-specific learned rules (auditor-gated, gitignored)
     ├── knowledge-nominations.md # Candidate learnings pipeline
     ├── command-index.md         # Full command catalog
     ├── settings.json            # Hook configuration

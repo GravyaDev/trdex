@@ -11,7 +11,31 @@ These rules are checked mechanically by `.claude/hooks/guard-bash.sh`. Violating
 |------|-------------------|
 | **Never call third-party APIs directly** (curl/wget/requests/httpx/fetch to any external platform API) | Always use a python tool that handles rate-limiting, throttle headers, retries, auth |
 | **Never read official API docs from secondary sources** (articles, blog posts) | Always fetch `/docs` or `/openapi.json` from the official endpoint first, then ask user if nothing was found |
-| **Never write outside `trdex/`** | This applies to ALL repos and directories, no exceptions. Any repo outside trdex is an independent product. Writing there from a trdex session causes cross-contamination and violates repo isolation. The user has stated this constraint clearly multiple times. Before every Read/Write/Edit/Bash, verify the target path starts with `trdex/`. If it doesn't, stop and ask the user for clarification before proceeding.
+| **Never write outside working directory** | This applies to ALL repos and directories, no exceptions. Any repo outside working directory is an independent product. Writing there causes cross-contamination and violates repo isolation. The user has stated this constraint clearly multiple times. Before every Read/Write/Edit/Bash, verify the target path. If it doesn't, stop and ask the user for clarification before proceeding.
+
+## Rule Precedence — project KB > global user instructions
+
+When a project-specific rule in `.claude/knowledge-base.md` conflicts with a
+default set in the global user instructions (`~/.claude/CLAUDE.md`), **the
+project knowledge-base wins**. Always. No exceptions.
+
+The most frequent case where this matters is **commit identity**: the global
+user instructions may define a default `Co-Authored-By` trailer (e.g.
+`Claude Opus 4.6 <noreply@anthropic.com>`) that applies across all projects.
+If the project knowledge-base declares its own `Commit Identity` rule (e.g.
+`Kloud <kloud@gravya.it>`), that project rule takes precedence and the
+global default MUST NOT be used in commits for this project.
+
+This is enforced mechanically by `.claude/hooks/guard-commit-identity.sh`:
+the hook reads the knowledge-base, extracts the required email, and HARD
+BLOCKS any `git commit` whose message contains a `Co-Authored-By` trailer
+with a different email. If no identity is configured in the knowledge-base,
+the hook is fail-open (allows any trailer) — this is the base-repo case.
+
+**Why this rule exists**: on 2026-04-08 an agent session inherited the
+global `Claude Opus` trailer and committed 4 times with it, violating the
+project's explicit `Kloud <kloud@gravya.it>` rule. The violation required
+a force-push rewrite to fix. This guard is the root-cause fix.
 
 ## First-Run Onboarding
 
@@ -28,18 +52,25 @@ All dates throughout the system use **ISO 8601: `YYYY-MM-DD`**. This applies to:
 Never use locale-dependent formats (MM/DD/YY, DD/MM/YY, YYYY-MM-DD). The system date for today is provided in the conversation context — use that, not `date` command output, to avoid format mismatches.
 
 ## Quick Start
-- Run `/start` to begin work
-- Run `/sync` mid-day to refresh memory
-- Run `/wrap-up` at end of day
-- Run `/audit` to verify recent work quality
-- Run `/clear` to safely flush context and resume fresh
-- Run `/unstick` when stuck on a problem
-- Run `/retro` for sprint retrospective
-- Run `/system-audit` for deep infrastructure audit
+
+**Daily rituals (you invoke these)**:
+- `/start` — begin work
+- `/sync` — mid-day refresh
+- `/wrap-up` — end of day
+- `/audit` — verify quality after a task or feature
+- `/system-audit` — deep infrastructure audit (monthly)
+
+**Auto-nudged (Kloudify surfaces these in your daily note when their trigger fires)**:
+- `/retro` — sprint retrospective. Nudged after 7+ days without one (`retro-suggester.sh`).
+- `/unstick` — when blocked. Nudged when 3+ failures of the same category accumulate (`stuck-detector.sh`).
+- `/debt-map` — tech debt inventory. Nudged when 20+ new TODO/FIXME markers accumulate (`debt-suggester.sh`).
+
+For context-pressure handling (`/clear` and friends), see the **Context Health** section below.
 
 ## Key Files
 - Memory: `.claude/memory.md` (read this for current context)
-- Knowledge Base: `.claude/knowledge-base.md` (system-wide learned rules — read before every task)
+- Universal Rules: `.claude/universal-rules.md` (cross-project rules shipped with Kloudify — read before every task)
+- Knowledge Base: `.claude/knowledge-base.md` (project-specific learned rules — read after universal-rules.md)
 - Task Board: `Task Board.md`
 - Scratchpad: `Scratchpad.md` (quick capture, processed during /sync, cleared at /wrap-up)
 - Daily Notes: `Daily Notes/` (created automatically by /start)
@@ -62,13 +93,35 @@ Never use locale-dependent formats (MM/DD/YY, DD/MM/YY, YYYY-MM-DD). The system 
 - **Logs** (`.claude/logs/`): Audit trail + incident log — auto-populated by hooks
 - **Skills** (`.claude/skills/`): Domain knowledge, loaded on demand
 
-## Memory Architecture (6 Tiers)
+## Activation Model — when each primitive fires
+
+Three primitives, three orthogonal triggers. Use this classification when adding new behavior to Kloudify or when deciding whether something belongs as a hook, a command, or a skill.
+
+| Primitive | Trigger axis | When to use it | Example |
+|-----------|--------------|----------------|---------|
+| **Hook** (`.claude/hooks/*.sh`) | **Artefact-triggered** — fires on a deterministic event (file write, tool call, session start, failure pattern). No human intent needed. | Behavior that should happen *automatically* in response to a state change. The user must not have to remember it. | `drift-detect.sh` runs when `CLAUDE.md` is edited; `stuck-detector.sh` fires when 3+ failures of the same category accumulate. |
+| **Command** (`.claude/commands/*.md`) | **Intent-triggered** — fires when the user explicitly invokes `/foo`. Requires a human "now" decision. | Deliberate rituals tied to a specific moment, or critical operations that must be human-armed. Few enough to remember without effort. | `/start`, `/wrap-up`, `/audit`, `/deep-audit` — temporal rituals or human-gated critical actions. |
+| **Skill** (`.claude/skills/*/SKILL.md`) | **Semantic-triggered** — fires when the agent recognizes a task that matches the skill's `description` frontmatter. Activated by natural-language conversation, not by syntax. | Pure procedural knowledge with no temporal trigger and no critical-action requirement. The user describes the goal, the agent picks the right skill. | `report-writing`, `competitive-intel`, `scaffold-cli` — payload knowledge applied on user request. |
+
+**Decision filter** for any new behavior:
+1. Is there an *observable artefact signal* (file change, threshold, event) that marks the right moment? → **Hook**.
+2. Does it require *deliberate human intent* at a specific moment, or is it a *critical operation* that must not auto-fire? → **Command**.
+3. Is it *procedural knowledge* the user requests in natural language? → **Skill**.
+
+If none of the three apply, the behavior probably doesn't need to exist. If two apply, the artefact-triggered path wins (more deterministic, less to remember).
+
+**Determinism note** — hooks are the only primitive that gives you *pre-action* determinism (the action is gated before it runs). Commands and skills give you *post-action* accountability (you log what happened after it ran). When the cost of a wrong action is high, prefer the hook even if the trigger is awkward.
+
+**Migration history**: see commit `6df3259` for the first application of this model — three procedural commands (`/scaffold-cli`, `/report`, `/competitive-intel`) were converted to skills because they had no artefact trigger and no temporal ritual. Commit `59fd187` added three artefact-triggered hooks (drift, onboarding, stuck) to replace behaviors that previously required the user to remember to invoke a command.
+
+## Memory Architecture (7 Tiers)
 1. **memory.md** — Active session context (what you're doing now)
 2. **Agent Memory** (`.claude/agent-memory/`) — Per-agent persistent knowledge across sessions
-3. **Knowledge Base** (`.claude/knowledge-base.md`) — System-wide learned rules (auditor-gated)
-4. **Knowledge Nominations** (`.claude/knowledge-nominations.md`) — Candidate learnings pipeline
-5. **MCP Knowledge Graph** — Structured entities and relations (if memory MCP enabled)
-6. **Daily Notes** — Chronological session history and handoff records
+3. **Universal Rules** (`.claude/universal-rules.md`) — Cross-project rules shipped with Kloudify (versioned in base repo, read by all agents at startup)
+4. **Knowledge Base** (`.claude/knowledge-base.md`) — Project-specific learned rules (auditor-gated, gitignored, created at onboarding)
+5. **Knowledge Nominations** (`.claude/knowledge-nominations.md`) — Candidate learnings pipeline
+6. **MCP Knowledge Graph** — Structured entities and relations (if memory MCP enabled)
+7. **Daily Notes** — Chronological session history and handoff records
 
 ## Command Awareness
 
@@ -84,35 +137,47 @@ All agents can invoke system commands. Read `.claude/command-index.md` for the f
 |---|---|---|
 | What am I doing right now? | `memory.md` → Now | Task Board → Today |
 | How to do a procedure | `.claude/commands/` or `.claude/skills/` | CLAUDE.md |
-| A fact or learned rule | `knowledge-base.md` | Agent memory |
+| A universal rule (cross-project) | `universal-rules.md` | — |
+| A project-specific rule | `knowledge-base.md` → Hard Rules | Agent memory |
 | What happened on a specific day | `Daily Notes/YYYY-MM-DD.md` | Audit trail |
-| What went wrong before | `knowledge-base.md` → Hard Rules | Agent memory → Known Patterns |
+| What went wrong before | `universal-rules.md` then `knowledge-base.md` | Agent memory → Known Patterns |
 | What commands exist | `.claude/command-index.md` | `.claude/commands/{name}.md` |
 
 ## Context Health
 
 Sessions have finite context. Heavy operations consume it fast.
 
-**Automatic safety net (hooks):**
-- `PreCompact` hook saves state before auto-compaction
-- `SessionStart(compact)` hook restores context after compaction
-- `SessionStart(user)` hook resets stale gate files on every fresh session
+**Automatic hooks at compact boundaries:**
+- `PreCompact` hook (`pre-compact-handoff.sh`) writes an "Auto-compaction cut" placeholder in today's daily note with a precise timestamp and recovery pointers. **It does NOT distill session state** — a bash hook cannot read Claude's in-context memory. The placeholder is a breadcrumb, not a handoff.
+- `SessionStart(compact)` hook (`post-compact-resume.sh`) injects a short orientation prompt pointing Claude to the recovery anchors (memory.md, knowledge-base.md, the daily note). **It does NOT instruct bulk re-read** and **does NOT auto-resume the previous task** — Claude waits for user input.
+- `SessionStart(user)` hook (`session-reset.sh`) resets stale gate files, validates hook permissions, prunes oversized audit trails.
 
 **Completeness gates (PreToolUse Write|Edit — hard blocks):**
-- **knowledge-base.md**: Every entry needs `[Source:]` provenance, max 200 lines, no TBD/TODO
+- **universal-rules.md** and **knowledge-base.md**: Every entry needs `[Source:]` provenance, max 200 lines, no TBD/TODO
 - **memory.md**: Max 100 lines (Write only)
 - **settings.json**: Must be valid JSON (broken JSON breaks all hooks)
 - **Agent defs** (`.claude/agents/*.md`): No TBD/TODO — instructions must be definitive
 - **Ungated** (iterative by nature): Daily Notes, Scratchpad, Templates, Logs, Commands, Skills
 
-**Self-monitoring (soft signals — Claude's responsibility):**
-- After ~30+ tool calls or 3+ large file reads: run `/clear` proactively
-- If you see a "compacting conversation" warning: run `/clear` immediately
-- If output quality degrades (repetition, missed details): run `/clear`
-- When a discrete multi-step task completes: consider `/clear` before starting the next unrelated task
-- When switching between different task domains: acknowledge the boundary, prefer `/clear` for heavy switches
+**Context-pressure response — emergency vs proactive:**
 
-**How /clear works:** Distills session state into memory.md + daily note handoff, preserving retrieval paths. Then automatically resumes work by reloading compressed context and executing the next action. Seamless to the user.
+The response to context pressure is **two-tier** and the distinction matters:
+
+*Emergency tier* (auto-acting, no confirmation needed):
+- **Compacting warning visible**: run `/clear` in emergency mode immediately. No choice — the alternative is uncontrolled compaction.
+- **Prompt-too-long hard error**: same.
+
+In emergency mode `/clear` skips the optional reads and distills only from in-context memory, then stops. This is the only case where Claude invokes `/clear` without asking.
+
+*Proactive tier* (signalling, NOT auto-acting):
+- **After ~30+ tool calls or 3+ large file reads**: surface a visible heads-up to the user — "Heads up: context is getting heavy. `/clear` is a natural stopping point if you want a fresh session." Do NOT invoke `/clear` without confirmation.
+- **Output quality degrades** (repetition, missed details): same — signal the degradation, suggest `/clear`, wait for the user.
+- **Discrete multi-step task completes**: suggest `/clear` as an option, do not force it. The user may want to continue in the same session.
+- **Switching between different task domains**: acknowledge the boundary in plain language, suggest `/clear` if the switch is heavy, wait.
+
+**Why the split**: `/clear` is NOT seamless. It saves a handoff and stops — the user must open a fresh session to continue. Auto-invoking `/clear` proactively interrupts the flow and forces a session restart the user did not ask for. Auto-invoking in emergency is different: the session is going to break anyway, and `/clear` gives a cleaner failure mode than uncontrolled compaction.
+
+**How /clear works:** Distills in-context session state into `Daily Notes/YYYY-MM-DD.md` as a Session Handoff section, updates `memory.md` if needed, promotes/nominates learnings, then **stops and reports the save location**. It does NOT re-read files, does NOT auto-resume, does NOT continue the previous task. To resume the work, open a fresh session and read the handoff section of the daily note. See `.claude/commands/clear.md` for the full protocol.
 
 **Delegation for context hygiene:**
 When a task is self-contained (its output does not inform the next step), delegate it to a subagent. This preserves context for work that actually needs it. Examples: batch find-and-replace, linting checks, file generation from templates, verification scans.

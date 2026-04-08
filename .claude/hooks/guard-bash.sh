@@ -73,10 +73,46 @@ if echo "$COMMAND" | grep -qE 'chmod\s+777'; then
   deny "HARD BLOCK: chmod 777 grants full access to all users." "Command blocked: chmod 777. Use more restrictive permissions like 755 or 644."
 fi
 
-# Writing to files outside project directory
-if echo "$COMMAND" | grep -qE '>\s*/' | grep -qvE ">\s*$CLAUDE_PROJECT_DIR"; then
-  log_incident "HIGH" "BLOCKED: writing outside project dir → $COMMAND"
-  deny "HARD BLOCK: writing outside project dir is strictly forbidden."
+# Writing to files outside project directory.
+# Covers redirects (`> /path`, `>> /path`), tee (`tee /path`, `tee -a /path`),
+# and dd (`dd of=/path`). Excludes writes inside $CLAUDE_PROJECT_DIR and
+# common safe temp sinks (/dev/null, /dev/stdout, /dev/stderr).
+check_outside_write() {
+  local target="$1"
+  # Allow /dev/null and friends
+  case "$target" in
+    /dev/null|/dev/stdout|/dev/stderr|/dev/tty) return 1 ;;
+  esac
+  # Allow anything inside the project dir
+  case "$target" in
+    "$CLAUDE_PROJECT_DIR"/*|"$CLAUDE_PROJECT_DIR") return 1 ;;
+  esac
+  # Absolute path outside project → block
+  case "$target" in
+    /*) return 0 ;;
+  esac
+  return 1
+}
+
+# Redirect: > /path or >> /path
+REDIR_TARGET=$(echo "$COMMAND" | grep -oE '>>?\s*/[^ ;|&]+' | head -1 | sed -E 's/^>>?\s*//')
+if [ -n "$REDIR_TARGET" ] && check_outside_write "$REDIR_TARGET"; then
+  log_incident "HIGH" "BLOCKED: redirect outside project dir → $COMMAND"
+  deny "HARD BLOCK: writing outside project dir is strictly forbidden." "Redirect target: $REDIR_TARGET"
+fi
+
+# tee: tee /path or tee -a /path
+TEE_TARGET=$(echo "$COMMAND" | grep -oE '\btee\s+(-[aA]\s+)?/[^ ;|&]+' | head -1 | sed -E 's/^tee\s+(-[aA]\s+)?//')
+if [ -n "$TEE_TARGET" ] && check_outside_write "$TEE_TARGET"; then
+  log_incident "HIGH" "BLOCKED: tee outside project dir → $COMMAND"
+  deny "HARD BLOCK: writing outside project dir is strictly forbidden." "tee target: $TEE_TARGET"
+fi
+
+# dd: dd of=/path
+DD_TARGET=$(echo "$COMMAND" | grep -oE '\bdd\s+.*\bof=/[^ ;|&]+' | head -1 | sed -E 's/.*\bof=//')
+if [ -n "$DD_TARGET" ] && check_outside_write "$DD_TARGET"; then
+  log_incident "HIGH" "BLOCKED: dd outside project dir → $COMMAND"
+  deny "HARD BLOCK: writing outside project dir is strictly forbidden." "dd target: $DD_TARGET"
 fi
 
 # ═══════════════════════════════════════════════════════
@@ -119,8 +155,9 @@ fi
 
 # rm with -r or -f flags (recursive/force delete)
 if echo "$COMMAND" | grep -qE 'rm\s+(-[a-zA-Z]*[rf][a-zA-Z]*\s+)'; then
-  # Allow rm on .claude/backups (rotation) and .claude/logs temp files
-  if echo "$COMMAND" | grep -qE '\.claude/(backups|logs/\.(quality-gate-active|session-blocks|tool-call-count|compaction-occurred))'; then
+  # Allow rm on .claude/backups (rotation), .claude/logs temp files,
+  # and the __NEEDS_ONBOARD sentinel (deleted at end of /onboard-init).
+  if echo "$COMMAND" | grep -qE '\.claude/(backups|logs/\.(quality-gate-active|session-blocks|tool-call-count|compaction-occurred))|__NEEDS_ONBOARD'; then
     exit 0
   fi
   log_incident "MEDIUM" "SOFT BLOCKED: recursive/force rm → $COMMAND"
@@ -137,6 +174,14 @@ fi
 if echo "$COMMAND" | grep -qE 'curl\s.*\|\s*(bash|sh|zsh)'; then
   log_incident "HIGH" "SOFT BLOCKED: curl pipe to shell → $COMMAND"
   deny "SOFT BLOCK: Piping curl to a shell executes arbitrary remote code." "Command blocked: curl pipe to shell. Download the file first, inspect it, then run it."
+fi
+
+# curl/wget to external URLs (enforces CLAUDE.md hard rule: no direct third-party API calls).
+# Excludes localhost, 127.0.0.1, 0.0.0.0, and context7 MCP (which is allowed).
+if echo "$COMMAND" | grep -qE '\b(curl|wget)\s+.*https?://' && \
+   ! echo "$COMMAND" | grep -qE 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])'; then
+  log_incident "MEDIUM" "SOFT BLOCKED: curl/wget to external URL → $COMMAND"
+  deny "SOFT BLOCK: Direct calls to third-party APIs via curl/wget are forbidden by CLAUDE.md hard rule." "Use a proper Python/Node tool with rate-limiting, retries, and auth handling. If this is a one-shot doc fetch, use the WebFetch tool instead."
 fi
 
 # ═══════════════════════════════════════════════════════
@@ -156,6 +201,11 @@ fi
 # Any git checkout that discards changes
 if echo "$COMMAND" | grep -qE 'git\s+checkout\s+\.'; then
   log_incident "MEDIUM" "WARNING: git checkout . discards changes → $COMMAND"
+fi
+
+# git commit with -F / --file / --template (message sourced from file, bypasses HEREDOC review)
+if echo "$COMMAND" | grep -qE 'git\s+commit\s+.*(-F\b|--file\b|--template\b)'; then
+  log_incident "MEDIUM" "WARNING: git commit from file → $COMMAND"
 fi
 
 exit 0

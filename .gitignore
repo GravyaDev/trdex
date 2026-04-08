@@ -1,12 +1,50 @@
-# Kloudify — personal & runtime files
+# Kloudify — repo base MUST stay pure.
+# A fresh `git clone kloudify` must yield the PRODUCT only: no session
+# state, no personal notes, no project-specific data. Everything that
+# accumulates during use of Kloudify lives outside the versioned tree.
+#
+# Rule of thumb: if a file grows or changes just because you *used*
+# Kloudify (instead of *developed* it), it belongs here.
+
+# ═══════════════════════════════════════════════════════
+# Personal / environment overrides
+# ═══════════════════════════════════════════════════════
 .antigravity/
 CLAUDE.local.md
+
+# ═══════════════════════════════════════════════════════
+# Runtime state (never versioned — volatile, per-session, per-project)
+# ═══════════════════════════════════════════════════════
 .claude/logs/
 .claude/agent-memory/
 .claude/backups/
 .claude/hooks/__counter
 
+# ═══════════════════════════════════════════════════════
+# Session context & personal working notes
+# ═══════════════════════════════════════════════════════
+# These are "the developer's mind during a session" — they must never
+# leak from one clone to another. The base repo must be empty of them.
+.claude/memory.md
+.claude/knowledge-base.md
+.claude/knowledge-nominations.md
+.claude/reports/
+.claude/plans/
+
+# ═══════════════════════════════════════════════════════
+# Project workspace (local to whichever project uses Kloudify)
+# ═══════════════════════════════════════════════════════
+# These files exist only in real project deployments of Kloudify,
+# never in the base repo. Their presence in a clone of the base would
+# contaminate the fresh deployment with stale notes from development.
+Daily Notes/
+Scratchpad.md
+Task Board.md
+__NEEDS_ONBOARD
+
+# ═══════════════════════════════════════════════════════
 # Python
+# ═══════════════════════════════════════════════════════
 __pycache__/
 *.py[cod]
 *$py.class
@@ -16,33 +54,45 @@ dist/
 build/
 .eggs/
 
+# ═══════════════════════════════════════════════════════
 # Virtual environments
+# ═══════════════════════════════════════════════════════
 .venv/
 venv/
 
+# ═══════════════════════════════════════════════════════
 # Environment & secrets
+# ═══════════════════════════════════════════════════════
 .env
 *.pem
 *.key
 
+# ═══════════════════════════════════════════════════════
 # IDE
+# ═══════════════════════════════════════════════════════
 .vscode/
 .idea/
 *.swp
 *.swo
 
+# ═══════════════════════════════════════════════════════
 # Testing & coverage
+# ═══════════════════════════════════════════════════════
 .coverage
 htmlcov/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 
+# ═══════════════════════════════════════════════════════
 # Docker volumes (local data)
+# ═══════════════════════════════════════════════════════
 pgdata/
 
+# ═══════════════════════════════════════════════════════
 # Playwright MCP artefacts (screenshots, console logs, yaml snapshots)
 # left behind by browser automation sessions during dashboard testing.
+# ═══════════════════════════════════════════════════════
 .playwright-mcp/
 dashboard-*.png
 # package.json is created by the Playwright MCP server on first run

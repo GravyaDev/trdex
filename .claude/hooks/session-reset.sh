@@ -76,4 +76,49 @@ if [ -f "$LOG_DIR/audit-trail.md" ]; then
   fi
 fi
 
+# ═══════════════════════════════════════════════════════
+# 6. Inject universal-rules.md and knowledge-base.md into session context
+# ═══════════════════════════════════════════════════════
+# This is the CRITICAL fix for the commit-identity violation pattern:
+# instead of asking Claude to "read knowledge-base before every task"
+# (which Claude forgets), we put the rules directly into the initial
+# context so they arrive deterministically. Both files are size-capped
+# at 200 lines by completeness-gate.sh + drift-detect.sh, so the cost
+# is bounded (~400 lines max for both combined).
+#
+# Anything printed to stdout from a SessionStart hook is surfaced to
+# Claude as additional context at the start of the session.
+
+UNIVERSAL="$CLAUDE_PROJECT_DIR/.claude/universal-rules.md"
+KB="$CLAUDE_PROJECT_DIR/.claude/knowledge-base.md"
+
+if [ -f "$UNIVERSAL" ] || [ -f "$KB" ]; then
+  echo "═══════════════════════════════════════════════════════"
+  echo "MANDATORY RULES (auto-loaded by session-reset.sh)"
+  echo "═══════════════════════════════════════════════════════"
+  echo ""
+  echo "These rules are loaded deterministically at every session"
+  echo "start. You MUST respect them without needing to re-read the"
+  echo "source files. If you are about to commit, deploy, or modify"
+  echo "shared state, consult these rules first — they are the"
+  echo "contract for how work is done in this project."
+  echo ""
+
+  if [ -f "$UNIVERSAL" ]; then
+    echo "─── .claude/universal-rules.md (cross-project) ───"
+    cat "$UNIVERSAL"
+    echo ""
+  fi
+
+  if [ -f "$KB" ]; then
+    echo "─── .claude/knowledge-base.md (project-specific) ───"
+    cat "$KB"
+    echo ""
+  fi
+
+  echo "═══════════════════════════════════════════════════════"
+  echo "END OF MANDATORY RULES"
+  echo "═══════════════════════════════════════════════════════"
+fi
+
 exit 0

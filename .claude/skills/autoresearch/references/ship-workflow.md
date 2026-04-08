@@ -406,7 +406,7 @@ If `--rollback` is specified or post-ship verification fails:
 
 ## Output Directory
 
-Creates `ship/{YYMMDD}-{HHMM}-{ship-slug}/` with:
+Creates `ship/{YYYY-MM-DD}-{HHMM}-{ship-slug}/` with:
 - `checklist.md` — full checklist with pass/fail status
 - `ship-log.tsv` — iteration log (if preparation loop ran)
 - `summary.md` — final ship report

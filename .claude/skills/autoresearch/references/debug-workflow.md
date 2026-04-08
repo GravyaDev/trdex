@@ -446,7 +446,7 @@ Root Fix: fix the email regex to require at least one character before @
 
 ## Output Directory
 
-Creates `debug/{YYMMDD}-{HHMM}-{debug-slug}/` with:
+Creates `debug/{YYYY-MM-DD}-{HHMM}-{debug-slug}/` with:
 - `findings.md` — all confirmed bugs with evidence
 - `eliminated.md` — disproven hypotheses (equally valuable)
 - `debug-results.tsv` — iteration log

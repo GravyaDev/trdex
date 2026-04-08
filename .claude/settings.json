@@ -9,6 +9,11 @@
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-bash.sh\"",
             "statusMessage": "Checking command safety..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-commit-identity.sh\"",
+            "statusMessage": "Checking commit identity..."
           }
         ]
       },
@@ -28,6 +33,16 @@
             "statusMessage": "Validating content completeness..."
           }
         ]
+      },
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-webfetch-jina.sh\"",
+            "statusMessage": "Enforcing Jina Reader for WebFetch..."
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -45,6 +60,12 @@
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/update-project-stack.sh\"",
             "async": true,
             "statusMessage": "Updating project stack profile..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/drift-detect.sh\"",
+            "async": true,
+            "statusMessage": "Checking config drift..."
           }
         ]
       }
@@ -58,6 +79,12 @@
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/log-failures.sh\"",
             "async": true,
             "statusMessage": "Logging failure..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/stuck-detector.sh\"",
+            "async": true,
+            "statusMessage": "Checking for stuck patterns..."
           }
         ]
       }
@@ -84,6 +111,24 @@
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/session-reset.sh\"",
             "timeout": 3,
             "statusMessage": "Resetting session state..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/onboard-init-trigger.sh\"",
+            "timeout": 3,
+            "statusMessage": "Checking onboarding state..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/retro-suggester.sh\"",
+            "timeout": 3,
+            "statusMessage": "Checking retro cadence..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/debt-suggester.sh\"",
+            "timeout": 5,
+            "statusMessage": "Checking technical debt accumulation..."
           }
         ]
       },

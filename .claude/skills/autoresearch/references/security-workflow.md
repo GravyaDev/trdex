@@ -843,12 +843,12 @@ Every `/autoresearch:security` run creates a dedicated folder inside a `security
 ### Folder Naming Convention
 
 ```
-security/{YYMMDD}-{HHMM}-{audit-type-slug}/
+security/{YYYY-MM-DD}-{HHMM}-{audit-type-slug}/
 ```
 
 | Component | Source | Example |
 |-----------|--------|---------|
-| `YYMMDD` | Current date | `260315` |
+| `YYYY-MM-DD` | Current date (ISO 8601) | `2026-03-15` |
 | `HHMM` | Current time (24h) | `0945` |
 | `audit-type-slug` | Inferred from scope/focus | `stride-owasp-full-audit` |
 
@@ -966,7 +966,7 @@ jwt.verify(token, secret, { algorithms: ['HS256'] });
 
 1. At the **start** of `/autoresearch:security`, create the folder:
    ```
-   mkdir -p security/{YYMMDD}-{HHMM}-{slug}
+   mkdir -p security/{YYYY-MM-DD}-{HHMM}-{slug}
    ```
 
 2. During the **Setup Phase**, write:

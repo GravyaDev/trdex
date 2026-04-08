@@ -51,6 +51,55 @@ Note: `project-stack.md` is also updated incrementally by a PostToolUse hook
 whenever structural files (package.json, requirements.txt, Dockerfile, etc.) change.
 The wrap-up regeneration ensures both files are complete and in sync.
 
+### Step 3c: Deployable components inventory (MANDATORY)
+
+**Why this step exists**: complement to `/start` Step 3 (Repo reality check).
+Where `/start` catches gaps reactively each morning, `/wrap-up` persists the
+inventory of what's deployable so future sessions inherit it instead of
+rediscovering the repo every time. This closes the oversight pattern from
+the 2026-04-08 Violation 3 report (dashboard component existed in code
+but was never surfaced to the agent planning the deploy).
+
+**3c-i. Enumerate deployable components.** Scan the source tree for each
+runnable entry point: FastAPI apps, Streamlit/Gradio dashboards, CLI scripts
+(`if __name__ == "__main__"` or `#!/usr/bin/env ...`), background workers,
+Next.js/SvelteKit apps, Docker-defined services. For each, record:
+
+- **Name** (directory or file)
+- **Type** (api, dashboard, cli, worker, static, other)
+- **Entry point** (e.g., `src/trdex/api/main.py`, `src/trdex/dashboard/app.py`)
+- **Deploy status** — present in a manifest (compose/Dockerfile/CI) or NOT
+
+**3c-ii. Update `.claude/project-structure.md`**. Append or replace a
+section at the bottom titled `## Deployable Components` with a table:
+
+```markdown
+## Deployable Components
+
+_Last updated by /wrap-up: YYYY-MM-DD_
+
+| Name | Type | Entry point | In deploy? |
+|---|---|---|---|
+| `trdex-api` | api | `src/trdex/api/main.py` | ✅ docker-compose.yml |
+| `trdex-dashboard` | dashboard | `src/trdex/dashboard/app.py` | ❌ not deployed |
+| `trdex-cli` | cli | `src/trdex/cli.py` | N/A (dev tool) |
+```
+
+**3c-iii. Flag undeployed components in the daily note.** If any row has
+`❌ not deployed`, append to today's Daily Note under a "Deploy gaps"
+subsection:
+
+```markdown
+### Deploy gaps
+- `trdex-dashboard` (dashboard) exists at `src/trdex/dashboard/app.py`
+  but is not in any deploy manifest. Decide: deploy, archive, or
+  document as dev-only.
+```
+
+This keeps the gap visible until it's resolved. Do NOT silently skip —
+if there are zero gaps, write "Deploy gaps: none" so the check is
+auditable.
+
 ### Step 4: Move completed tasks
 
 In `Task Board.md`:
@@ -108,17 +157,6 @@ If today is Friday, invoke:
 ```
 
 Keeps project docs in sync with the week's changes. Output goes to the daily note.
-
-### Step 6d: AI Operations Registry update (Fridays only, if present)
-
-If today is Friday and an `ai-operations-registry/` directory exists:
-
-1. Read all files in `ai-operations-registry/`
-2. Cross-reference with the current codebase to check if content matches reality
-3. Update stale sections and dates
-4. Log in daily note: "AI Operations Registry updated: [list of files changed]"
-
-Skip this step if no AI Operations Registry is configured.
 
 ### Step 7: Review incident log
 
