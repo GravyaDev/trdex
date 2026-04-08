@@ -1,47 +1,64 @@
 # Task Board
 
-## Today — 2026-04-07 (chiusa)
-Tutto fatto, vedi sezione Done sotto.
+## Today — 2026-04-08 (chiusa ~15:30 UTC, deploy WIP)
 
-## Tomorrow — 2026-04-08
-- [ ] **PRIORITY 1**: Implementare refactor Intent enum (Opzione 2)
-  - Seguire `.claude/reports/brainstorm-2026-04-07-intent-enum.md`
-  - 24 decisioni numerate, ~7h focused work
-  - Sequenza: Step 0 grep → enum+translator+tests → state.py → analyst → risk → runner → executor → PortfolioService atomicity → tests update → inspect_runs → smoke level 4 verify
-  - NON iniziare a fine sessione: il refactor richiede focus continuativo
-- [ ] **PRIORITY 2**: dopo il refactor, accendere scheduler per Phase 2 osservazione
-  - Aggiungere a `.env`: `TRDEX_AGENT_SCHEDULER_ENABLED=true`, `TRDEX_AGENT_SCHEDULER_SYMBOLS=BTC/USDT,ETH/USDT`, `TRDEX_AGENT_SCHEDULER_INTERVAL=300`
-  - Lanciare `uv run python -m trdex.main`
-  - Lasciare girare per 3-5 giorni, monitorare con `inspect_runs`
+Tutta la giornata su refactor Intent enum + deploy trdex su VPS. Deploy bloccato da bug 4+5 scoperti nel secondo deploy attempt. Sessione chiusa per context saturation. **Dettagli completi in `.claude/reports/session-handoff-2026-04-08-deploy-wip.md`.**
 
-## This Week (post-refactor)
-- [ ] Phase 2 osservazione vera: 3-5 giorni di scheduler live in simulation
-- [ ] Daily check con `inspect_runs --hours 24` e `--hours 72`
+Lavoro completato:
+- Refactor Intent enum: 24 decisioni del brainstorming applicate, 308/308 test verde (+28 test nuovi)
+- VPS hardening completo: swap 4GB, fail2ban, UFW informative, sshd drop-in
+- User `kloud` creato su VPS con sudoers scoped + SSH key-only
+- `/opt/gravya/services/coolify-trdex/` files + first commit come Kloud (`dffe2fb`)
+- Docker compose Coolify-ready + override dev-only file
+- 13 commit pushati su `origin/main`
+- Coolify Project `trdex` configurato con Application da GitHub + env vars + dominio
+- Deploy attempt 1 FAILED: qdrant healthcheck curl mancante → fix `5dc584a`
+- Deploy attempt 2 FAILED: app crash su DB vuoto (bugs 4+5 scoperti)
+
+## Next Session — PRIORITY 1 (deploy unblock)
+
+- [ ] **Fix bug 4**: Dockerfile aggiungere `COPY migrations/ migrations/` dopo linea 24
+- [ ] **Fix bug 5**: FastAPI lifespan in `src/trdex/api/app.py` chiamare `apply_migrations` come primo step di startup (Option C del handoff)
+- [ ] **Fix bug 6** (preventivo): init Qdrant collection `trdex_context` nel lifespan dopo migrations
+- [ ] Commit + push 3 fix insieme
+- [ ] Coolify Redeploy (3° attempt)
+- [ ] Verify: 4 container healthy, app logs `[lifespan] migrations applied`, nessun restart loop
+- [ ] Post-deploy: smoke_level4 dal container, inspect_runs --hours 1
+- [ ] Enable scheduler: Coolify env `TRDEX_AGENT_SCHEDULER_ENABLED=true` + Restart
+- [ ] Monitor primi tick via `inspect_runs --hours 1`
+- [ ] Write `/opt/gravya/backup/trdex/backup.sh` + add to `backup-all.sh` + commit come Kloud
+
+**Stima**: 45-90 min di focus fresco. **NON iniziare a fine sessione di altre attività.**
+
+## This Week (post-deploy success)
+
+- [ ] Phase 2 osservazione vera: 3-5 giorni di scheduler live in simulation sul VPS
+- [ ] Daily check con `inspect_runs --hours 24` e `--hours 72` (via SSH come kloud)
 - [ ] Sentinella: se zero trade in 48h sul mercato corrente, capire perché (mercato lateral? bug del traduttore?)
 - [ ] Sentinella: monitorare `agent_runs` count cresce ~288 al giorno per simbolo
 
 ## Backlog (consolidato)
-- [ ] **Deploy trdex su VPS per Phase 2 osservazione 24/7** — task dedicato
-  - **Prerequisiti già pronti** (✅ committati 2026-04-08):
-    - Dockerfile fixed (README + curl per healthcheck)
-    - .dockerignore creato (esclude .env, .mcp.json, .claude, tests, docs)
-    - .env.example completo con tutte le variabili (incluso SL_TRAILING_STOP_PCT)
-    - docker-compose.yaml: restart=unless-stopped + log rotation 10MB×3 su tutti i servizi
-    - app build verificato (`docker compose build app` → trdex-app:latest)
-  - **Da decidere prima di iniziare il task**:
-    - VPS provider (Hostinger? DO? Hetzner?) e specs (min 2vCPU/4GB/40GB)
-    - Deploy mode: solo scheduler (porta chiusa) vs API esposta dietro nginx+TLS
-    - Strategy backup pgdata (cron pg_dump → object storage)
-    - Monitoring esterno (uptime kuma / healthcheck.io / niente)
-  - **Steps del task quando lo apriremo**:
-    1. Provisioning VPS + ssh hardening + ufw/firewall + fail2ban
-    2. Install docker engine + compose plugin
-    3. `git clone` del repo + creare `/etc/trdex.env` (chmod 600) coi secrets
-    4. `docker compose up -d` (build app + infra)
-    5. `apply_migrations` + smoke_level4 di sanità
-    6. Accendere `TRDEX_AGENT_SCHEDULER_ENABLED=true` + restart dell'app
-    7. Verificare con `inspect_runs` da remoto via ssh tunnel
-    8. (opzionale) configurare Telegram alerting su kill switch
+- [ ] **Creare agente Claude Code "gravya-ops" dedicato alla gestione VPS** — task dedicato in sessione separata
+  - **Trigger**: attivare quando trdex su VPS è stabile (2-5 giorni dopo l'inizio di Phase 2 osservazione)
+  - **Home**: `C:\Users\Daniele\Antigravity\gravya-platform\` (repo esistente) — NON dentro trdex
+  - **Pattern**: Pattern A (agente dedicato, scope infra-only, hard rule di non toccare codice applicativo dei servizi)
+  - **Scope**: orchestrazione di TUTTI i servizi Coolify su `srv.gravya.it` (oggi 8+ servizi incluso trdex), backup, monitoring, patch Ubuntu, cleanup, incident response
+  - **Autonomia iniziale**: read-only, escalation a write-sicuro dopo 2 settimane di uso affidabile
+  - **MCP**: Hostinger API (già configurato a livello sistema Windows tramite variabile d'ambiente)
+  - **SSH**: chiave dedicata separata da `trdex_deploy` (es. `gravya_ops_deploy`), non riuso cross-agente
+  - **Hard rule corollaria**: "gravya-ops NON modifica il codice applicativo dei servizi. Tocca solo infra/compose/secrets/backup/monitoring. Se serve una modifica al codice di un servizio, output è `HANDOFF: <servizio>` e stop"
+  - **Skill da progettare**: `audit-vps`, `run-backup-all`, `audit-coolify`, `diagnose-container`, `monitor-disk-ram`, `patch-ubuntu`, `cleanup-logs`
+  - **Audit trail**: ogni azione loggata in `/opt/gravya/ops-audit/YYYY-MM-DD.log` sul VPS
+  - **First use case**: audit del deploy trdex di oggi + verifica che tutto sia a posto (scheduler, backup funzionante, coerenza compose vs /opt/gravya/services/coolify-trdex/)
+  - **Modalità di esecuzione del task**:
+    - Daniele NON vuole costruire l'agente dentro questa sessione
+    - La sessione CORRENTE (trdex) produrrà a fine deploy un **handoff plan completo e autonomo** in un file dedicato (es. `.claude/reports/handoff-gravya-ops-<data>.md`)
+    - Il plan deve includere: snapshot dello stato reale del VPS al momento del deploy, elenco skill da creare con template, CLAUDE.md draft, profilo memoria iniziale, convenzioni, SOP
+    - Un'altra istanza Claude Code (non questa) aprirà una sessione dedicata in `gravya-platform/` e userà quel file come input per costruire l'agente
+    - Zero interazione tra le due sessioni, zero contaminazione
+- [ ] **Setup monitoring esterno del deploy VPS** — dopo che gravya-ops è attivo (diventa un caso d'uso di gravya-ops)
+  - Opzioni: uptime kuma self-hosted su VPS stesso, healthcheck.io, o alert Telegram via app stesso
+  - Deve coprire: `/v1/health` uptime, disco VPS, RAM, kill-switch activation, scheduler tick drift
 - [ ] **Phase 3 (post-osservazione)**: iterazione sulla strategia
   - Solo dopo aver capito i numeri di Phase 2
   - Variazioni SMA cross (parametri diversi), poi RSI threshold, poi MACD divergence
