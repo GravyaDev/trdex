@@ -26,3 +26,7 @@ services:
     ports:
       - "6333:6333"   # REST API
       - "6334:6334"   # gRPC
+
+  dashboard:
+    ports:
+      - "8501:8501"   # Streamlit, access at http://localhost:8501/dashboard/

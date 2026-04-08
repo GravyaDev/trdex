@@ -118,7 +118,16 @@ class PortfolioRepository:
         ]
 
     async def pnl_history(self, days: int = 30) -> list[dict]:
-        """Cumulative realized P&L over time (for charting)."""
+        """Cumulative realized P&L over time (for charting).
+
+        Bug 9 (2026-04-08): the previous implementation interpolated
+        ``:days`` inside a SQL string literal — ``INTERVAL ':days days'``
+        — so the bind placeholder was never parsed. SQLAlchemy saw a
+        zero-parameter query while the execute() call passed 1 bind,
+        which crashed asyncpg with "the server expects 0 arguments for
+        this query, 1 was passed". Fixed by using ``make_interval()``
+        which takes the bound integer directly as a named-arg function.
+        """
         rows = await self._session.execute(
             text("""
                 SELECT
@@ -130,7 +139,7 @@ class PortfolioRepository:
                 FROM positions
                 WHERE status = 'closed'
                   AND exit_price IS NOT NULL
-                  AND closed_at >= NOW() - INTERVAL ':days days'
+                  AND closed_at >= NOW() - make_interval(days => :days)
                 ORDER BY closed_at ASC
             """),
             {"days": days},

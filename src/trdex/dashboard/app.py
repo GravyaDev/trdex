@@ -6,6 +6,7 @@ Run with:
 
 from __future__ import annotations
 
+import os
 import time
 
 import httpx
@@ -14,12 +15,22 @@ import streamlit as st
 
 st.set_page_config(page_title="trdex", page_icon="📈", layout="wide")
 
+# Default API URL resolution order:
+#   1. TRDEX_DASHBOARD_API_URL env var (set in docker-compose for the
+#      containerised deploy — resolves to http://app:8000 via the
+#      internal Docker network)
+#   2. http://localhost:8000 fallback for developers running
+#      `streamlit run ...` directly on their laptop against a local
+#      uvicorn. The user can always override via the sidebar input.
+_DEFAULT_BASE_URL = os.environ.get("TRDEX_DASHBOARD_API_URL", "http://localhost:8000")
+_DEFAULT_API_KEY = os.environ.get("TRDEX_DASHBOARD_API_KEY", "")
+
 # ── Sidebar config ──────────────────────────────────────────────────────────
 
 with st.sidebar:
     st.title("⚙️ Config")
-    base_url = st.text_input("API URL", value="http://localhost:8000")
-    api_key = st.text_input("API Key", value="", type="password")
+    base_url = st.text_input("API URL", value=_DEFAULT_BASE_URL)
+    api_key = st.text_input("API Key", value=_DEFAULT_API_KEY, type="password")
     refresh_interval = st.selectbox("Auto-refresh", [5, 15, 30, 60], index=1)
     manual_refresh = st.button("🔄 Refresh now")
 
@@ -27,6 +38,30 @@ _headers = {"X-API-Key": api_key} if api_key else {}
 
 
 # ── Data fetchers (cached) ──────────────────────────────────────────────────
+
+
+def _format_http_error(path: str, verb: str, exc: Exception) -> str:
+    """Build a human-readable error string from an httpx exception.
+
+    FastAPI raises ``HTTPException(status_code=..., detail="message")``
+    which serialises as ``{"detail": "message"}`` in the response body.
+    The default ``raise_for_status()`` error only carries the status
+    line (``Server error '503 Service Unavailable' ...``) which is
+    useless for the operator — the interesting bit is the ``detail``
+    field. This helper unwraps it whenever possible and falls back to
+    the generic message otherwise.
+    """
+    if isinstance(exc, httpx.HTTPStatusError):
+        try:
+            payload = exc.response.json()
+            detail = payload.get("detail") if isinstance(payload, dict) else None
+            if detail:
+                return f"{verb} {path} → {exc.response.status_code}: {detail}"
+        except Exception:
+            pass
+        return f"{verb} {path} → {exc.response.status_code} {exc.response.reason_phrase}"
+    return f"{verb} {path} → {type(exc).__name__}: {exc}"
+
 
 @st.cache_data(ttl=30)
 def fetch(path: str, base: str, key: str) -> dict | None:
@@ -36,7 +71,7 @@ def fetch(path: str, base: str, key: str) -> dict | None:
         r.raise_for_status()
         return r.json()
     except Exception as e:
-        st.error(f"API error ({path}): {e}")
+        st.error(_format_http_error(path, "GET", e))
         return None
 
 
@@ -52,7 +87,7 @@ def post(path: str, *, params: dict | None = None, timeout: int = 60) -> dict | 
         r.raise_for_status()
         return r.json()
     except Exception as e:
-        st.error(f"API error (POST {path}): {e}")
+        st.error(_format_http_error(path, "POST", e))
         return None
 
 
@@ -272,16 +307,26 @@ if risk_events and risk_events.get("events"):
 with st.expander("📰 News Ingestion Status"):
     ctx_status = get("/v1/context/status")
     if ctx_status:
+        sources_list = ctx_status.get("sources", [])
         c1, c2, c3 = st.columns(3)
-        c1.metric("Sources", len(ctx_status.get("sources", [])))
+        c1.metric("Sources", len(sources_list))
         c2.metric("Symbols", len(ctx_status.get("symbols", [])))
         c3.metric("Running", "✅" if ctx_status.get("running") else "❌")
         st.caption(f"Last run: {ctx_status.get('last_run', 'never')}")
-        st.caption(f"Sources: {', '.join(ctx_status.get('sources', [])) or 'none'}")
-        if st.button("🔄 Ingest Now", key="ingest_now"):
-            data = post("/v1/context/run", timeout=120)
-            if data is not None:
-                st.success(f"Ingested {data.get('docs_ingested', 0)} documents.")
+        st.caption(f"Sources: {', '.join(sources_list) or 'none'}")
+        # Only show Ingest Now when there is at least one source registered.
+        # The backend returns 503 if called without sources — avoid the
+        # noisy error by hiding the button entirely in that state.
+        if sources_list:
+            if st.button("🔄 Ingest Now", key="ingest_now"):
+                data = post("/v1/context/run", timeout=120)
+                if data is not None:
+                    st.success(f"Ingested {data.get('docs_ingested', 0)} documents.")
+        else:
+            st.info(
+                "No news sources configured. Set TRDEX_CRYPTOCOMPARE_API_KEY "
+                "or TRDEX_STOCKDATA_API_KEY in the environment to enable."
+            )
 
 # ── Symbol Watchlist Management ───────────────────────────────────────────────
 

@@ -5,7 +5,6 @@ CLAUDE.local.md
 .claude/agent-memory/
 .claude/backups/
 .claude/hooks/__counter
-.mcp.json
 
 # Python
 __pycache__/
@@ -41,3 +40,12 @@ htmlcov/
 
 # Docker volumes (local data)
 pgdata/
+
+# Playwright MCP artefacts (screenshots, console logs, yaml snapshots)
+# left behind by browser automation sessions during dashboard testing.
+.playwright-mcp/
+dashboard-*.png
+# package.json is created by the Playwright MCP server on first run
+# for its own JS environment — it does not belong to trdex.
+package.json
+package-lock.json

@@ -59,6 +59,32 @@ Lavoro completato:
 - [ ] **Setup monitoring esterno del deploy VPS** — dopo che gravya-ops è attivo (diventa un caso d'uso di gravya-ops)
   - Opzioni: uptime kuma self-hosted su VPS stesso, healthcheck.io, o alert Telegram via app stesso
   - Deve coprire: `/v1/health` uptime, disco VPS, RAM, kill-switch activation, scheduler tick drift
+- [ ] **Valutare Perplexity Sonar come news source principale** (sostituisce o affianca CryptoCompare/StockData)
+  - **Motivazione**: Perplexity Sonar è un search engine LLM-native che restituisce sintesi narrative contestualizzate invece di liste cronologiche di titoli. Il vector store Qdrant + Scout agent funzionano meglio con testo denso in signal rispetto a titoli spezzettati. È un win architetturale, non solo di source.
+  - **Trigger**: dopo Phase 2 observation baseline (almeno 7 giorni con scheduler attivo + zero news sources o solo CryptoCompare). Quando vuoi passare da "SMA cross puro" a "SMA + context AI" nel setup agent.
+  - **Effort**: ~45-90 min di coding per scrivere `PerplexityNewsSource(NewsSource)` che traduce output narrativo Perplexity → ContextDocument list. Registrazione nel lifespan IngestionScheduler. Test end-to-end.
+  - **Costo**: sonar base ~$20/mese con tick ogni 5 min (288 query/giorno, ~500+1000 token/query). Accettabile per personal use. Sonar-pro ~$65/mese è overkill per questo use case.
+  - **Scope incluso**:
+    1. Signup Perplexity API key → add env var `TRDEX_PERPLEXITY_API_KEY`
+    2. New module `src/trdex/context/news_sources/perplexity.py` che implementa `NewsSource` interface (method `fetch(symbols)` → list[ContextDocument])
+    3. Query template: "What are the most significant news for {symbol} in the last {interval} minutes? Focus on price-impacting events, regulation, macro trends." — iterare sul prompt per quality
+    4. Mapping paragrafo principale + citations → 1+N ContextDocument con URL, text, published_at=now
+    5. Sentiment: lasciare None in prima iterazione (è complicato senza un altro LLM call)
+    6. Registrazione nel lifespan: `if settings.perplexity_api_key: _scheduler.register(PerplexityNewsSource(...))`
+    7. Test unit del parser + integration contro API reale (marked `@pytest.mark.integration`)
+  - **Scope escluso**:
+    - Multi-LLM evaluation (sonar vs sonar-pro vs altri provider) — si decide in session dedicata
+    - Rimozione di CryptoCompare/StockData — lasciale come fallback
+    - Sentiment analysis del paragrafo — future work
+  - **Decisione di design da prendere**: usare Perplexity come **sostituzione** di CryptoCompare/StockData (semplice, meno duplicazione in Qdrant) o come **aggiunta** (difesa in profondità, più source diversità)? Raccomandazione: sostituzione o fallback-only.
+- [ ] **Upgrade auth dashboard da basic auth a soluzione migliore** — dopo che Phase 2 gira stabile
+  - **Motivazione**: basic auth Traefik è funzionale ma UX/ergonomia povera (popup browser, no MFA, no session revoke, no audit log accessi, no lockout brute-force). Accettato in Phase 2 come trade-off per velocità di deploy, da sostituire appena il dashboard è stabile in produzione.
+  - **Opzioni in ordine di preferenza**:
+    1. **Cloudflare Tunnel + Cloudflare Access** (zero-trust SSO via email magic-link/GitHub/Google, MFA nativo, audit log, gratis per <50 utenti). Richiede migrare zona DNS a Cloudflare, installare `cloudflared` sul VPS, configurare policy.
+    2. **Tailscale VPN**: rimuovi exposure pubblica, dashboard accessibile solo su IP privato Tailscale. Zero password, zero attack surface esterna. Richiede client Tailscale su ogni device.
+    3. **oauth2-proxy + GitHub OAuth**: middleware Traefik che richiede login GitHub prima di proxy. Delega MFA a GitHub. Aggiunge 1 container al compose.
+  - **Scope**: rimuovere `traefik.http.middlewares.trdex-dashboard-auth.basicauth.*` labels dal compose, sostituire con la nuova catena di middleware, rimuovere `TRDEX_DASHBOARD_BASICAUTH` env var, aggiornare doc deploy.
+  - **Trigger**: dopo almeno 1 settimana di Phase 2 observation stabile, prima di eventuali passaggi su dati reali / live mode.
 - [ ] **Phase 3 (post-osservazione)**: iterazione sulla strategia
   - Solo dopo aver capito i numeri di Phase 2
   - Variazioni SMA cross (parametri diversi), poi RSI threshold, poi MACD divergence

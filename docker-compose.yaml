@@ -142,6 +142,72 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
+  # Streamlit dashboard UI for Phase 2 observation.
+  #
+  # Reuses the trdex-app image (same build context) because streamlit
+  # and plotly are already declared in pyproject.toml — no new Dockerfile
+  # needed. The CMD is overridden to run Streamlit instead of uvicorn.
+  #
+  # Served at https://trdex.gravya.it/dashboard behind Traefik with
+  # basic-auth middleware (credentials in TRDEX_DASHBOARD_BASICAUTH env
+  # var, generated with htpasswd -nb). Talks to the FastAPI app over
+  # the internal Docker network (http://app:8000), so the API key the
+  # user pastes into the sidebar is the only auth towards the backend.
+  #
+  # See Task Board "Upgrade auth dashboard" for the follow-up plan to
+  # replace basic-auth with Cloudflare Access or Tailscale.
+  dashboard:
+    build: .
+    command: >
+      uv run streamlit run src/trdex/dashboard/app.py
+      --server.port=8501
+      --server.address=0.0.0.0
+      --server.baseUrlPath=/dashboard
+      --server.headless=true
+      --browser.gatherUsageStats=false
+    environment:
+      # Pre-fill the dashboard's sidebar inputs so the operator doesn't
+      # have to paste values on every session. Both are overridable via
+      # the sidebar if needed.
+      TRDEX_DASHBOARD_API_URL: 'http://app:8000'
+      TRDEX_DASHBOARD_API_KEY: '${TRDEX_API_KEY:-}'
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      # Streamlit exposes its health endpoint under the configured
+      # baseUrlPath, so with --server.baseUrlPath=/dashboard the URL
+      # becomes /dashboard/_stcore/health. curl is already installed
+      # in the base image (Bug 2 fix, commit c42c641).
+      test: ["CMD-SHELL", "curl -sf http://localhost:8501/dashboard/_stcore/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    logging: *default-logging
+    labels:
+      # Traefik routing for Coolify. The main Application in Coolify
+      # already generates Host(`trdex.gravya.it`) -> app:8000; this
+      # second router is more specific (Host + PathPrefix) so Traefik
+      # routes /dashboard/* to the Streamlit container and everything
+      # else stays on the FastAPI app.
+      - "traefik.enable=true"
+      - "traefik.http.routers.trdex-dashboard.rule=Host(`trdex.gravya.it`) && PathPrefix(`/dashboard`)"
+      - "traefik.http.routers.trdex-dashboard.entrypoints=https"
+      - "traefik.http.routers.trdex-dashboard.tls=true"
+      - "traefik.http.routers.trdex-dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.trdex-dashboard.service=trdex-dashboard"
+      - "traefik.http.services.trdex-dashboard.loadbalancer.server.port=8501"
+      # Basic-auth middleware. TRDEX_DASHBOARD_BASICAUTH must contain a
+      # pre-hashed "user:$apr1$..." (or bcrypt "user:$2y$...") string
+      # generated with htpasswd. The single dollar signs need to be
+      # doubled in the env file because Docker Compose interpolates
+      # $VAR references — see .env.example for the exact format.
+      - "traefik.http.routers.trdex-dashboard.middlewares=trdex-dashboard-auth"
+      - "traefik.http.middlewares.trdex-dashboard-auth.basicauth.users=${TRDEX_DASHBOARD_BASICAUTH:-}"
+      - "traefik.http.middlewares.trdex-dashboard-auth.basicauth.realm=trdex"
+
 volumes:
   pgdata:
   redis:
