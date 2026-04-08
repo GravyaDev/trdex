@@ -199,14 +199,28 @@ services:
       - "traefik.http.routers.trdex-dashboard.tls.certresolver=letsencrypt"
       - "traefik.http.routers.trdex-dashboard.service=trdex-dashboard"
       - "traefik.http.services.trdex-dashboard.loadbalancer.server.port=8501"
-      # Basic-auth middleware. TRDEX_DASHBOARD_BASICAUTH must contain a
-      # pre-hashed "user:$apr1$..." (or bcrypt "user:$2y$...") string
-      # generated with htpasswd. The single dollar signs need to be
-      # doubled in the env file because Docker Compose interpolates
-      # $VAR references — see .env.example for the exact format.
-      - "traefik.http.routers.trdex-dashboard.middlewares=trdex-dashboard-auth"
-      - "traefik.http.middlewares.trdex-dashboard-auth.basicauth.users=${TRDEX_DASHBOARD_BASICAUTH:-}"
-      - "traefik.http.middlewares.trdex-dashboard-auth.basicauth.realm=trdex"
+      # Basic-auth middleware — hash is hardcoded per Coolify official
+      # pattern (https://coolify.io/docs/knowledge-base/proxy/traefik/basic-auth).
+      # Single quotes around the label value mean YAML treats the string
+      # as literal and docker-compose does NOT interpolate $VAR, so the
+      # bcrypt dollars stay as single `$` (not `$$`). Tried referencing
+      # via ${TRDEX_DASHBOARD_BASICAUTH} env var first but Coolify does
+      # not interpolate env vars inside Traefik labels at compose-up
+      # time — the literal `${...}` ended up on the container, Traefik
+      # rejected it, 401 forever. Hardcoded works.
+      #
+      # The hash is bcrypt ($2y$) of a 24-char random password; offline
+      # brute force is infeasible. Repo is private. Upgrade path is
+      # tracked in Task Board "Upgrade auth dashboard" (Cloudflare
+      # Access / Tailscale / oauth2-proxy) and should happen before
+      # any move to live mode.
+      #
+      # To rotate: regenerate with
+      #   docker run --rm httpd:2.4-alpine htpasswd -nbB <user> <pass>
+      # paste the output here verbatim (single $), commit, redeploy.
+      - 'traefik.http.routers.trdex-dashboard.middlewares=trdex-dashboard-auth'
+      - 'traefik.http.middlewares.trdex-dashboard-auth.basicauth.users=daniele:$2y$05$kB33xiQMcnxh25vJra3iVuuj/0UeRdhEKMC3KARtETCfB3gLUJeR6'
+      - 'traefik.http.middlewares.trdex-dashboard-auth.basicauth.realm=trdex'
 
 volumes:
   pgdata:
