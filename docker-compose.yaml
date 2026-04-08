@@ -48,7 +48,13 @@ services:
     volumes:
       - qdrant:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      # The qdrant image has no curl/wget/nc. Bash is available though,
+      # so we use the /dev/tcp bash trick to probe that port 6333 is
+      # open. This doesn't check the /healthz endpoint body, but if
+      # the TCP port is accepting connections qdrant is ready for
+      # clients. CMD-SHELL default is /bin/sh (dash) which lacks
+      # /dev/tcp support, so we force bash explicitly.
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333'"]
       interval: 10s
       timeout: 5s
       retries: 5
