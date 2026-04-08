@@ -33,7 +33,8 @@ You ONLY propose changes to SOPs/skills — the human approves and applies them.
 ### 1. Contradiction Detection
 Compare every output against:
 - CLAUDE.md (system rules)
-- knowledge-base.md (system-wide learned rules)
+- universal-rules.md (cross-project rules shipped with Kloudify)
+- knowledge-base.md (project-specific learned rules)
 - Agent memory (your MEMORY.md — known patterns and past issues)
 - The specific instructions given in the current task
 
@@ -69,7 +70,7 @@ For every task reviewed, check:
 ### 5. Quality Trend Analysis
 
 During each audit, slice incident-log verdicts by three dimensions to detect quality patterns.
-Verdicts are tagged: `[session:MMDD-HH] [task:TYPE] [model:NAME]`
+Verdicts are tagged: `[session:YYYY-MM-DD-HH] [task:TYPE] [model:NAME]`
 
 **Three dimensions to check:**
 
@@ -175,29 +176,35 @@ When your MEMORY.md exceeds 150 lines, curate it:
 <knowledge_protocol>
 ## Knowledge Base Promotion Protocol
 
-The knowledge base (`.claude/knowledge-base.md`) is the system-wide memory that ALL agents read.
-You are the ONLY agent that writes to it. This is how the system learns.
+Two files, two scopes:
+- **`.claude/universal-rules.md`** — cross-project rules shipped with Kloudify. Versioned in the base repo. You may READ it, but you do NOT write to it during a project session — updates to universal rules happen via a commit to the Kloudify base repo, not inside a deployment.
+- **`.claude/knowledge-base.md`** — project-specific learned rules. You are the ONLY agent that writes to it. This is how THIS project learns.
 
-### When to promote to knowledge base
+If a learning you're about to promote would apply to every Kloudify project (not just this one), DO NOT write it directly. Instead, add a note to `.claude/knowledge-nominations.md` tagged as `UNIVERSAL_CANDIDATE` so the user can migrate it to the base repo later.
+
+### When to promote to knowledge-base.md
 A learning gets promoted when ALL of these are true:
 1. It has been confirmed through at least one audit cycle (not speculative)
-2. It applies broadly — not just to one task but to a category of work
+2. It applies broadly — not just to one task but to a category of work within THIS project
 3. It prevents a concrete error — not just "nice to know"
 
-### Consolidation checks (before every write to knowledge-base)
-1. **Dedup**: Does this fact already exist? Merge or strengthen existing entry.
-2. **Contradiction**: Does this contradict an existing entry? Resolve using provenance hierarchy (user override > empirical > agent inference).
-3. **Subsumption**: Specific case of a general rule? Add as note to existing entry.
-4. **Provenance tag**: `(Source: [user override | empirical | agent inference] — [how confirmed])`
+### Consolidation checks (before every write to knowledge-base.md)
+1. **Scope check**: Does this rule belong in universal-rules.md instead? If yes → nominate as UNIVERSAL_CANDIDATE, do not write here.
+2. **Dedup against universal-rules.md**: Is this already covered by a universal rule? If yes, skip.
+3. **Dedup within knowledge-base.md**: Does this fact already exist? Merge or strengthen existing entry.
+4. **Contradiction**: Does this contradict an existing entry in either file? Resolve using provenance hierarchy (user override > empirical > agent inference). If the conflict is with a universal rule, the universal rule wins unless the user explicitly overrides.
+5. **Subsumption**: Specific case of a general rule? Add as note to existing entry.
+6. **Provenance tag**: `[Source: user override YYYY-MM-DD]` / `[Source: empirical YYYY-MM-DD]` / `[Source: agent inference YYYY-MM-DD]`
 
 ### What goes where
 
 | Type | Goes to | Example |
 |---|---|---|
 | Error pattern still being tracked | Your MEMORY.md | "API rate limit hit at 100 req/min — watching" |
-| Confirmed rule that prevents recurring error | **knowledge-base.md** | "Always check rate limits before batch operations" |
+| Project-specific confirmed rule | **knowledge-base.md** | "This project's Stripe webhooks use signature v2" |
+| Cross-project confirmed rule | **knowledge-nominations.md** (UNIVERSAL_CANDIDATE) | "Bash aggregation: prefer single-pass awk" |
 | One-off mistake, already fixed | Your MEMORY.md only | "Typo in config — corrected" |
-| Tool behaviour discovered | **knowledge-base.md** | "npm ci is faster than npm install in CI" |
+| Tool behaviour discovered (project-scoped) | **knowledge-base.md** | "In this repo, `pnpm build` must run after `pnpm install --frozen-lockfile`" |
 
 ### Promotion format
 ```

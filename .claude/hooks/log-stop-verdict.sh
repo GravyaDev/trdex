@@ -8,7 +8,7 @@ VERDICT_LOG="$LOG_DIR/verdicts.jsonl"
 INCIDENT_LOG="$LOG_DIR/incident-log.md"
 NOMINATIONS="$CLAUDE_PROJECT_DIR/.claude/knowledge-nominations.md"
 TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
-SESSION_DATE=$(date +"%m%d-%H")
+SESSION_DATE=$(date +"%Y-%m-%d-%H")
 BLOCK_FILE="$LOG_DIR/.session-blocks-$SESSION_DATE"
 
 mkdir -p "$LOG_DIR"
@@ -64,7 +64,7 @@ fi
 
 # Nominate learning if present
 if [ -n "$LEARNING" ] && [ "$LEARNING" != "null" ]; then
-  NOMINATION_DATE=$(date +"%m%d%y")
+  NOMINATION_DATE=$(date +"%Y-%m-%d")
   echo "- [$NOMINATION_DATE] stop-hook: $LEARNING | Evidence: session verdict ($TASK_TYPE)" >> "$NOMINATIONS"
 fi
 

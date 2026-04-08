@@ -38,17 +38,10 @@ All system commands, their triggers, required tools, and invocation mode.
 | `/unstick [problem]` | When stuck on a problem 10+ min | Read, Agent, Grep, Glob, WebSearch | Self-execute | Root-cause analysis via unsticker agent |
 | `/onboard [project]` | Starting work on unfamiliar codebase | Read, Agent, Glob, Grep, Bash(git,find,wc,ls) | Self-execute | Generate full codebase onboarding guide |
 
-## Planning & Strategy
-
-| Command | Trigger | Tools | Mode | Description |
-|---------|---------|-------|------|-------------|
-| `/competitive-intel [market]` | Entering a new market or evaluating position | Read, Write, Edit, Agent, Glob, WebSearch, WebFetch, Bash(date) | Self-execute | Deep competitive analysis with strategic recommendations |
-
 ## Communication & Delivery
 
 | Command | Trigger | Tools | Mode | Description |
 |---------|---------|-------|------|-------------|
-| `/report [topic]` | Need to present findings to stakeholders | Read, Write, Edit, Agent, Glob, Grep, Bash(date) | Self-execute | Generate audience-aware professional report |
 | `/release [version]` | Shipping a new version | Read, Write, Edit, Glob, Grep, Bash(git,date) | Self-execute | Auto-generate release notes — technical + marketing + executive |
 | `/handoff [recipient]` | Passing work to another person or AI | Read, Write, Edit, Glob, Grep, Bash(git,date) | Self-execute | Structured session handoff with full context briefing |
 
@@ -71,8 +64,19 @@ All system commands, their triggers, required tools, and invocation mode.
 | Command | Trigger | Tools | Mode | Description |
 |---------|---------|-------|------|-------------|
 | `/playbook [name]` | Repeating a manual workflow | Read, Write, Edit, Glob, Bash(date) | Self-execute | Record a workflow and auto-generate a reusable command |
-| `/scaffold-cli [binary]` | Starting a new CLI tool or formalising an existing one | Read, Write, Edit, Bash(ocli,date), Glob | Self-execute | Design CLI spec-first with OpenCLI, generate code + docs |
 | `/generate-skills [category\|slug\|--all]` | Adding/updating boilerplate skills | Read, Write, Bash(find,mkdir) | Self-execute | Generate SKILL.md files from manifest — single source of truth for boilerplate skills |
+
+## Migrated to Skills
+
+These were once commands but have been converted to **skills** because they are pure procedural knowledge with no temporal trigger or critical-action requirement. They are now activated semantically by the agent when the user describes a matching task in natural language. No `/command` to remember — just describe what you want and the skill activates.
+
+| Former command | Now skill | Activation hint |
+|----------------|-----------|-----------------|
+| `/scaffold-cli [binary]` | [`scaffold-cli`](./skills/scaffold-cli/SKILL.md) | "scaffold a CLI", "design a command-line tool", "create an ocli spec" |
+| `/report [topic]` | [`report-writing`](./skills/report-writing/SKILL.md) | "write a report", "create an executive summary", "draft a report for [audience]" |
+| `/competitive-intel [market]` | [`competitive-intel`](./skills/competitive-intel/SKILL.md) | "analyze competitors", "competitive analysis", "how do we compare against" |
+
+**Migration date**: 2026-04-07. Reason: pure procedural knowledge, no artefact trigger and no rituale temporale → fits the skill-first model better than the command-first one. See `Lavoro 3` in commit history for the design discussion that led here.
 
 ## Auto-Trigger Conditions
 
@@ -89,7 +93,6 @@ Commands should be proactively invoked (not waiting for user) when:
 | Quality feels degraded | `/clear` |
 | Stuck for 10+ minutes | `/unstick` |
 | Feature/task completed | `/audit` |
-| Starting a CLI tool project | `/scaffold-cli` |
 | Before merging code | `/review` (which auto-invokes `:security` + `:predict`) |
 | Starting unfamiliar project | `/onboard` |
 | Passing work to someone else | `/handoff` (which auto-invokes `:ship --dry-run`) |

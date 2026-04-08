@@ -36,8 +36,9 @@ Comprehensive infrastructure audit. Run monthly or after major system changes.
 
 ### Check 4: Memory Tier Health
 - `memory.md`: Is it under 100 lines? Is "Now" current?
-- `knowledge-base.md`: Is it under 200 lines? Do all entries have [Source:]?
-- `knowledge-nominations.md`: Are there stale nominations (>30 days)?
+- `universal-rules.md`: Is it under 200 lines? Do all entries have [Source:]? (Cross-project ruleset, edited only at base repo level.)
+- `knowledge-base.md`: Is it under 200 lines? Do all entries have [Source:]? (Project-specific.)
+- `knowledge-nominations.md`: Are there stale nominations (>30 days)? Any `UNIVERSAL_CANDIDATE` entries ready to migrate?
 - `agent-memory/`: Do directories match existing agents?
 - Daily Notes: Are recent notes present?
 

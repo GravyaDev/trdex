@@ -24,7 +24,8 @@ description: {{DESCRIPTION}}
 
 Before starting:
 - Read `memory.md` for current project context and priorities
-- Check `knowledge-base.md` for relevant learned rules or constraints
+- Check `universal-rules.md` for cross-project rules that apply
+- Check `knowledge-base.md` for project-specific learned rules or constraints
 - Review any existing related documents in the project
 - Note any active tasks in `Task Board.md` that relate to this deliverable
 
@@ -32,7 +33,7 @@ Before starting:
 
 ### Step 1: Context & Research
 - Review any existing {{TITLE_LOWER}} documents in the project
-- Check knowledge-base.md for relevant learned rules or constraints
+- Check universal-rules.md and knowledge-base.md for relevant learned rules or constraints
 - Check memory.md for current project context and priorities
 - Identify key stakeholders and their requirements
 - Select the most appropriate framework: {{FRAMEWORKS_INLINE}}

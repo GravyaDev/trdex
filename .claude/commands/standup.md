@@ -15,7 +15,7 @@ Automated daily standup. Pulls from git history and task board to generate yeste
 ### Step 1: Get the date context
 
 ```bash
-date +"%m%d%y %A"
+date +"%Y-%m-%d %A"
 ```
 
 Determine yesterday (skip weekends if today is Monday → use Friday).

@@ -16,18 +16,54 @@ Begin a working session. Load context, create today's daily note, review tasks.
 ### Step 1: Get today's date
 
 ```bash
-date +"%m%d%y %H:%M %A"
+date +"%Y-%m-%d %H:%M %A"
 ```
 
 ### Step 2: Load memory (parallel reads)
 
-Read simultaneously:
-- `.claude/memory.md`
-- `.claude/knowledge-base.md`
+Read simultaneously, in this order of precedence:
+- `.claude/memory.md` — active session context
+- `.claude/universal-rules.md` — cross-project rules (shipped with Kloudify)
+- `.claude/knowledge-base.md` — project-specific rules (gitignored, created at onboarding)
 
-These are your working context. Knowledge-base entries are mandatory constraints.
+These are your working context. **Both rule files are mandatory constraints** — universal-rules apply to every Kloudify project, knowledge-base applies to this specific project. If they conflict, the project-specific rule wins unless the user explicitly says otherwise.
 
-### Step 3: Create daily note
+If `.claude/knowledge-base.md` does not exist, the project was not onboarded correctly — run `/onboard-init` first.
+
+### Step 3: Repo reality check (MANDATORY — do not skip)
+
+**Why this step exists**: an earlier session shipped a "deployment complete" verdict without noticing that a whole component existed in the code but not in the deploy manifest. The root cause was starting work without a wide-angle view of the repo. This step forces that view.
+
+Do NOT skip this even if you think you already know the project. Memory and intuition are stale; the filesystem is not.
+
+**3a. Map the source tree.** List the first- and second-level directories under the project's main source root (`src/`, `app/`, `packages/`, or whatever convention this repo uses — read `.claude/project-structure.md` to find out). For each directory report: name, file count, and whether it's referenced anywhere in a deploy manifest (compose, Dockerfile, k8s, CI config).
+
+**3b. Find the deploy manifest(s).** Search for:
+- `docker-compose.yml` / `docker-compose.*.yml` / `compose.yml`
+- `Dockerfile` / `Dockerfile.*`
+- `.github/workflows/*.yml` / `.gitlab-ci.yml`
+- `k8s/*.yaml` / `kubernetes/*.yaml`
+- `render.yaml` / `railway.toml` / `fly.toml` / `vercel.json` / `netlify.toml`
+
+If none exist, state that explicitly and skip to 3d — there is no deploy to cross-reference against.
+
+**3c. Compute the delta.** For each source directory found in 3a, check whether it appears in any manifest from 3b. Build a table:
+
+| Component | In code? | In deploy? | Delta |
+|---|---|---|---|
+| `src/backend/` | ✅ | ✅ | — |
+| `src/dashboard/` | ✅ | ❌ | **MISSING FROM DEPLOY** |
+| `src/shared/` | ✅ | N/A (library) | — |
+
+**3d. Write gaps to memory.md.** If the delta contains any `MISSING FROM DEPLOY` rows, append them to `.claude/memory.md` under **Open Threads**, with today's date. Example:
+```
+- [2026-04-08] `src/dashboard/` exists in code but not in any deploy manifest — verify whether this is intentional or an oversight before declaring any deploy task complete.
+```
+If the file is already at 100 lines, prune the oldest resolved "Now" / "Recent Decisions" item first.
+
+**3e. Surface in orientation.** The Step 8 orientation output MUST include a line "Repo reality check: N directories scanned, K gaps vs deploy manifest" with the specific gap names if any. Do not hide this behind a neutral "all good" — be specific about what was checked and what was found.
+
+### Step 4: Create daily note
 
 Create `Daily Notes/YYYY-MM-DD.md` (if it doesn't exist):
 
@@ -63,7 +99,7 @@ Show a one-line summary:
 
 If no upstream is configured, skip this step silently.
 
-### Step 5: Dependency vulnerability check + auto-patch
+### Step 6: Dependency vulnerability check + auto-patch
 
 Detect the project's package managers by scanning for manifest files, then run the appropriate audit tool(s).
 
@@ -110,14 +146,14 @@ git revert HEAD --no-edit
 # Then reinstall dependencies
 ```
 
-### Step 6: Open task board
+### Step 7: Open task board
 
 Read `Task Board.md`. Scan for:
 - Overdue items (anything from previous days still open)
 - Today's priorities
 - Blocked items
 
-### Step 7: Task review
+### Step 8: Task review
 
 For each task in Today:
 1. Is it still relevant?
@@ -126,7 +162,7 @@ For each task in Today:
 
 Move stale tasks to Backlog. Flag blocked items.
 
-### Step 8: Ready to work
+### Step 9: Ready to work
 
 Output a brief orientation:
 - What day it is

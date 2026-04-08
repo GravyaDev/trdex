@@ -703,7 +703,7 @@ Higher = more thorough + more diverse analysis. Incentivizes: breadth (cover all
 
 ## Output Directory
 
-Creates `predict/{YYMMDD}-{HHMM}-{predict-slug}/` with:
+Creates `predict/{YYYY-MM-DD}-{HHMM}-{predict-slug}/` with:
 
 | File | Description |
 |------|-------------|

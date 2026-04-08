@@ -126,10 +126,13 @@ check_incomplete_markers() {
 
 case "$RELATIVE_PATH" in
 
-  # ─── KNOWLEDGE BASE ─────────────────────────────────
-  # Institutional memory. Errors here persist forever.
+  # ─── KNOWLEDGE BASES ────────────────────────────────
+  # Institutional memory — covers BOTH universal-rules.md (cross-project,
+  # versioned in base repo) and knowledge-base.md (project-specific,
+  # gitignored in base). Same constraints apply to both: errors here
+  # persist forever and are read by every agent on startup.
   # Rules: provenance required, max 200 lines, no TBD.
-  ".claude/knowledge-base.md")
+  ".claude/knowledge-base.md"|".claude/universal-rules.md")
     check_incomplete_markers "$CONTENT" "$RELATIVE_PATH"
 
     if [ "$TOOL" = "Write" ]; then
@@ -139,13 +142,13 @@ case "$RELATIVE_PATH" in
 
       if [ "$ENTRY_COUNT" -gt 0 ] && [ "$SOURCE_COUNT" -lt "$ENTRY_COUNT" ]; then
         MISSING=$((ENTRY_COUNT - SOURCE_COUNT))
-        block_high "$RELATIVE_PATH" "Knowledge-base has $MISSING entries missing [Source: ...] provenance. Every entry MUST cite its source." "Add [Source: user override MMDDYY] or [Source: empirical — description] or [Source: agent inference — description] to every entry line (- **...**:)."
+        block_high "$RELATIVE_PATH" "$RELATIVE_PATH has $MISSING entries missing [Source: ...] provenance. Every entry MUST cite its source." "Add [Source: user override YYYY-MM-DD] or [Source: empirical YYYY-MM-DD] or [Source: agent inference YYYY-MM-DD] to every entry line (- **...**:)."
       fi
 
       # Max 200 lines
       LINE_COUNT=$(echo "$CONTENT" | wc -l | tr -d ' ')
       if [ "$LINE_COUNT" -gt 200 ]; then
-        block_high "$RELATIVE_PATH" "Knowledge-base is $LINE_COUNT lines (max 200). Curate: remove stale entries before adding new ones." "Read the current knowledge-base, identify entries older than 90 days or superseded by newer entries, remove them, then retry."
+        block_high "$RELATIVE_PATH" "$RELATIVE_PATH is $LINE_COUNT lines (max 200). Curate: remove stale entries before adding new ones." "Read the current file, identify entries older than 90 days or superseded by newer entries, remove them, then retry."
       fi
     fi
     ;;
