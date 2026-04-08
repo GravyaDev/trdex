@@ -21,6 +21,27 @@ Tutto fatto, vedi sezione Done sotto.
 - [ ] Sentinella: monitorare `agent_runs` count cresce ~288 al giorno per simbolo
 
 ## Backlog (consolidato)
+- [ ] **Deploy trdex su VPS per Phase 2 osservazione 24/7** — task dedicato
+  - **Prerequisiti già pronti** (✅ committati 2026-04-08):
+    - Dockerfile fixed (README + curl per healthcheck)
+    - .dockerignore creato (esclude .env, .mcp.json, .claude, tests, docs)
+    - .env.example completo con tutte le variabili (incluso SL_TRAILING_STOP_PCT)
+    - docker-compose.yaml: restart=unless-stopped + log rotation 10MB×3 su tutti i servizi
+    - app build verificato (`docker compose build app` → trdex-app:latest)
+  - **Da decidere prima di iniziare il task**:
+    - VPS provider (Hostinger? DO? Hetzner?) e specs (min 2vCPU/4GB/40GB)
+    - Deploy mode: solo scheduler (porta chiusa) vs API esposta dietro nginx+TLS
+    - Strategy backup pgdata (cron pg_dump → object storage)
+    - Monitoring esterno (uptime kuma / healthcheck.io / niente)
+  - **Steps del task quando lo apriremo**:
+    1. Provisioning VPS + ssh hardening + ufw/firewall + fail2ban
+    2. Install docker engine + compose plugin
+    3. `git clone` del repo + creare `/etc/trdex.env` (chmod 600) coi secrets
+    4. `docker compose up -d` (build app + infra)
+    5. `apply_migrations` + smoke_level4 di sanità
+    6. Accendere `TRDEX_AGENT_SCHEDULER_ENABLED=true` + restart dell'app
+    7. Verificare con `inspect_runs` da remoto via ssh tunnel
+    8. (opzionale) configurare Telegram alerting su kill switch
 - [ ] **Phase 3 (post-osservazione)**: iterazione sulla strategia
   - Solo dopo aver capito i numeri di Phase 2
   - Variazioni SMA cross (parametri diversi), poi RSI threshold, poi MACD divergence

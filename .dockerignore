@@ -1,0 +1,66 @@
+# Build artefacts and cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+dist/
+build/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Git and CI
+.git/
+.gitignore
+.github/
+
+# Local secrets and runtime state — never bake into images
+.env
+.env.local
+.env.*.local
+.mcp.json
+trdex_telegram.session
+trdex_telegram.session-journal
+
+# Local-only data and persistence
+data/
+logs/
+*.log
+
+# Documentation that the runtime doesn't need
+docs/
+"Daily Notes/"
+"Riferimenti/"
+Scratchpad.md
+"Task Board.md"
+
+# Claude / Kloudify (host-only tooling)
+.claude/
+.antigravity/
+CLAUDE.md
+CLAUDE.local.md
+
+# Tests don't run inside the production image
+tests/
+pytest.ini
+
+# Misc
+node_modules/
+package.json
+package-lock.json
