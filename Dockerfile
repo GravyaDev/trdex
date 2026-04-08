@@ -23,6 +23,11 @@ RUN uv sync --frozen --no-dev
 # Copy source code
 COPY src/ src/
 
+# Copy SQL migrations — required at runtime by apply_migrations()
+# called from the FastAPI lifespan on startup. Without this the app
+# crashes on a fresh DB with "relation \"positions\" does not exist".
+COPY migrations/ migrations/
+
 # Expose FastAPI port
 EXPOSE 8000
 

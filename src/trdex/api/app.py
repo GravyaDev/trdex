@@ -93,6 +93,34 @@ async def _telegram_background(monitor: TelegramMonitor, channels: list[str]) ->
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     global _telegram_task, _scheduler, _agent_task
 
+    # --- Apply DB migrations (idempotent, self-healing on fresh deploys) ---
+    # Must run before anything else touches the database. The migration
+    # runner uses IF NOT EXISTS everywhere, so this is a no-op on already
+    # migrated databases and completes in <1s. A fresh Coolify volume
+    # would otherwise crash later with "relation \"positions\" does not
+    # exist" because nothing else applies the schema.
+    from trdex.scripts.apply_migrations import run_migrations
+    rc = await run_migrations()
+    if rc != 0:
+        logger.critical("[lifespan] migration step failed (rc=%s) — aborting startup", rc)
+        raise RuntimeError("database migrations failed; see logs above")
+    logger.info("[lifespan] migrations applied (or already up to date)")
+
+    # --- Ensure Qdrant context collection exists ---
+    # ContextIngestionPipeline.ensure_collection() is idempotent. Calling
+    # it here means the first news-ingestion tick (or Telegram signal)
+    # doesn't race on collection creation.
+    try:
+        from trdex.context.vector_store import QdrantStore
+        await QdrantStore().ensure_collection()
+        logger.info("[lifespan] Qdrant collection ensured")
+    except Exception as exc:
+        # Non-fatal: Qdrant may be down in dev, or embeddings disabled.
+        # The app can still run; only the context ingestion features
+        # will degrade. News scheduler and Telegram task already guard
+        # their own exceptions.
+        logger.warning("[lifespan] Qdrant collection setup failed: %s", exc)
+
     # --- Session factory (needed early for tracker load) ---
     session_factory = get_session_factory()
 
@@ -145,21 +173,33 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             logger.info("[ws] subscribed %s", _sym)
 
     # --- Telegram streaming ---
+    # Wrapped in try/except so a failing Telethon login (e.g. missing
+    # session file on a fresh container that would otherwise prompt for
+    # an SMS code on stdin and raise EOFError) degrades the Telegram
+    # feature without crashing the whole app. Same soft-fail pattern
+    # used for Qdrant above — Telegram is optional in Phase 2.
     channels = settings.telegram_channels_list
+    monitor = None
     if channels and settings.telegram_api_id:
-        monitor = TelegramMonitor(
-            api_id=settings.telegram_api_id,
-            api_hash=settings.telegram_api_hash,
-            phone=settings.telegram_phone,
-        )
-        await monitor.start()
-        _telegram_task = asyncio.create_task(
-            _telegram_background(monitor, channels),
-            name="telegram-stream",
-        )
-        logger.info("[telegram] streaming %d channels", len(channels))
+        try:
+            monitor = TelegramMonitor(
+                api_id=settings.telegram_api_id,
+                api_hash=settings.telegram_api_hash,
+                phone=settings.telegram_phone,
+            )
+            await monitor.start()
+            _telegram_task = asyncio.create_task(
+                _telegram_background(monitor, channels),
+                name="telegram-stream",
+            )
+            logger.info("[telegram] streaming %d channels", len(channels))
+        except Exception as exc:
+            logger.warning(
+                "[telegram] startup failed, streaming disabled: %s", exc
+            )
+            monitor = None
+            _telegram_task = None
     else:
-        monitor = None
         logger.info("[telegram] skipped — no channels configured")
 
     # --- News ingestion scheduler ---

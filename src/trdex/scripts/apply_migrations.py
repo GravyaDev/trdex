@@ -200,13 +200,14 @@ async def _apply_file(engine, path: Path, dry_run: bool) -> None:
                 raise
 
 
-async def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dry-run", action="store_true", help="print plan only")
-    parser.add_argument("--only", type=str, default=None, help="apply only this prefix (e.g. 008)")
-    args = parser.parse_args()
+async def run_migrations(only: str | None = None, dry_run: bool = False) -> int:
+    """Apply all migrations (or the one selected by ``only``).
 
-    files = _discover_migrations(args.only)
+    Callable from non-CLI contexts (e.g. the FastAPI lifespan on app
+    startup) so that a fresh deploy against an empty database self-heals
+    without an out-of-band init step. Returns 0 on success, 1 on failure.
+    """
+    files = _discover_migrations(only)
     if not files:
         return 1
 
@@ -218,7 +219,7 @@ async def main() -> int:
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
     try:
         for path in files:
-            await _apply_file(engine, path, args.dry_run)
+            await _apply_file(engine, path, dry_run)
     except Exception:
         logger.error("migration run aborted")
         return 1
@@ -227,6 +228,15 @@ async def main() -> int:
 
     logger.info("OK — %d migration file(s) processed", len(files))
     return 0
+
+
+async def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dry-run", action="store_true", help="print plan only")
+    parser.add_argument("--only", type=str, default=None, help="apply only this prefix (e.g. 008)")
+    args = parser.parse_args()
+
+    return await run_migrations(only=args.only, dry_run=args.dry_run)
 
 
 def _redact_url(url: str) -> str:
