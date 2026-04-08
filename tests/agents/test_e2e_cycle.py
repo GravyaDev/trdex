@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from trdex.agents.graph import run_agent_cycle
+from trdex.agents.intent import Intent
 from trdex.agents.state import AgentState, MarketSnapshot
 
 
@@ -45,7 +46,7 @@ async def test_full_cycle_simulation(btc_snapshot: MarketSnapshot) -> None:
     assert state.symbol == "BTC/USDT"
     assert state.run_id != ""
     assert state.completed_at is not None
-    assert state.analysis.signal in ("BUY", "SELL", "HOLD")
+    assert state.analysis.intent in (Intent.OPEN_LONG, Intent.CLOSE_LONG, Intent.HOLD)
     assert state.order.status in ("filled", "skipped", "rejected")
 
 
@@ -60,7 +61,7 @@ async def test_cycle_hold_when_no_candles() -> None:
     ):
         state: AgentState = await run_agent_cycle("ETH/USDT", market_snapshot=snapshot)
 
-    assert state.analysis.signal == "HOLD"
+    assert state.analysis.intent == Intent.HOLD
     assert state.order.status == "skipped"
 
 
@@ -78,5 +79,5 @@ async def test_cycle_risk_blocks_low_confidence() -> None:
         state: AgentState = await run_agent_cycle("BTC/USDT", market_snapshot=snapshot)
 
     # Not enough data → HOLD → risk blocks → skipped
-    assert state.analysis.signal == "HOLD"
+    assert state.analysis.intent == Intent.HOLD
     assert state.order.status == "skipped"

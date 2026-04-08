@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import statistics
 
+from trdex.agents.intent import Intent, signal_to_intent
 from trdex.agents.memory_helpers import attach_memory_snapshot
 from trdex.agents.state import AgentState, AnalysisResult
 from trdex.backtest.indicators import rsi_from_list
@@ -118,7 +119,7 @@ async def analyst_node(state: AgentState) -> AgentState:
     logger.info("[Analyst] analysing %s", state.symbol)
 
     if state.market is None:
-        state.analysis = AnalysisResult(signal="HOLD", reasoning="No market data.")
+        state.analysis = AnalysisResult(intent=Intent.HOLD, reasoning="No market data.")
         return state
 
     # Pull aggregated memory snapshot from the 6-tier stack (best-effort).
@@ -151,6 +152,10 @@ async def analyst_node(state: AgentState) -> AgentState:
         rsi, sma_short, sma_long, price, sentiment_avg
     )
 
+    # D5: rule engine stays portfolio-ignorant. Translation to Intent
+    # happens here, downstream, with the live portfolio context.
+    intent = signal_to_intent(signal, state.symbol, state.portfolio)
+
     indicators: dict[str, float] = {}
     if rsi is not None:
         indicators["rsi"] = rsi
@@ -162,12 +167,13 @@ async def analyst_node(state: AgentState) -> AgentState:
         indicators["sentiment_avg"] = sentiment_avg
 
     state.analysis = AnalysisResult(
-        signal=signal,
+        intent=intent,
         confidence=confidence,
         reasoning=reasoning,
         indicators=indicators,
     )
     logger.info(
-        "[Analyst] signal=%s confidence=%.2f | %s", signal, confidence, reasoning
+        "[Analyst] signal=%s → intent=%s confidence=%.2f | %s",
+        signal, intent.value, confidence, reasoning,
     )
     return state

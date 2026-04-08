@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trdex.agents.graph import run_agent_cycle
+from trdex.agents.intent import Intent
 from trdex.agents.state import AgentState, MarketSnapshot, PortfolioContext
 from trdex.market.manager import PriceFeedManager
 from trdex.storage.agent_run_models import AgentRunRecord
@@ -52,6 +53,11 @@ class AgentRunner:
 
             open_positions = await pos_repo.get_open_positions()
             open_symbols = [p.symbol for p in open_positions]
+            # D21: subset restricted to agent-sourced positions, so the
+            # translator and Gate 4 never touch Telegram-opened ones.
+            open_symbols_by_agent = [
+                p.symbol for p in open_positions if p.source == "agent"
+            ]
 
             unrealized_pnl = sum(
                 (float(p.exit_price or 0) - float(p.entry_price)) * float(p.amount)
@@ -70,6 +76,7 @@ class AgentRunner:
             return PortfolioContext(
                 equity=equity,
                 open_position_symbols=open_symbols,
+                open_position_symbols_by_agent=open_symbols_by_agent,
                 unrealized_pnl=unrealized_pnl,
                 realized_pnl=balance - peak_balance,  # net change from peak
                 drawdown_pct=drawdown_pct,
@@ -148,20 +155,36 @@ class AgentRunner:
         # 5. Persist the agent run row (audit trail)
         await self._persist(state)
 
-        # 6. Persist the open-position side effect if the fill succeeded.
-        # Without this, the readiness gate would never see any trades and
-        # the StopLossMonitor would never find anything to supervise.
-        await self._persist_open_fill(state)
+        # 6. Dispatch the fill side effect to the portfolio persistence
+        # layer. OPEN intents create a new position row; CLOSE intents
+        # update the existing one and write a trade_fill ledger entry.
+        await self._dispatch_fill(state)
 
         return state
 
-    async def _persist_open_fill(self, state: AgentState) -> None:
-        """Record a new open position in the portfolio when the executor
-        has filled an approved BUY order.
+    async def _dispatch_fill(self, state: AgentState) -> None:
+        """Persist the portfolio-side effect of a successful fill.
+
+        D9: single switch on ``state.analysis.intent`` replaces the old
+        "persist_open" special-case, making the two paths explicit and
+        symmetric.
+
+        D13: the CLOSE path re-reads the live DB to find the position,
+        protecting against a TOCTOU race with the StopLossMonitor that
+        may have closed the position between cycle start and dispatch.
+
+        D14: if the CLOSE path cannot find a matching agent-owned
+        position, it logs a structured ``fill_orphan_warning`` and
+        returns — it does not write anything.
 
         Best-effort: any failure here is logged and swallowed so it
-        cannot break the cycle. Long-only by construction: SELL fills
-        are refused by ``PortfolioService.record_open_fill`` itself.
+        cannot break the cycle return value.
+
+        Residual risk (D15): in live mode, if persistence fails AFTER
+        the exchange has filled the order, local DB and exchange state
+        diverge until the future ``fill_reconciliation`` table is
+        built. Accepted until Phase 2 observation data justifies
+        building it.
         """
         if state.order.status != "filled":
             return
@@ -171,51 +194,113 @@ class AgentRunner:
             return
         if state.order.filled_price is None or state.order.filled_qty is None:
             logger.warning(
-                "[runner] filled order missing price/qty for %s — skipping position persist",
+                "[runner] filled order missing price/qty for %s — skipping dispatch",
                 state.symbol,
             )
             return
 
+        intent = state.analysis.intent
         try:
-            from decimal import Decimal
-
-            from trdex.portfolio.service import PortfolioService
-            from trdex.storage.portfolio_repo import PortfolioRepository
-
-            repo = PortfolioRepository(self._session)
-            service = PortfolioService(repo, self._feeds)
-
-            # Budget is the cash committed to the position at entry:
-            # price * qty (fees are paid on top by the simulator and
-            # accounted for at close time).
-            filled_price_dec = Decimal(str(state.order.filled_price))
-            filled_qty_dec = Decimal(str(state.order.filled_qty))
-            budget = filled_price_dec * filled_qty_dec
-
-            await service.record_open_fill(
-                symbol=state.symbol,
-                side=state.analysis.signal,  # BUY or SELL
-                amount=filled_qty_dec,
-                entry_price=filled_price_dec,
-                budget=budget,
-                source="agent",
-                signal_id=state.run_id,
-            )
+            if intent == Intent.OPEN_LONG:
+                await self._record_open_long(state)
+            elif intent == Intent.CLOSE_LONG:
+                await self._record_close_long(state)
+            else:
+                # OPEN_SHORT / CLOSE_SHORT are reserved vocabulary and
+                # the Risk gate should never let them reach here today;
+                # HOLD never reaches the executor at all. Log+skip.
+                logger.warning(
+                    "[runner] _dispatch_fill: unsupported intent %s for %s — skipping",
+                    intent.value, state.symbol,
+                )
         except Exception:
             logger.exception(
-                "[runner] failed to persist open fill for %s — cycle result unaffected",
-                state.symbol,
+                "[runner] _dispatch_fill failed for %s (intent=%s) — cycle result unaffected",
+                state.symbol, intent.value,
             )
 
+    async def _record_open_long(self, state: AgentState) -> None:
+        """Persist an OPEN_LONG fill as a new position row."""
+        from decimal import Decimal
+
+        from trdex.portfolio.service import PortfolioService
+
+        repo = PortfolioRepository(self._session)
+        service = PortfolioService(repo, self._feeds)
+
+        # Budget is the cash committed to the position at entry:
+        # price * qty (fees are paid on top by the simulator and
+        # accounted for at close time).
+        filled_price_dec = Decimal(str(state.order.filled_price))
+        filled_qty_dec = Decimal(str(state.order.filled_qty))
+        budget = filled_price_dec * filled_qty_dec
+
+        await service.record_open_fill(
+            symbol=state.symbol,
+            side="BUY",
+            amount=filled_qty_dec,
+            entry_price=filled_price_dec,
+            budget=budget,
+            source="agent",
+            signal_id=state.run_id,
+        )
+
+    async def _record_close_long(self, state: AgentState) -> None:
+        """Persist a CLOSE_LONG fill as an update to the existing position
+        plus a ``trade_fill`` row in the balance ledger.
+
+        D13: re-reads the live DB for the agent-owned open position on
+        ``state.symbol``. D14: if none is found, writes a structured
+        warning and returns without mutating anything.
+        """
+        from decimal import Decimal
+
+        from trdex.portfolio.service import PortfolioService
+
+        repo = PortfolioRepository(self._session)
+        positions = await repo.get_open_positions()
+        match = next(
+            (
+                p for p in positions
+                if p.symbol == state.symbol and p.source == "agent"
+            ),
+            None,
+        )
+        if match is None:
+            logger.warning(
+                "[runner] fill_orphan_warning: CLOSE_LONG filled for %s "
+                "(run_id=%s) but no open agent position found — possibly "
+                "closed by StopLossMonitor mid-cycle. Ledger not written.",
+                state.symbol, state.run_id,
+            )
+            return
+
+        service = PortfolioService(repo, self._feeds)
+        filled_price_dec = Decimal(str(state.order.filled_price))
+        await service.record_close_fill(
+            position=match,
+            exit_price=filled_price_dec,
+            fee=Decimal("0"),
+            closed_by="agent_signal",
+        )
+
     async def _persist(self, state: AgentState) -> None:
-        """Save agent run result to agent_runs table."""
+        """Save agent run result to agent_runs table.
+
+        Historical note (D11 rev, D24): the DB column is still named
+        ``signal`` but carries Intent string values (``open_long``,
+        ``close_long``, ``hold``, …) since the 2026-04-08 refactor. No
+        migration was applied — the column rename would be churn for a
+        3-row dataset. See brainstorm-2026-04-07-intent-enum.md.
+        """
         try:
             ran_at = (state.completed_at or datetime.now(tz=timezone.utc)).replace(tzinfo=None)
+            intent_value = state.analysis.intent.value
             record = AgentRunRecord(
                 run_id=state.run_id,
                 symbol=state.symbol,
                 ran_at=ran_at,
-                signal=state.analysis.signal,
+                signal=intent_value,  # historical column name, now stores Intent
                 confidence=state.analysis.confidence,
                 reasoning=state.analysis.reasoning,
                 indicators=state.analysis.indicators,
@@ -232,7 +317,7 @@ class AgentRunner:
             )
             self._session.add(record)
             await self._session.commit()
-            logger.info("[runner] persisted run_id=%s signal=%s order=%s",
-                        state.run_id, state.analysis.signal, state.order.status)
+            logger.info("[runner] persisted run_id=%s intent=%s order=%s",
+                        state.run_id, intent_value, state.order.status)
         except Exception:
             logger.exception("[runner] failed to persist agent run for %s", state.symbol)

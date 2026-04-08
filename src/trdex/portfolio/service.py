@@ -21,7 +21,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Literal
+
+from sqlalchemy import select
 
 from trdex.market.manager import FeedError, PriceFeedManager
 from trdex.portfolio.models import Portfolio, Position
@@ -29,6 +33,20 @@ from trdex.storage.balance_models import BalanceRecord
 from trdex.storage.balance_repo import BalanceRepository
 from trdex.storage.portfolio_models import PositionRecord
 from trdex.storage.portfolio_repo import PortfolioRepository
+
+
+ClosedBy = Literal[
+    "agent_signal",
+    "stop_loss",
+    "take_profit",
+    "trailing_stop",
+    "kill_switch",
+    "manual",
+]
+
+
+def _utcnow_naive() -> datetime:
+    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 logger = logging.getLogger(__name__)
 
@@ -142,55 +160,107 @@ class PortfolioService:
         position: PositionRecord,
         exit_price: Decimal,
         fee: Decimal = Decimal("0"),
+        closed_by: ClosedBy = "agent_signal",
     ) -> tuple[PositionRecord, BalanceRecord]:
         """Persist the closing of a position and write realised PnL to ledger.
 
-        Updates ``positions.status = 'closed'`` and writes one
-        ``account_balance`` row with ``event_type = 'trade_fill'`` whose
-        ``amount`` is the realised PnL net of ``fee``.
+        **Atomicity (D17)**: the position update and the balance ledger
+        insert are committed in a **single** transaction. Previously the
+        WIP commit `815614d` flushed each write with its own commit,
+        leaving a window where ``positions.status='closed'`` was
+        persisted but no matching ``trade_fill`` row existed (on a crash
+        mid-call, the realised PnL would be silently lost). The new
+        path uses ``session.add`` + a single terminal ``commit`` so the
+        two rows live or die together.
+
+        **Closed-by (D20)**: the caller must indicate which subsystem
+        triggered the close. The value is persisted inside the
+        ``account_balance.note`` field as ``closed_by=<value>; ...``
+        (no column added per D11 rev — inspect_runs parses the note).
+        Possible values:
+
+            - ``agent_signal``  — agent runner dispatched a CLOSE intent
+            - ``stop_loss``     — StopLossMonitor hit the SL threshold
+            - ``take_profit``   — SL monitor hit TP
+            - ``trailing_stop`` — SL monitor trailing exit
+            - ``kill_switch``   — emergency flatten
+            - ``manual``        — telegram or manual tool
 
         The PnL formula mirrors the one in ``_realized_pnl``:
             BUY  : (exit - entry) * amount - fee
             SELL : (entry - exit) * amount - fee
 
+        Residual risk (D15): in live mode, local DB and exchange state
+        can diverge if this call raises AFTER the exchange has filled
+        the close order. A future ``fill_reconciliation`` table will
+        close that gap — not in scope today.
+
         Returns the updated position and the new balance ledger row.
         """
-        closed = await self._repo.close_position(
-            position_id=position.id, exit_price=exit_price
+        session = self._repo._session
+
+        # 1. Load the live row (inside this session, not trusting the
+        #    caller's snapshot). If it vanished — concurrent close by
+        #    another subsystem — we raise so the caller can abort.
+        result = await session.execute(
+            select(PositionRecord).where(PositionRecord.id == position.id)
         )
-        if closed is None:
+        live = result.scalar_one_or_none()
+        if live is None:
             raise RuntimeError(
-                f"close_position({position.id}) returned None — position vanished?"
+                f"record_close_fill: position {position.id} vanished before close"
+            )
+        if live.status != "open":
+            raise RuntimeError(
+                f"record_close_fill: position {position.id} is already "
+                f"{live.status}, refusing double-close"
             )
 
-        # Compute realised PnL net of the fee paid on close.
-        entry = Decimal(str(position.entry_price))
-        amt = Decimal(str(position.amount))
-        if position.side == "BUY":
+        # 2. Compute PnL from the LIVE row (not the caller's snapshot).
+        entry = Decimal(str(live.entry_price))
+        amt = Decimal(str(live.amount))
+        if live.side == "BUY":
             gross = (exit_price - entry) * amt
         else:  # SELL / short leg (kept for completeness, not reachable today)
             gross = (entry - exit_price) * amt
         pnl = gross - fee
 
-        # Ledger write via raw BalanceRepository so we can use the same
-        # session as the position update. The balance_after is computed
-        # as (current balance + pnl).
-        bal_repo = BalanceRepository(self._repo._session)  # share session
-        balance_row = await bal_repo.record_event(
+        # 3. Mutate the position row. The ORM will flush on commit.
+        live.exit_price = exit_price
+        live.status = "closed"
+        live.closed_at = _utcnow_naive()
+
+        # 4. Compute the new balance_after by reading the latest ledger
+        #    row within the same session — still uncommitted writes are
+        #    not visible, so this is the authoritative "before" balance.
+        bal_repo = BalanceRepository(session)
+        current_balance = await bal_repo.current_balance()
+        new_balance = current_balance + pnl
+
+        # 5. Append the ledger row without committing.
+        balance_row = BalanceRecord(
             event_type="trade_fill",
             amount=pnl,
+            balance_after=new_balance,
             note=(
-                f"close {closed.side} {closed.symbol} "
-                f"position {closed.id} @ {exit_price} "
+                f"closed_by={closed_by}; close {live.side} {live.symbol} "
+                f"position {live.id} @ {exit_price} "
                 f"(entry {entry}, qty {amt}, fee {fee})"
             ),
+            recorded_at=_utcnow_naive(),
         )
+        session.add(balance_row)
+
+        # 6. Single terminal commit — both writes live or die together.
+        await session.commit()
+        await session.refresh(live)
+        await session.refresh(balance_row)
 
         logger.info(
-            "[PortfolioService] closed %s position %d: pnl=%s new_balance=%s",
-            closed.symbol, closed.id, pnl, balance_row.balance_after,
+            "[PortfolioService] closed %s position %d by=%s: pnl=%s new_balance=%s",
+            live.symbol, live.id, closed_by, pnl, balance_row.balance_after,
         )
-        return closed, balance_row
+        return live, balance_row
 
 
 # ── helpers ────────────────────────────────────────────────────────────────

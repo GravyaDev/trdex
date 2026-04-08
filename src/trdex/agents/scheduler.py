@@ -84,9 +84,9 @@ async def agent_scheduler_loop(
                             )
                             state = await runner.run(sym)
                             logger.info(
-                                "[AgentScheduler] %s -> signal=%s order=%s",
+                                "[AgentScheduler] %s -> intent=%s order=%s",
                                 sym,
-                                state.analysis.signal,
+                                state.analysis.intent.value,
                                 state.order.status,
                             )
                     except Exception:

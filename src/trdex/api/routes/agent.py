@@ -84,7 +84,7 @@ async def run_agent(
     return AgentRunResponse(
         run_id=state.run_id,
         symbol=state.symbol,
-        signal=state.analysis.signal,
+        signal=state.analysis.intent.value,  # historical API field name, now Intent
         confidence=state.analysis.confidence,
         reasoning=state.analysis.reasoning,
         indicators=state.analysis.indicators,

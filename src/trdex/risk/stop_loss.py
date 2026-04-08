@@ -297,6 +297,15 @@ class StopLossMonitor:
                     from trdex.storage.portfolio_repo import PortfolioRepository
 
                     fill_price = Decimal(str(result.filled_price)) if result.filled_price is not None else Decimal(str(price))
+                    # D20: map SL reason string to the ClosedBy enum
+                    # literal so inspect_runs can break down closes by
+                    # trigger subsystem.
+                    closed_by_value = (
+                        "stop_loss" if reason == "stop_loss"
+                        else "take_profit" if reason == "take_profit"
+                        else "trailing_stop" if reason == "trailing_stop"
+                        else "kill_switch"
+                    )
                     async with self._session_factory() as session:
                         repo = PortfolioRepository(session)
                         service = PortfolioService(repo, self._feeds)
@@ -304,6 +313,7 @@ class StopLossMonitor:
                             position=position,
                             exit_price=fill_price,
                             fee=Decimal("0"),  # sim fee is cosmetic in log
+                            closed_by=closed_by_value,
                         )
                 except Exception:
                     logger.exception(

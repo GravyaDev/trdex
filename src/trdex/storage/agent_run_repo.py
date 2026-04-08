@@ -86,7 +86,11 @@ class AgentRunRepository:
         lines: list[str] = []
 
         for r in runs:
-            sig = (r.signal or "HOLD").upper()
+            # D11/D24: the DB column is still called `signal` but stores
+            # Intent string values since 2026-04-08 (``open_long``,
+            # ``close_long``, ``hold``, …). No normalisation: the strings
+            # are already canonical.
+            sig = r.signal or "hold"
             signals[sig] = signals.get(sig, 0) + 1
             if r.risk_approved:
                 approved += 1

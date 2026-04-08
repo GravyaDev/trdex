@@ -121,9 +121,9 @@ async def run_agent_cycle(
     final_state.completed_at = datetime.now(tz=timezone.utc)
 
     logger.info(
-        "[Graph] cycle complete run_id=%s signal=%s order=%s",
+        "[Graph] cycle complete run_id=%s intent=%s order=%s",
         final_state.run_id,
-        final_state.analysis.signal,
+        final_state.analysis.intent.value,
         final_state.order.status,
     )
     return final_state

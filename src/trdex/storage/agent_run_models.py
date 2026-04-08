@@ -36,7 +36,16 @@ class AgentRunRecord(Base):
     )
 
     # Analyst
-    signal: Mapped[str] = mapped_column(Text, nullable=False, default="HOLD")
+    # D24: the column is named ``signal`` for historical reasons (it
+    # used to store ``BUY`` / ``SELL`` / ``HOLD`` strings emitted by
+    # the rule engine). Since the 2026-04-08 Intent enum refactor it
+    # stores Intent string values: ``open_long``, ``close_long``,
+    # ``open_short``, ``close_short``, ``hold``. The column rename
+    # was deliberately skipped (D11 rev) to avoid an unscheduled
+    # migration on a 3-row dataset. See
+    # ``.claude/reports/brainstorm-2026-04-07-intent-enum.md`` for
+    # the full decision log.
+    signal: Mapped[str] = mapped_column(Text, nullable=False, default="hold")
     confidence: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False, default=0)
     reasoning: Mapped[str] = mapped_column(Text, nullable=False, default="")
     indicators: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)

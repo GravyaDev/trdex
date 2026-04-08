@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from trdex.agents.intent import Intent
 from trdex.agents.memory_helpers import attach_memory_snapshot
 from trdex.agents.state import AgentState, RiskDecision
 from trdex.config import get_settings
@@ -24,7 +25,7 @@ async def _write_last_signal(state: AgentState, approved: bool, reason: str) -> 
                 subject_id=state.symbol,
                 predicate="last_signal",
                 object_value={
-                    "signal": state.analysis.signal,
+                    "intent": state.analysis.intent.value,
                     "confidence": state.analysis.confidence,
                     "approved": approved,
                     "reason": reason,
@@ -49,8 +50,9 @@ async def risk_node(state: AgentState) -> AgentState:
     be influenced by LLM reasoning. It is the last hard gate before
     any order reaches the Executor.
     """
-    logger.info("[Risk] evaluating signal=%s confidence=%.2f",
-                state.analysis.signal, state.analysis.confidence)
+    intent = state.analysis.intent
+    logger.info("[Risk] evaluating intent=%s confidence=%.2f",
+                intent.value, state.analysis.confidence)
 
     # Attach risk-agent memory snapshot for observability/prompt material only.
     # NOTE: hard rules below MUST remain rule-based — never branch on memory.
@@ -69,9 +71,9 @@ async def risk_node(state: AgentState) -> AgentState:
         logger.critical("[Risk] BLOCKED by kill switch — %s", ks.status["reason"])
         return state
 
-    # Gate 1: HOLD signal → nothing to approve
-    if state.analysis.signal == "HOLD":
-        state.risk = RiskDecision(approved=False, reason="Signal is HOLD — no trade.")
+    # Gate 1: HOLD intent → nothing to approve
+    if intent == Intent.HOLD:
+        state.risk = RiskDecision(approved=False, reason="Intent is HOLD — no trade.")
         return state
 
     # Gate 2: Minimum confidence threshold
@@ -82,17 +84,25 @@ async def risk_node(state: AgentState) -> AgentState:
         await _write_last_signal(state, approved=False, reason=reason)
         return state
 
-    # Gate 3: Portfolio drawdown gate — block if already in significant loss
+    # Gate 3: Portfolio drawdown gate — block if already in significant loss.
+    # Applies only to OPEN intents: if we're already drawn down, closing an
+    # existing position is exactly what we want to allow, not block.
     portfolio = state.portfolio
-    if portfolio.drawdown_pct >= MAX_DRAWDOWN_BLOCK:
+    if intent.is_open and portfolio.drawdown_pct >= MAX_DRAWDOWN_BLOCK:
         reason = f"Portfolio drawdown {portfolio.drawdown_pct:.1%} exceeds limit {MAX_DRAWDOWN_BLOCK:.1%}."
         state.risk = RiskDecision(approved=False, reason=reason)
         logger.warning("[Risk] BLOCKED — drawdown %.1f%%", portfolio.drawdown_pct * 100)
         await _write_last_signal(state, approved=False, reason=reason)
         return state
 
-    # Gate 4: Already have an open position on this symbol — no pyramiding
-    if state.symbol in portfolio.open_position_symbols:
+    # Gate 4 (D7): OPEN intents on an existing agent-owned position are
+    # pyramiding attempts and must be blocked. CLOSE intents on an
+    # existing position are the normal exit path and must pass through
+    # — this is the core fix for the signal-vs-close paradox. The
+    # translator already guarantees that CLOSE_LONG is only emitted
+    # when the agent has an open long on this symbol (D21), so no
+    # separate "CLOSE with no position" gate is needed (removed D8).
+    if intent.is_open and state.symbol in portfolio.open_position_symbols_by_agent:
         reason = f"Already have an open position on {state.symbol} — no pyramiding."
         state.risk = RiskDecision(approved=False, reason=reason)
         logger.info("[Risk] BLOCKED — existing position on %s", state.symbol)

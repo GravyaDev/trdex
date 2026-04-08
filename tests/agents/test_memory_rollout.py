@@ -9,6 +9,7 @@ import pytest
 
 from trdex.agents.analyst import analyst_node
 from trdex.agents.executor import executor_node
+from trdex.agents.intent import Intent
 from trdex.agents.risk import risk_node
 from trdex.agents.scout import scout_node
 from trdex.agents.state import (
@@ -122,7 +123,7 @@ async def test_risk_attaches_snapshot_under_risk_key_without_branching() -> None
     state = AgentState(
         symbol="BTC/USDT",
         run_id="r-1",
-        analysis=AnalysisResult(signal="HOLD", confidence=0.8),
+        analysis=AnalysisResult(intent=Intent.HOLD, confidence=0.8),
         portfolio=PortfolioContext(equity=10_000.0),
     )
     state.memory_loader = _make_loader({"risk": "RISK_CTX"})
@@ -151,7 +152,7 @@ async def test_executor_attaches_snapshot_under_executor_key() -> None:
         symbol="BTC/USDT",
         run_id="r-1",
         market=_market(),
-        analysis=AnalysisResult(signal="BUY", confidence=0.8),
+        analysis=AnalysisResult(intent=Intent.OPEN_LONG, confidence=0.8),
         risk=RiskDecision(approved=True, position_size=0.02, reason="ok"),
         portfolio=PortfolioContext(equity=10_000.0),
         gateway=mock_gw,

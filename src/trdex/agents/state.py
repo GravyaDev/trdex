@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Literal
 
+from trdex.agents.intent import Intent
+
 
 @dataclass
 class MarketSnapshot:
@@ -32,9 +34,16 @@ class SentimentContext:
 
 @dataclass
 class AnalysisResult:
-    """Analyst agent output."""
+    """Analyst agent output.
 
-    signal: Literal["BUY", "SELL", "HOLD"] = "HOLD"
+    ``intent`` is the post-refactor (2026-04-08) operational intent
+    that downstream nodes act on. It is the canonical field; the legacy
+    ``signal`` string has been removed — see brainstorm decision log
+    ``.claude/reports/brainstorm-2026-04-07-intent-enum.md`` for the
+    full rationale.
+    """
+
+    intent: Intent = Intent.HOLD
     confidence: float = 0.0           # 0.0 – 1.0
     reasoning: str = ""
     indicators: dict[str, float] = field(default_factory=dict)
@@ -67,7 +76,12 @@ class PortfolioContext:
     """Live portfolio state injected into the agent cycle for risk decisions."""
 
     equity: float = 0.0                # total equity (cash + unrealized P&L)
-    open_position_symbols: list[str] = field(default_factory=list)  # symbols with open positions
+    open_position_symbols: list[str] = field(default_factory=list)  # all sources
+    # D21: subset of ``open_position_symbols`` restricted to
+    # ``positions.source = 'agent'``. The ``signal_to_intent`` translator
+    # consults THIS list (not the full one) so the agent never tries to
+    # close a position opened by another source (e.g. Telegram tracker).
+    open_position_symbols_by_agent: list[str] = field(default_factory=list)
     unrealized_pnl: float = 0.0        # aggregate unrealized P&L across all open positions
     realized_pnl: float = 0.0          # total realized P&L (session)
     drawdown_pct: float = 0.0          # current drawdown from peak equity (0.0–1.0)

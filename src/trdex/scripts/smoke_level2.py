@@ -125,7 +125,7 @@ async def main() -> int:
         print(f"  price         : {market.price}")
         print(f"  candles       : {len(market.candles)}")
     a = final_state.analysis
-    print(f"  analyst signal: {a.signal} conf={a.confidence:.2f}")
+    print(f"  analyst intent: {a.intent.value} conf={a.confidence:.2f}")
     print(f"  analyst reason: {a.reasoning[:120]}")
     print(f"  indicators    : {a.indicators}")
     r = final_state.risk

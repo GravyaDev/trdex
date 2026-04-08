@@ -11,7 +11,7 @@ from trdex.storage.agent_run_repo import AgentRunRepository
 
 def _make_run(
     *,
-    signal: str = "BUY",
+    signal: str = "open_long",
     confidence: float = 0.6,
     risk_approved: bool = True,
     order_status: str = "filled",
@@ -58,10 +58,10 @@ async def test_narrative_empty_returns_no_runs_message() -> None:
 async def test_narrative_aggregates_signals_and_rates() -> None:
     session = AsyncMock()
     runs = [
-        _make_run(signal="BUY", risk_approved=True, order_status="filled", minutes_ago=0),
-        _make_run(signal="HOLD", risk_approved=False, order_status="skipped", minutes_ago=15),
-        _make_run(signal="BUY", risk_approved=True, order_status="rejected", minutes_ago=30),
-        _make_run(signal="SELL", risk_approved=True, order_status="filled", minutes_ago=45),
+        _make_run(signal="open_long", risk_approved=True, order_status="filled", minutes_ago=0),
+        _make_run(signal="hold", risk_approved=False, order_status="skipped", minutes_ago=15),
+        _make_run(signal="open_long", risk_approved=True, order_status="rejected", minutes_ago=30),
+        _make_run(signal="close_long", risk_approved=True, order_status="filled", minutes_ago=45),
     ]
     result_mock = MagicMock()
     result_mock.scalars.return_value.all.return_value = runs
@@ -71,11 +71,11 @@ async def test_narrative_aggregates_signals_and_rates() -> None:
     narr = await repo.narrative_context("BTC/USDT", limit=10)
 
     assert narr.count == 4
-    assert narr.signals == {"BUY": 2, "HOLD": 1, "SELL": 1}
+    assert narr.signals == {"open_long": 2, "hold": 1, "close_long": 1}
     assert narr.approval_rate == 0.75  # 3 of 4 approved
     assert narr.fill_rate == 0.5  # 2 of 4 filled
     assert "BTC/USDT" in narr.text
-    assert "BUY:2" in narr.text
+    assert "open_long:2" in narr.text
     assert narr.text.count("\n") == 4  # header + 4 lines
 
 

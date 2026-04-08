@@ -98,7 +98,7 @@ def _run() -> AgentRunRecord:
     from datetime import datetime
 
     r.ran_at = datetime(2026, 4, 7, 9, 0, 0)
-    r.signal = "BUY"
+    r.signal = "open_long"  # Intent string value, see D11/D24
     r.confidence = 0.6
     r.risk_approved = True
     r.order_status = "filled"

@@ -463,7 +463,7 @@ async def step3_replay(
                 run_id=str(uuid.uuid4()),  # valid UUID; marker lives in risk_reason
                 symbol=symbol,
                 ran_at=exit_ts_naive,
-                signal="BUY",  # backtest is long-only; one row per closed trade
+                signal="open_long",  # backtest replay: one row per closed trade, tagged as the open
                 confidence=0.5,
                 reasoning="backtest replay sma_cross(9,21)",
                 indicators={},
