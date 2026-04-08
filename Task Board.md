@@ -21,6 +21,10 @@ Tutto fatto, vedi sezione Done sotto.
 - [ ] Sentinella: monitorare `agent_runs` count cresce ~288 al giorno per simbolo
 
 ## Backlog (consolidato)
+- [ ] **PRIMA della Phase 2**: rinominare i volumes Docker da `trdex_pgdata`/`trdex_qdrant`/`trdex_redis` a `pgdata`/`qdrant`/`redis` per eliminare il doppio prefisso `trdex_trdex_*`
+  - Richiede `docker compose down -v` (cancella i 3 volumes attuali)
+  - Poi `apply_migrations` + (opzionale) re-seed smoke per ripopolare i dati
+  - Va fatto **prima** che la Phase 2 inizi a generare dati veri di osservazione, altrimenti perdi i dati di osservazione
 - [ ] **Phase 3 (post-osservazione)**: iterazione sulla strategia
   - Solo dopo aver capito i numeri di Phase 2
   - Variazioni SMA cross (parametri diversi), poi RSI threshold, poi MACD divergence

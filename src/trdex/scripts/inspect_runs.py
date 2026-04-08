@@ -8,9 +8,9 @@ any time on a live DB (won't disturb the scheduler).
 Sections printed in order, top-down from infra to business:
 
     1. Scheduler health      - rows in agent_runs, per symbol, last run
-    2. Signal distribution   - BUY/SELL/HOLD counts in the window
+    2. Intent distribution   - open_long/close_long/hold counts in the window
     3. Risk gate decisions   - approved vs blocked with reasons
-    4. Trades executed       - recent trade fills with PnL
+    4. Trades executed       - recent trade fills, broken down by closed_by
     5. Equity curve          - seed / current / peak / drawdown
     6. Open positions        - live positions if any
     7. Readiness snapshot    - evaluate_readiness() verdict
@@ -157,10 +157,14 @@ async def section_1_scheduler_health(engine, args: InspectArgs) -> None:
         print("  (no cycles in window)")
 
 
-async def section_2_signal_distribution(engine, args: InspectArgs) -> None:
+async def section_2_intent_distribution(engine, args: InspectArgs) -> None:
+    """D22: intent distribution. The column is still named ``signal`` in
+    the DB (historical, see D11/D24) but stores Intent string values
+    since the 2026-04-08 refactor (``open_long``, ``close_long``,
+    ``hold``, ``open_short``, ``close_short``)."""
     from sqlalchemy import text
 
-    _section("2. Signal distribution")
+    _section("2. Intent distribution")
     since = _since_cutoff(args)
     sym_clause, sym_params = _symbol_clause(args)
     where = "WHERE 1 = 1"
@@ -183,13 +187,13 @@ async def section_2_signal_distribution(engine, args: InspectArgs) -> None:
         ).fetchall()
 
     if not rows:
-        print("  (no signals in window)")
+        print("  (no intents in window)")
         return
     total = sum(r[1] for r in rows)
-    for signal, n in rows:
+    for intent, n in rows:
         pct = n / total * 100
         bar = "#" * int(pct / 2)  # each # = 2%
-        print(f"  {signal:<6}  {n:<6} {pct:5.1f}%  {bar}")
+        print(f"  {intent:<12}  {n:<6} {pct:5.1f}%  {bar}")
 
 
 async def section_3_risk_decisions(engine, args: InspectArgs) -> None:
@@ -198,7 +202,9 @@ async def section_3_risk_decisions(engine, args: InspectArgs) -> None:
     _section("3. Risk gate decisions")
     since = _since_cutoff(args)
     sym_clause, sym_params = _symbol_clause(args)
-    where = "WHERE signal != 'HOLD'"
+    # Filter out HOLD intents (case-insensitive). Pre-2026-04-08 rows
+    # used 'HOLD' uppercase; post-refactor rows use 'hold' lowercase.
+    where = "WHERE LOWER(signal) != 'hold'"
     params: dict[str, object] = {}
     if since is not None:
         where += " AND ran_at >= :since"
@@ -234,7 +240,7 @@ async def section_3_risk_decisions(engine, args: InspectArgs) -> None:
             )
         ).fetchall()
 
-    print(f"  non-HOLD signals  : {approved + blocked}")
+    print(f"  non-HOLD intents  : {approved + blocked}")
     print(f"  approved          : {approved}")
     print(f"  blocked           : {blocked}")
     if top_reasons:
@@ -242,6 +248,27 @@ async def section_3_risk_decisions(engine, args: InspectArgs) -> None:
         for reason, n in top_reasons:
             short = (reason or "")[:64]
             print(f"    [{n:>3}] {short}")
+
+
+def _parse_closed_by(note: str | None) -> str:
+    """Extract the ``closed_by=<value>;`` tag from a trade_fill note.
+
+    The PortfolioService writes notes of the form
+    ``closed_by=agent_signal; close BUY BTC/USDT position 42 @ ...``.
+    Legacy rows from before the 2026-04-08 refactor have no such tag
+    and are bucketed as ``"legacy"`` so they remain visible in reports.
+    """
+    if not note:
+        return "legacy"
+    # Cheap parse — avoids pulling in re for a 1-tag format.
+    prefix = "closed_by="
+    if prefix not in note:
+        return "legacy"
+    start = note.index(prefix) + len(prefix)
+    end = note.find(";", start)
+    if end == -1:
+        end = len(note)
+    return note[start:end].strip() or "legacy"
 
 
 async def section_4_trades(engine, args: InspectArgs) -> None:
@@ -281,6 +308,16 @@ async def section_4_trades(engine, args: InspectArgs) -> None:
             )
         ).fetchall()
 
+        # D22: closed_by breakdown across the whole window.
+        all_notes = (
+            await conn.execute(
+                text(
+                    f"SELECT note, amount FROM account_balance {where}"
+                ),
+                params,
+            )
+        ).fetchall()
+
     if not agg or agg[0] == 0:
         print("  (no trade fills in window)")
         return
@@ -295,12 +332,25 @@ async def section_4_trades(engine, args: InspectArgs) -> None:
     print(f"  total pnl         : {_fmt_money(float(pnl_sum or 0))}")
     print(f"  avg pnl / trade   : {_fmt_money(float(pnl_avg or 0))}")
 
+    # Per-trigger aggregation (agent_signal / stop_loss / take_profit / trailing_stop / kill_switch / legacy)
+    by_trigger: dict[str, tuple[int, float]] = {}
+    for note, amount in all_notes:
+        trigger = _parse_closed_by(note)
+        count, pnl = by_trigger.get(trigger, (0, 0.0))
+        by_trigger[trigger] = (count + 1, pnl + float(amount or 0))
+    if by_trigger:
+        print("  closed_by breakdown:")
+        for trigger, (count, pnl) in sorted(by_trigger.items(), key=lambda kv: -kv[1][0]):
+            print(f"    {trigger:<14} {count:>4} trades  pnl={_fmt_money(pnl)}")
+
     print("  last 10 fills:")
     for recorded_at, amount, balance_after, note in recent:
         marker = "+" if float(amount) >= 0 else ""
+        trigger = _parse_closed_by(note)
         note_short = (note or "")[:40]
         print(
             f"    {_fmt_ts(recorded_at):<10} "
+            f"[{trigger:<13}] "
             f"{marker}{float(amount):>9.4f}  "
             f"balance={float(balance_after):>11.2f}  "
             f"{note_short}"
@@ -510,7 +560,7 @@ async def main() -> int:
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
     try:
         await section_1_scheduler_health(engine, args)
-        await section_2_signal_distribution(engine, args)
+        await section_2_intent_distribution(engine, args)
         await section_3_risk_decisions(engine, args)
         await section_4_trades(engine, args)
         await section_5_equity(engine, args)
