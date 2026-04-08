@@ -73,6 +73,12 @@ if echo "$COMMAND" | grep -qE 'chmod\s+777'; then
   deny "HARD BLOCK: chmod 777 grants full access to all users." "Command blocked: chmod 777. Use more restrictive permissions like 755 or 644."
 fi
 
+# Writing to files outside project directory
+if echo "$COMMAND" | grep -qE '>\s*/' | grep -qvE ">\s*$CLAUDE_PROJECT_DIR"; then
+  log_incident "HIGH" "BLOCKED: writing outside project dir → $COMMAND"
+  deny "HARD BLOCK: writing outside project dir is strictly forbidden."
+fi
+
 # ═══════════════════════════════════════════════════════
 # SECRET EXPOSURE — block commands that leak credentials
 # ═══════════════════════════════════════════════════════
@@ -95,10 +101,16 @@ if echo "$COMMAND" | grep -qE '\.env.*\|\s*(curl|wget|nc|ncat)'; then
   deny "HARD BLOCK: Piping credential files to network commands would exfiltrate secrets." "Never pipe .env files to network commands."
 fi
 
-# Block git add of credential files
-if echo "$COMMAND" | grep -qE 'git\s+add\s+.*(\.(env|env\.local|env\.production))'; then
+# Block git add of credential files.
+# The pattern is anchored on either whitespace or end-of-command after
+# the credential extension, so legitimate templates like .env.example /
+# .env.sample / .env.template are never matched (they have characters
+# beyond the recognised credential extensions and therefore fall
+# through). Mixed arguments like "git add .env.example .env" still get
+# blocked because the second token matches the trailing-anchor branch.
+if echo "$COMMAND" | grep -qE 'git\s+add\s+.*\.env(\.local|\.production|\.dev|\.prod|\.staging)?(\s|$)'; then
   log_incident "CRITICAL" "BLOCKED: git add of credential file → $COMMAND"
-  deny "HARD BLOCK: Staging credential files (.env) for git commit would expose secrets publicly." "These files must stay in .gitignore. Never commit credentials to git."
+  deny "HARD BLOCK: Staging credential files (.env) for git commit would expose secrets publicly." "These files must stay in .gitignore. Never commit credentials to git. Templates like .env.example are explicitly allowed."
 fi
 
 # ═══════════════════════════════════════════════════════
@@ -144,11 +156,6 @@ fi
 # Any git checkout that discards changes
 if echo "$COMMAND" | grep -qE 'git\s+checkout\s+\.'; then
   log_incident "MEDIUM" "WARNING: git checkout . discards changes → $COMMAND"
-fi
-
-# Writing to files outside project directory
-if echo "$COMMAND" | grep -qE '>\s*/' | grep -qvE ">\s*$CLAUDE_PROJECT_DIR"; then
-  log_incident "MEDIUM" "WARNING: write outside project dir → $COMMAND"
 fi
 
 exit 0
