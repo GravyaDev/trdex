@@ -1,3 +1,8 @@
+# documentation: https://github.com/GravyaDev/trdex
+# slogan: AI-driven trading automation platform (scout, analyst, risk, executor)
+# tags: trading,ai,langgraph,crypto,backtest,timescaledb,qdrant
+# port: 8000
+
 # Shared logging configuration — caps every container's log file at 10 MB
 # with up to 3 rotated files, so a long-running unattended deploy on a
 # small VPS disk does not silently fill the filesystem with stdout/stderr.
@@ -10,26 +15,23 @@ x-default-logging: &default-logging
 services:
   db:
     image: timescale/timescaledb:2.17.2-pg16
-    ports:
-      - "5433:5432"
     environment:
-      POSTGRES_USER: trdex
-      POSTGRES_PASSWORD: trdex
-      POSTGRES_DB: trdex
+      POSTGRES_USER: '${POSTGRES_USER:-trdex}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required (openssl rand -hex 24)}'
+      POSTGRES_DB: '${POSTGRES_DB:-trdex}'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U trdex"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trdex}"]
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 30s
     restart: unless-stopped
     logging: *default-logging
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     volumes:
       - redis:/data
     healthcheck:
@@ -37,14 +39,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
     restart: unless-stopped
     logging: *default-logging
 
   qdrant:
     image: qdrant/qdrant:v1.13.0
-    ports:
-      - "6333:6333"   # REST API
-      - "6334:6334"   # gRPC
     volumes:
       - qdrant:/qdrant/storage
     healthcheck:
@@ -52,14 +52,74 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     restart: unless-stopped
     logging: *default-logging
 
   app:
     build: .
     ports:
-      - "8000:8000"
-    env_file: .env
+      - "${TRDEX_APP_HOST_PORT:-8500}:8000"
+    environment:
+      # App mode
+      TRDEX_MODE: '${TRDEX_MODE:-simulation}'
+      TRDEX_LOG_LEVEL: '${TRDEX_LOG_LEVEL:-INFO}'
+      # Database (internal network, URL composed from POSTGRES_* vars)
+      DATABASE_URL: 'postgresql+asyncpg://${POSTGRES_USER:-trdex}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-trdex}'
+      # Redis (internal network)
+      REDIS_URL: 'redis://redis:6379/0'
+      # Qdrant (internal network)
+      TRDEX_QDRANT_URL: 'http://qdrant:6333'
+      # FastAPI
+      TRDEX_API_HOST: '0.0.0.0'
+      TRDEX_API_PORT: '8000'
+      # TRDEX_API_KEY: empty string is valid in dev mode (disables auth).
+      # Use `?` (not `:?`) so Compose fails only if the variable is unset
+      # in production Coolify — but tolerates the empty dev-locale value.
+      TRDEX_API_KEY: '${TRDEX_API_KEY?TRDEX_API_KEY must be defined (can be empty in dev; generate with openssl rand -hex 32 for prod)}'
+      TRDEX_CORS_ORIGINS: '${TRDEX_CORS_ORIGINS:-}'
+      # Exchange (Binance) — optional in simulation mode
+      BINANCE_API_KEY: '${BINANCE_API_KEY:-}'
+      BINANCE_API_SECRET: '${BINANCE_API_SECRET:-}'
+      # Market data aggregators — all optional
+      TRDEX_COINGECKO_API_KEY: '${TRDEX_COINGECKO_API_KEY:-}'
+      TRDEX_FOREX_API_KEY: '${TRDEX_FOREX_API_KEY:-}'
+      TRDEX_CRYPTOCOMPARE_API_KEY: '${TRDEX_CRYPTOCOMPARE_API_KEY:-}'
+      TRDEX_ALPHAVANTAGE_API_KEY: '${TRDEX_ALPHAVANTAGE_API_KEY:-}'
+      TRDEX_FREECRYPTOAPI_KEY: '${TRDEX_FREECRYPTOAPI_KEY:-}'
+      TRDEX_STOCKDATA_API_KEY: '${TRDEX_STOCKDATA_API_KEY:-}'
+      # News ingestion
+      TRDEX_INGESTION_INTERVAL: '${TRDEX_INGESTION_INTERVAL:-300}'
+      TRDEX_INGESTION_SYMBOLS: '${TRDEX_INGESTION_SYMBOLS:-BTC/USDT,ETH/USDT}'
+      # AI / embeddings (required for Qdrant context ingestion)
+      # TRDEX_JINA_API_KEY: empty is tolerated (Qdrant embeddings feature
+      # degrades but app still runs). `?` (not `:?`) for the same reason
+      # as TRDEX_API_KEY: enforce definition in Coolify, tolerate empty dev.
+      TRDEX_JINA_API_KEY: '${TRDEX_JINA_API_KEY?TRDEX_JINA_API_KEY must be defined (can be empty; enables Qdrant embeddings when set)}'
+      # Telegram — disabled by default for Phase 2. A persistent volume
+      # will be added when telegram signal tracking is re-enabled.
+      TRDEX_TELEGRAM_API_ID: '${TRDEX_TELEGRAM_API_ID:-0}'
+      TRDEX_TELEGRAM_API_HASH: '${TRDEX_TELEGRAM_API_HASH:-}'
+      TRDEX_TELEGRAM_PHONE: '${TRDEX_TELEGRAM_PHONE:-}'
+      TRDEX_TELEGRAM_CHANNELS: '${TRDEX_TELEGRAM_CHANNELS:-}'
+      TRDEX_TELEGRAM_SIGNAL_BUDGET: '${TRDEX_TELEGRAM_SIGNAL_BUDGET:-100.0}'
+      # Agent scheduler — Phase 2 observation (set true to enable)
+      TRDEX_AGENT_SCHEDULER_ENABLED: '${TRDEX_AGENT_SCHEDULER_ENABLED:-false}'
+      TRDEX_AGENT_SCHEDULER_INTERVAL: '${TRDEX_AGENT_SCHEDULER_INTERVAL:-300}'
+      TRDEX_AGENT_SCHEDULER_SYMBOLS: '${TRDEX_AGENT_SCHEDULER_SYMBOLS:-BTC/USDT,ETH/USDT}'
+      # Stop-loss monitor
+      TRDEX_SL_CHECK_INTERVAL: '${TRDEX_SL_CHECK_INTERVAL:-30.0}'
+      TRDEX_SL_POSITION_PCT: '${TRDEX_SL_POSITION_PCT:-0.05}'
+      TRDEX_SL_TAKE_PROFIT_PCT: '${TRDEX_SL_TAKE_PROFIT_PCT:-0.10}'
+      TRDEX_SL_TRAILING_STOP_PCT: '${TRDEX_SL_TRAILING_STOP_PCT:-0.03}'
+      TRDEX_SL_DAILY_DRAWDOWN_PCT: '${TRDEX_SL_DAILY_DRAWDOWN_PCT:-0.10}'
+      # Risk limits
+      TRDEX_MAX_POSITION_PCT: '${TRDEX_MAX_POSITION_PCT:-0.02}'
+      # Simulation gate (required before switching to live)
+      TRDEX_GATE_MIN_DAYS: '${TRDEX_GATE_MIN_DAYS:-30}'
+      TRDEX_GATE_MIN_SHARPE: '${TRDEX_GATE_MIN_SHARPE:-1.0}'
+      TRDEX_GATE_MAX_DRAWDOWN: '${TRDEX_GATE_MAX_DRAWDOWN:-0.20}'
+      TRDEX_GATE_MIN_WIN_RATE: '${TRDEX_GATE_MIN_WIN_RATE:-0.40}'
     depends_on:
       db:
         condition: service_healthy
@@ -67,8 +127,6 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
-    volumes:
-      - ./trdex_telegram.session:/app/trdex_telegram.session  # Telethon auth session
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8000/v1/health || exit 1"]
       interval: 10s

@@ -1,0 +1,28 @@
+# Dev-locale only override — automatically merged by `docker compose`
+# when running from the repo root on a developer machine.
+#
+# Coolify production deploys ignore this file: Coolify only reads
+# `docker-compose.yaml` (the base file). Host port bindings here exist
+# so that developers can run apply_migrations / smoke_level3 /
+# smoke_level4 / inspect_runs from the Windows host directly against
+# the containers, without having to `docker compose exec` for every
+# tool invocation.
+#
+# If you want to disable these bindings locally too (e.g. to match
+# production behaviour exactly), rename this file to
+# `docker-compose.override.yaml.disabled` or pass
+# `--file docker-compose.yaml` explicitly to compose.
+
+services:
+  db:
+    ports:
+      - "5433:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  qdrant:
+    ports:
+      - "6333:6333"   # REST API
+      - "6334:6334"   # gRPC
