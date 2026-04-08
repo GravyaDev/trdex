@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: trdex
       POSTGRES_DB: trdex
     volumes:
-      - trdex_pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U trdex"]
       interval: 5s
@@ -20,7 +20,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - trdex_redis:/data
+      - redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -33,7 +33,7 @@ services:
       - "6333:6333"   # REST API
       - "6334:6334"   # gRPC
     volumes:
-      - trdex_qdrant:/qdrant/storage
+      - qdrant:/qdrant/storage
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
       interval: 10s
@@ -63,6 +63,6 @@ services:
     restart: unless-stopped
 
 volumes:
-  trdex_pgdata:
-  trdex_redis:
-  trdex_qdrant:
+  pgdata:
+  redis:
+  qdrant:
