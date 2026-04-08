@@ -489,8 +489,25 @@ class StopLossMonitor:
                 await _kill_switch.activate_async(event.message)
                 logger.critical("[StopLoss] PORTFOLIO DD: %s", event.message)
 
-        # Portfolio-level: all-time max drawdown (peak-to-trough)
-        equity = total_cost + total_unrealized
+        # Portfolio-level: all-time max drawdown (peak-to-trough).
+        #
+        # Realised-only by design: both ``peak_equity`` and the current
+        # ``equity`` read from BalanceRepository, which only records rows
+        # at close-fill time (``record_close_fill``). Unrealised P&L on
+        # open positions is intentionally excluded — that concern belongs
+        # to the per-position stop-loss / take-profit / trailing-stop
+        # checks above, and to the daily_drawdown check below which is
+        # mark-to-market on ``total_cost`` only.
+        #
+        # Mixing realised peak with mtM current (the pre-fix behaviour)
+        # caused a false-positive 98% drawdown: peak came from the
+        # $10k seed balance while equity came from $200 of open position
+        # cost, so ``(10000-200)/10000 = 98%`` tripped the 20% limit on
+        # the first trade of a fresh deploy. See Bug 8 / commit history.
+        from trdex.storage.balance_repo import BalanceRepository
+        async with self._session_factory() as session:
+            bal_repo = BalanceRepository(session)
+            equity = float(await bal_repo.current_balance())
         if self._peak_equity is None or equity > self._peak_equity:
             self._peak_equity = equity
         if self._peak_equity > 0:
