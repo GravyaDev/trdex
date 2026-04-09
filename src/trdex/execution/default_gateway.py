@@ -36,7 +36,6 @@ def _to_order_result(result: ExecutionResult) -> OrderResult:
         status="filled",
         filled_price=float(result.filled_price),
         filled_qty=float(result.filled_amount),
-        fee=result.fee,
         message=(
             f"{'Simulated' if result.simulated else 'Live'} fill: "
             f"{result.side.value.upper()} {_fmt(result.filled_amount, _QTY_Q)} {result.symbol} "

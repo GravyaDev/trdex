@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, Float, Index, Numeric, String
+from sqlalchemy import BigInteger, Index, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from trdex.storage.db import Base
@@ -40,7 +40,6 @@ class PositionRecord(Base):
     )
     closed_at: Mapped[datetime | None] = mapped_column(nullable=True)
     exit_price: Mapped[Decimal | None] = mapped_column(Numeric(28, 8), nullable=True)
-    fee_open: Mapped[float] = mapped_column(Float, default=0.0)
 
     def __repr__(self) -> str:
         return f"<Position {self.symbol} {self.side} {self.status} entry={self.entry_price}>"

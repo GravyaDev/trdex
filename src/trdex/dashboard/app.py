@@ -150,16 +150,7 @@ if positions_data and positions_data.get("positions"):
     for col in ["entry_price", "current_price", "amount", "unrealized_pnl", "unrealized_pnl_pct"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
-    # Format prices with enough decimals for microcap coins (e.g. ENJ $0.03077)
-    for col in ["entry_price", "current_price"]:
-        if col in df.columns:
-            df[col] = df[col].map(lambda x: f"{x:.8g}" if x is not None else "")
-    if "amount" in df.columns:
-        df["amount"] = df["amount"].map(lambda x: f"{x:.4f}" if x is not None else "")
-    if "unrealized_pnl" in df.columns:
-        df["unrealized_pnl"] = df["unrealized_pnl"].map(lambda x: f"${x:+,.4f}" if x is not None else "")
-    if "unrealized_pnl_pct" in df.columns:
-        df["unrealized_pnl_pct"] = df["unrealized_pnl_pct"].map(lambda x: f"{x:.2%}" if x is not None else "")
+    df["unrealized_pnl_pct"] = df["unrealized_pnl_pct"].map(lambda x: f"{x:.2%}")
     st.dataframe(df, use_container_width=True)
 else:
     st.info("No open positions.")
@@ -252,17 +243,8 @@ if history:
     df_agent = pd.DataFrame(history)
     if not df_agent.empty:
         df_agent["confidence"] = pd.to_numeric(df_agent["confidence"], errors="coerce").map(lambda x: f"{x:.1%}")
-        # Bug 11 fix: HOLD intents have no order to approve/reject.
-        # Showing ❌ on every HOLD row suggests the system is blocking
-        # something when in reality there is nothing to block. Use "—"
-        # for HOLD, ✅/❌ only for actionable intents.
-        _hold_signals = {"hold", "HOLD", "🟡 HOLD"}
-        df_agent["risk_approved"] = df_agent.apply(
-            lambda row: "—" if row.get("signal", "") in _hold_signals else ("✅" if row["risk_approved"] else "❌"),
-            axis=1,
-        )
-        signal_icons = {"BUY": "🟢 BUY", "SELL": "🔴 SELL", "HOLD": "🟡 HOLD",
-                        "open_long": "🟢 OPEN", "close_long": "🔴 CLOSE", "hold": "🟡 HOLD"}
+        df_agent["risk_approved"] = df_agent["risk_approved"].map(lambda x: "✅" if x else "❌")
+        signal_icons = {"BUY": "🟢 BUY", "SELL": "🔴 SELL", "HOLD": "🟡 HOLD"}
         df_agent["signal"] = df_agent["signal"].map(lambda s: signal_icons.get(s, s))
         st.dataframe(
             df_agent[["symbol", "signal", "confidence", "risk_approved", "order_status", "ran_at"]],
@@ -319,65 +301,6 @@ if risk_events and risk_events.get("events"):
         import pandas as pd
         df_ev = pd.DataFrame(risk_events["events"])
         st.dataframe(df_ev, use_container_width=True)
-
-# ── Per-symbol risk config ─────────────────────────────────────────────────────
-
-with st.expander("⚙️ Per-Symbol Risk Thresholds"):
-    st.caption(
-        "Override SL/TP/trailing per symbol. Leave blank = adaptive default "
-        "(proportional to the symbol's volatility CV). The adaptive formula "
-        "is: max(global_base, multiplier × CV)."
-    )
-    sym_configs = get("/v1/risk/symbol-config")
-    if sym_configs and sym_configs.get("configs"):
-        import pandas as pd
-        df_sc = pd.DataFrame(sym_configs["configs"])
-        for col in ["sl_pct", "tp_pct", "trailing_pct"]:
-            if col in df_sc.columns:
-                df_sc[col] = df_sc[col].map(
-                    lambda x: f"{x:.2%}" if x is not None else "adaptive"
-                )
-        st.dataframe(df_sc, use_container_width=True)
-    else:
-        st.info("No per-symbol overrides — all symbols use adaptive CV-based defaults.")
-
-    with st.form("symbol_config_form", clear_on_submit=True):
-        sc_cols = st.columns([2, 1, 1, 1, 2])
-        with sc_cols[0]:
-            sc_symbol = st.text_input("Symbol", placeholder="ENJ/USDT")
-        with sc_cols[1]:
-            sc_sl = st.text_input("SL %", placeholder="auto")
-        with sc_cols[2]:
-            sc_tp = st.text_input("TP %", placeholder="auto")
-        with sc_cols[3]:
-            sc_trail = st.text_input("Trail %", placeholder="auto")
-        with sc_cols[4]:
-            sc_notes = st.text_input("Notes", placeholder="optional")
-        sc_submit = st.form_submit_button("Save Override")
-
-    if sc_submit and sc_symbol:
-        body = {"notes": sc_notes}
-        if sc_sl:
-            body["sl_pct"] = float(sc_sl) / 100
-        if sc_tp:
-            body["tp_pct"] = float(sc_tp) / 100
-        if sc_trail:
-            body["trailing_pct"] = float(sc_trail) / 100
-        import httpx as _httpx
-        headers = {"X-API-Key": api_key} if api_key else {}
-        try:
-            r = _httpx.put(
-                f"{base_url}/v1/risk/symbol-config/{sc_symbol}",
-                json=body,
-                headers=headers,
-                timeout=10,
-            )
-            r.raise_for_status()
-            st.success(f"Saved config for {sc_symbol}")
-            st.cache_data.clear()
-            st.rerun()
-        except Exception as e:
-            st.error(_format_http_error(f"/v1/risk/symbol-config/{sc_symbol}", "PUT", e))
 
 # ── Context / Ingestion ───────────────────────────────────────────────────────
 

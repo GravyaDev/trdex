@@ -46,32 +46,9 @@ class Simulator(ExecutionGateway):
                 "Inject current market price before calling execute()."
             )
 
-        # Truncate quantity to the exchange's lot size step. Without
-        # this, the simulator produces fractional amounts like 6407.7529
-        # ENJ when ENJ's step_size is 1 whole token — fine in simulation
-        # but rejected by Binance in live mode. Truncating here makes
-        # the simulation realistic and the P&L numbers accurate.
-        from trdex.market import specs as market_specs
-        amount = market_specs.truncate_qty(order.symbol, order.amount)
-        if amount <= 0:
-            logger.warning(
-                "[SIM] qty truncated to 0 for %s (raw=%s, step=%s) — skipping",
-                order.symbol, order.amount, market_specs.get_step_size(order.symbol),
-            )
-            return ExecutionResult(
-                order_id="",
-                symbol=order.symbol,
-                side=order.side,
-                filled_amount=Decimal("0"),
-                filled_price=order.price,
-                fee=Decimal("0"),
-                timestamp=datetime.now(UTC),
-                simulated=True,
-            )
-
         order_id = str(uuid.uuid4())[:8]
         fill_price = order.price
-        fee = amount * fill_price * self.fee_rate
+        fee = order.amount * fill_price * self.fee_rate
 
         self._orders[order_id] = order
 
@@ -79,7 +56,7 @@ class Simulator(ExecutionGateway):
             order_id=order_id,
             symbol=order.symbol,
             side=order.side,
-            filled_amount=amount,
+            filled_amount=order.amount,
             filled_price=fill_price,
             fee=fee,
             timestamp=datetime.now(UTC),
@@ -89,7 +66,7 @@ class Simulator(ExecutionGateway):
         logger.info(
             "[SIM] %s %s %s @ %s (fee: %s) [%s]",
             order.side.value.upper(),
-            _fmt(amount, _QTY_Q),
+            _fmt(order.amount, _QTY_Q),
             order.symbol,
             _fmt(fill_price, _PRICE_Q),
             _fmt(fee, _FEE_Q),

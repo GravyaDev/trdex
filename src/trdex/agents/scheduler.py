@@ -16,44 +16,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Iterable
-from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_active_hours(spec: str) -> tuple[int, int] | None:
-    """Parse an 'HH:MM-HH:MM' spec into (start_hour, end_hour).
-
-    Returns None if the spec is empty or unparseable (= always active).
-    Examples:
-        '08:00-22:00' → (8, 22)
-        '00:00-24:00' → (0, 24)  (= always active, same as empty)
-        ''            → None     (= always active)
-    """
-    if not spec or not spec.strip():
-        return None
-    try:
-        start_s, end_s = spec.strip().split("-")
-        start_h = int(start_s.split(":")[0])
-        end_h = int(end_s.split(":")[0])
-        if start_h == 0 and end_h == 24:
-            return None  # equivalent to always active
-        return (start_h, end_h)
-    except (ValueError, IndexError):
-        logger.warning("[AgentScheduler] invalid active_hours spec %r — running H24", spec)
-        return None
-
-
-def _is_active_now(window: tuple[int, int] | None) -> bool:
-    """Check if the current UTC hour falls within the active window."""
-    if window is None:
-        return True
-    start, end = window
-    hour = datetime.now(tz=timezone.utc).hour
-    if start <= end:
-        return start <= hour < end
-    # Wrap-around (e.g. 22:00-06:00)
-    return hour >= start or hour < end
 
 
 async def agent_scheduler_loop(
@@ -65,7 +29,6 @@ async def agent_scheduler_loop(
     gateway=None,
     memory_loader=None,
     max_iterations: int | None = None,
-    active_hours: str = "",
 ) -> int:
     """Run the Scout->Analyst->Risk->Executor cycle on a schedule.
 
@@ -100,7 +63,6 @@ async def agent_scheduler_loop(
     from trdex.risk.stop_loss import get_kill_switch
 
     symbols_list = list(symbols)
-    hours_window = _parse_active_hours(active_hours)
     iterations = 0
 
     while max_iterations is None or iterations < max_iterations:
@@ -108,11 +70,6 @@ async def agent_scheduler_loop(
             if get_kill_switch().active:
                 logger.warning(
                     "[AgentScheduler] kill switch active - skipping cycle"
-                )
-            elif not _is_active_now(hours_window):
-                logger.debug(
-                    "[AgentScheduler] outside active hours %s — skipping cycle",
-                    active_hours,
                 )
             else:
                 for sym in symbols_list:
