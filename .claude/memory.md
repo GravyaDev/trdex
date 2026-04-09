@@ -2,9 +2,9 @@
 
 ## Now
 
-- **trdex è LIVE in production** su `https://trdex.gravya.it` (FastAPI) + `https://trdex.gravya.it/dashboard/` (Streamlit, basic auth `daniele`).
-- **Phase 2 observation iniziata 2026-04-08 17:42 UTC**: scheduler agent attivo BTC+ETH (5min interval), oggi già 2 trade chiusi (BTC +0.73%, ETH -0.13%, net +$1.22 su seed $10k). Win rate 50%, drawdown 0%.
-- **Sessione 2026-04-08 chiusa al wrap-up**: nessun lavoro tecnico aperto, niente bug blocker, sistema in osservazione passiva.
+- **trdex LIVE in production**: `https://trdex.gravya.it` (FastAPI) + `https://trdex.gravya.it/dashboard/` (Streamlit, now GitHub OAuth via oauth2-proxy)
+- **Phase 2 observation**: 9 symbols, ~15 trade chiusi in 24h, $10k+ equity, 53.8% win rate
+- **Sessione 2026-04-09 chiusa**: 4 task completati (OAuth, testnet Ed25519, Perplexity, aggregation) + adaptive SL + lot size + fees + dashboard features. Tutti pushati, Redeploy pending per ultimi 2 task.
 
 ## ⚠️ Sister branch LLM dev — `llm-agents`
 
@@ -70,15 +70,14 @@
 - StopLossMonitor tick 30s (sl=5% tp=10% trail=3% dd_daily=10% dd_max=20% realised-only)
 - Memory 6-tier: KB / agent_memory / nominations / trade narratives / entity graph / agent_runs
 
-## Backlog priority (vedi Task Board.md per dettagli)
+## Completed today (2026-04-09) — vedi Task Board Done per dettagli
 
-1. Bug 11 cosmetic (HOLD risk_approved=❌) — 10 min
-2. Dashboard symbols management + rate limit live — ~3-5h
-3. Dashboard thresholds edit + audit log — ~2-3h
-4. Upgrade auth dashboard (Cloudflare Access / Tailscale) — trigger dopo 1 settimana stabile
-5. Perplexity Sonar news source — trigger dopo baseline
-6. Phase 3 strategy iteration — solo dopo 7-14 giorni dati
-7. gravya-ops agent — deferred fino decisione `pleng vs custom`
+All 4 planned tasks + 9 additional improvements deployed. Remaining:
+- Phase 3 strategy iteration — dopo 7-14 giorni dati
+- LLM agents — branch `llm-agents` (design doc scritto, codice in corso nell'altra sessione)
+- Auth upgrade: ✅ DONE (OAuth2-proxy GitHub)
+- Perplexity: ✅ DONE (testato live)
+- Multi-source aggregation: ✅ DONE (user-selectable feeds)
 
 ## Known Issues
 
