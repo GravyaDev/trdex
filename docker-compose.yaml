@@ -154,12 +154,18 @@ services:
   #   OAUTH2_PROXY_COOKIE_SECRET  — random 32-char string for cookie signing
   #   OAUTH2_PROXY_EMAIL_DOMAIN   — restrict to specific email domain (default: *)
   #   OAUTH2_PROXY_GITHUB_USER    — restrict to specific GitHub username
+  # OAuth2 proxy — GitHub SSO for dashboard access.
+  # Acts as a REVERSE PROXY in front of the dashboard: all /dashboard
+  # traffic goes through oauth2-proxy, which handles login/redirect/
+  # cookie verification internally. Traefik routes to oauth2-proxy,
+  # NOT directly to the dashboard. oauth2-proxy then proxies to the
+  # dashboard container on the internal Docker network.
+  #
+  # This is the "reverse proxy mode" (not forwardAuth mode). ForwardAuth
+  # does not work well because Traefik passes 401s directly to the
+  # client without redirecting to the login page.
   oauth2-proxy:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.7.1
-    # All config via environment variables — Coolify injects env vars
-    # into the container runtime but does NOT interpolate ${VAR} inside
-    # compose command args. oauth2-proxy reads OAUTH2_PROXY_* env vars
-    # natively (each --flag has a matching env var with underscores).
     environment:
       OAUTH2_PROXY_PROVIDER: 'github'
       OAUTH2_PROXY_CLIENT_ID: '${OAUTH2_PROXY_CLIENT_ID}'
@@ -171,45 +177,27 @@ services:
       OAUTH2_PROXY_EMAIL_DOMAINS: '${OAUTH2_PROXY_EMAIL_DOMAIN:-*}'
       OAUTH2_PROXY_GITHUB_USERS: '${OAUTH2_PROXY_GITHUB_USER:-}'
       OAUTH2_PROXY_HTTP_ADDRESS: '0.0.0.0:4180'
-      OAUTH2_PROXY_UPSTREAMS: 'static://202'
+      # Upstream: proxy authenticated requests to the dashboard container
+      OAUTH2_PROXY_UPSTREAMS: 'http://dashboard:8501'
       OAUTH2_PROXY_REVERSE_PROXY: 'true'
-      OAUTH2_PROXY_SET_XAUTHREQUEST: 'true'
       OAUTH2_PROXY_PROXY_PREFIX: '/oauth2'
       OAUTH2_PROXY_REDIRECT_URL: 'https://trdex.gravya.it/oauth2/callback'
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: 'true'
-    # No healthcheck: the oauth2-proxy image is a static binary with
-    # no shell, no wget, no curl — CMD-SHELL fails with "no such file".
-    # The process either starts or crashes; there is no "unhealthy but
-    # running" state. Coolify treats a running container without
-    # healthcheck as healthy by default.
     restart: unless-stopped
     logging: *default-logging
     labels:
       - "traefik.enable=true"
-      # OAuth2 callback + sign-in/sign-out routes
-      - "traefik.http.routers.trdex-oauth2.rule=Host(`trdex.gravya.it`) && PathPrefix(`/oauth2`)"
-      - "traefik.http.routers.trdex-oauth2.entrypoints=https"
-      - "traefik.http.routers.trdex-oauth2.tls=true"
-      - "traefik.http.routers.trdex-oauth2.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.trdex-oauth2.service=trdex-oauth2-svc"
+      # Route ALL /dashboard and /oauth2 traffic to oauth2-proxy.
+      # oauth2-proxy handles auth check, login redirect, and proxying
+      # to the dashboard container internally.
+      - "traefik.http.routers.trdex-dashboard.rule=Host(`trdex.gravya.it`) && (PathPrefix(`/dashboard`) || PathPrefix(`/oauth2`))"
+      - "traefik.http.routers.trdex-dashboard.entrypoints=https"
+      - "traefik.http.routers.trdex-dashboard.tls=true"
+      - "traefik.http.routers.trdex-dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.trdex-dashboard.service=trdex-oauth2-svc"
       - "traefik.http.services.trdex-oauth2-svc.loadbalancer.server.port=4180"
-      # ForwardAuth middleware — Traefik calls oauth2-proxy /oauth2/auth.
-      # On 401, forwardAuth passes the 401 to the client (Traefik does
-      # NOT auto-redirect). The errors middleware below catches the 401
-      # and redirects the user to /oauth2/sign_in which starts the
-      # GitHub OAuth flow.
-      - "traefik.http.middlewares.trdex-oauth2-verify.forwardauth.address=http://oauth2-proxy:4180/oauth2/auth"
-      - "traefik.http.middlewares.trdex-oauth2-verify.forwardauth.trustForwardHeader=true"
-      - "traefik.http.middlewares.trdex-oauth2-verify.forwardauth.authResponseHeaders=X-Auth-Request-User,X-Auth-Request-Email,Set-Cookie"
-      # Errors middleware — catches 401 from forwardAuth and redirects
-      # to the oauth2-proxy sign-in page. The `query` field is the URL
-      # where the user is sent; oauth2-proxy will then redirect to GitHub.
-      - "traefik.http.middlewares.trdex-oauth2-redirect.errors.status=401"
-      - "traefik.http.middlewares.trdex-oauth2-redirect.errors.service=trdex-oauth2-svc"
-      - "traefik.http.middlewares.trdex-oauth2-redirect.errors.query=/oauth2/sign_in?rd={url}"
 
-  # Streamlit dashboard UI for Phase 2 observation.
-  # Protected by oauth2-proxy + GitHub SSO via Traefik forwardAuth.
+  # Streamlit dashboard — no direct Traefik route (proxied via oauth2-proxy).
   dashboard:
     build: .
     command: >
@@ -225,8 +213,6 @@ services:
     depends_on:
       app:
         condition: service_healthy
-      oauth2-proxy:
-        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8501/dashboard/_stcore/health || exit 1"]
       interval: 15s
@@ -235,16 +221,6 @@ services:
       start_period: 30s
     restart: unless-stopped
     logging: *default-logging
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.trdex-dashboard.rule=Host(`trdex.gravya.it`) && PathPrefix(`/dashboard`)"
-      - "traefik.http.routers.trdex-dashboard.entrypoints=https"
-      - "traefik.http.routers.trdex-dashboard.tls=true"
-      - "traefik.http.routers.trdex-dashboard.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.trdex-dashboard.service=trdex-dashboard"
-      - "traefik.http.services.trdex-dashboard.loadbalancer.server.port=8501"
-      # Auth chain: verify session (forwardAuth) → redirect to login on 401 (errors)
-      - "traefik.http.routers.trdex-dashboard.middlewares=trdex-oauth2-verify,trdex-oauth2-redirect"
 
 volumes:
   pgdata:
