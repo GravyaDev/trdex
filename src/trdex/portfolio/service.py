@@ -106,6 +106,7 @@ class PortfolioService:
         amount: Decimal,
         entry_price: Decimal,
         budget: Decimal,
+        fee: Decimal = Decimal("0"),
         source: str = "agent",
         signal_id: str | None = None,
     ) -> PositionRecord | None:
@@ -143,13 +144,19 @@ class PortfolioService:
             source=source,
             signal_id=signal_id,
         )
+        # Persist opening fee for full round-trip P&L accounting
+        record.fee_open = float(fee)
+        session = self._repo._session
+        await session.commit()
+        await session.refresh(record)
         logger.info(
-            "[PortfolioService] opened %s position %d: %s qty=%s @ %s (source=%s)",
+            "[PortfolioService] opened %s position %d: %s qty=%s @ %s fee=%s (source=%s)",
             symbol,
             record.id,
             side,
             amount,
             entry_price,
+            fee,
             source,
         )
         return record
@@ -217,13 +224,15 @@ class PortfolioService:
             )
 
         # 2. Compute PnL from the LIVE row (not the caller's snapshot).
+        #    Full round-trip cost: fee_open (paid at entry) + fee (paid now at close).
         entry = Decimal(str(live.entry_price))
         amt = Decimal(str(live.amount))
+        fee_open = Decimal(str(live.fee_open or 0))
         if live.side == "BUY":
             gross = (exit_price - entry) * amt
         else:  # SELL / short leg (kept for completeness, not reachable today)
             gross = (entry - exit_price) * amt
-        pnl = gross - fee
+        pnl = gross - fee - fee_open
 
         # 3. Mutate the position row. The ORM will flush on commit.
         live.exit_price = exit_price

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, Literal
 
 from trdex.agents.intent import Intent
@@ -68,6 +69,7 @@ class OrderResult:
     status: Literal["filled", "rejected", "skipped", "pending"] = "skipped"
     filled_price: float | None = None
     filled_qty: float | None = None
+    fee: Decimal | None = None
     message: str = ""
 
 

@@ -306,13 +306,20 @@ class StopLossMonitor:
                         else "trailing_stop" if reason == "trailing_stop"
                         else "kill_switch"
                     )
+                    # Estimate close fee from fill: 0.1% taker (Binance standard).
+                    # In simulation mode the Simulator uses the same rate; in
+                    # live mode the LiveExecutor would return the real fee from
+                    # the exchange response. We approximate here because
+                    # _auto_close does not go through the Simulator — it
+                    # closes the position directly via the gateway.
+                    close_fee = fill_price * Decimal(str(float(position.amount))) * Decimal("0.001")
                     async with self._session_factory() as session:
                         repo = PortfolioRepository(session)
                         service = PortfolioService(repo, self._feeds)
                         await service.record_close_fill(
                             position=position,
                             exit_price=fill_price,
-                            fee=Decimal("0"),  # sim fee is cosmetic in log
+                            fee=close_fee,
                             closed_by=closed_by_value,
                         )
                 except Exception:
@@ -372,6 +379,46 @@ class StopLossMonitor:
             except Exception:
                 logger.warning("[StopLoss] could not fetch price for %s", sym)
 
+        # Load per-symbol volatility CV from entity graph so that
+        # SL/TP/trailing thresholds adapt to the coin's natural price
+        # swings. A fixed 5% SL is fine for BTC (CV~0.4%) but suicidal
+        # for ENJ (CV~13%) or meme coins (CV~20%): the price oscillates
+        # more than ±5% even during a strong trend, causing repeated
+        # whipsaw stop-outs. The adaptive formula uses
+        #   adaptive = max(base_threshold, multiplier × CV)
+        # so low-vol coins keep the configured floor and high-vol coins
+        # get wider breathing room proportional to their volatility.
+        #
+        # CV source: written every tick by the Analyst agent to the
+        # entity graph (subject_type="symbol", predicate="volatility_regime",
+        # object_value={"regime": "low|medium|high", "cv": float}).
+        symbol_cv: dict[str, float] = {}
+        symbol_overrides: dict[str, object] = {}  # SymbolConfigRecord per symbol
+        try:
+            from trdex.storage.entity_graph_repo import EntityGraphRepository
+            from trdex.storage.symbol_config_repo import SymbolConfigRepository
+            async with self._session_factory() as session:
+                eg_repo = EntityGraphRepository(session)
+                for sym in {p.symbol for p in open_positions}:
+                    val = await eg_repo.get_value("symbol", sym, "volatility_regime")
+                    if val and isinstance(val, dict) and "cv" in val:
+                        symbol_cv[sym] = float(val["cv"])
+                # Load per-symbol overrides (from symbol_config table)
+                sc_repo = SymbolConfigRepository(session)
+                symbol_overrides = await sc_repo.get_map()
+        except Exception:
+            logger.warning("[StopLoss] could not load volatility CV / symbol_config — using base thresholds")
+
+        # Multipliers: how many CVs above the base threshold.
+        # 2.5× CV means the adaptive SL sits at ~2.5 standard deviations
+        # of recent price movement — wide enough to avoid noise, tight
+        # enough to cut real drawdowns. TP uses 5× CV (let winners run
+        # further on volatile coins). Trailing uses 1.5× CV (tighter
+        # than SL to lock in profits once they exist).
+        _SL_CV_MULT = 2.5
+        _TP_CV_MULT = 5.0
+        _TRAIL_CV_MULT = 1.5
+
         total_unrealized = 0.0
         total_cost = 0.0
 
@@ -393,6 +440,14 @@ class StopLossMonitor:
             total_unrealized += unrealized
             total_cost += cost
 
+            # Compute effective thresholds for this symbol.
+            # Priority: per-symbol DB override > adaptive CV > global base.
+            cv = symbol_cv.get(pos.symbol, 0.0)
+            override = symbol_overrides.get(pos.symbol)
+            eff_sl = override.sl_pct if (override and override.sl_pct is not None) else max(self._sl_pct, _SL_CV_MULT * cv)
+            eff_tp = override.tp_pct if (override and override.tp_pct is not None) else max(self._tp_pct, _TP_CV_MULT * cv)
+            eff_trail = override.trailing_pct if (override and override.trailing_pct is not None) else max(self._trailing_pct, _TRAIL_CV_MULT * cv)
+
             # Update trailing stop high-water mark
             pos_id = pos.id
             if pos.side == "BUY":
@@ -407,8 +462,8 @@ class StopLossMonitor:
                     self._trailing_highs[pos_id] = price
                     hwm = price
 
-            # Per-position stop-loss
-            if pnl_pct <= -self._sl_pct:
+            # Per-position stop-loss (adaptive)
+            if pnl_pct <= -eff_sl:
                 event = StopLossEvent(
                     reason=StopReason.POSITION_STOP_LOSS,
                     symbol=pos.symbol,
@@ -418,15 +473,15 @@ class StopLossMonitor:
                     loss_pct=pnl_pct,
                     message=(
                         f"{pos.symbol} position {pos.id} hit stop-loss: "
-                        f"{pnl_pct:.2%} loss (limit: {-self._sl_pct:.2%})"
+                        f"{pnl_pct:.2%} loss (limit: {-eff_sl:.2%}, cv={cv:.4f})"
                     ),
                 )
                 new_events.append(event)
                 logger.warning("[StopLoss] POSITION SL: %s", event.message)
                 await self._auto_close(pos, price, "stop_loss", price_age=price_times.get(pos.symbol))
 
-            # Per-position take-profit
-            elif pnl_pct >= self._tp_pct:
+            # Per-position take-profit (adaptive)
+            elif pnl_pct >= eff_tp:
                 event = StopLossEvent(
                     reason=StopReason.POSITION_TAKE_PROFIT,
                     symbol=pos.symbol,
@@ -436,14 +491,14 @@ class StopLossMonitor:
                     loss_pct=pnl_pct,
                     message=(
                         f"{pos.symbol} position {pos.id} hit take-profit: "
-                        f"{pnl_pct:.2%} gain (limit: {self._tp_pct:.2%})"
+                        f"{pnl_pct:.2%} gain (limit: {eff_tp:.2%}, cv={cv:.4f})"
                     ),
                 )
                 new_events.append(event)
                 logger.info("[StopLoss] POSITION TP: %s", event.message)
                 await self._auto_close(pos, price, "take_profit", price_age=price_times.get(pos.symbol))
 
-            # Trailing stop: price retraced from high-water mark
+            # Trailing stop: price retraced from high-water mark (adaptive)
             elif pnl_pct > 0 and pos_id in self._trailing_highs:
                 hwm = self._trailing_highs[pos_id]
                 if pos.side == "BUY":
@@ -451,7 +506,7 @@ class StopLossMonitor:
                 else:
                     retrace = (price - hwm) / hwm if hwm > 0 else 0.0
 
-                if retrace >= self._trailing_pct:
+                if retrace >= eff_trail:
                     event = StopLossEvent(
                         reason=StopReason.TRAILING_STOP,
                         symbol=pos.symbol,
@@ -461,7 +516,7 @@ class StopLossMonitor:
                         loss_pct=pnl_pct,
                         message=(
                             f"{pos.symbol} position {pos_id} trailing stop: "
-                            f"retraced {retrace:.2%} from peak {hwm:.4f} (limit: {self._trailing_pct:.2%})"
+                            f"retraced {retrace:.2%} from peak {hwm:.4f} (limit: {eff_trail:.2%}, cv={cv:.4f})"
                         ),
                     )
                     new_events.append(event)
