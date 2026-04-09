@@ -365,6 +365,11 @@ def create_app() -> FastAPI:
 
     # --- Public endpoints (no auth) ---
 
+    @app.get("/", include_in_schema=False)
+    async def root_redirect():
+        from starlette.responses import RedirectResponse
+        return RedirectResponse(url="/dashboard/")
+
     @app.get("/v1/health")
     async def health() -> dict[str, str]:
         return {"status": "ok", "version": __version__}
