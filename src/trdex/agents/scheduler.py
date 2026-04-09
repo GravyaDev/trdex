@@ -83,6 +83,7 @@ async def agent_scheduler_loop(
     *,
     gateway=None,
     memory_loader=None,
+    llm_caller=None,
     max_iterations: int | None = None,
     active_hours: str = "",
 ) -> int:
@@ -149,6 +150,7 @@ async def agent_scheduler_loop(
                                 session_factory=session_factory,
                                 gateway=gateway,
                                 memory_loader=memory_loader,
+                                llm_caller=llm_caller,
                             )
                             state = await runner.run(sym)
                             logger.info(

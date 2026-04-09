@@ -7,6 +7,7 @@ allowed-tools:
   - Write
   - Bash(date:*)
   - Bash(git:*)
+  - Bash(bash:*)
   - Agent
 ---
 
@@ -67,7 +68,7 @@ Next.js/SvelteKit apps, Docker-defined services. For each, record:
 
 - **Name** (directory or file)
 - **Type** (api, dashboard, cli, worker, static, other)
-- **Entry point** (e.g., `src/trdex/api/main.py`, `src/trdex/dashboard/app.py`)
+- **Entry point** (e.g., `src/backend/main.py`, `src/dashboard/app.py`)
 - **Deploy status** — present in a manifest (compose/Dockerfile/CI) or NOT
 
 **3c-ii. Update `.claude/project-structure.md`**. Append or replace a
@@ -80,9 +81,9 @@ _Last updated by /wrap-up: YYYY-MM-DD_
 
 | Name | Type | Entry point | In deploy? |
 |---|---|---|---|
-| `trdex-api` | api | `src/trdex/api/main.py` | ✅ docker-compose.yml |
-| `trdex-dashboard` | dashboard | `src/trdex/dashboard/app.py` | ❌ not deployed |
-| `trdex-cli` | cli | `src/trdex/cli.py` | N/A (dev tool) |
+| `myapp-api` | api | `src/backend/main.py` | ✅ docker-compose.yml |
+| `myapp-dashboard` | dashboard | `src/dashboard/app.py` | ❌ not deployed |
+| `myapp-cli` | cli | `src/cli.py` | N/A (dev tool) |
 ```
 
 **3c-iii. Flag undeployed components in the daily note.** If any row has
@@ -91,7 +92,7 @@ subsection:
 
 ```markdown
 ### Deploy gaps
-- `trdex-dashboard` (dashboard) exists at `src/trdex/dashboard/app.py`
+- `myapp-dashboard` (dashboard) exists at `src/dashboard/app.py`
   but is not in any deploy manifest. Decide: deploy, archive, or
   document as dev-only.
 ```
@@ -126,7 +127,13 @@ Review today's work for learnings:
 
 Format: `- [YYYY-MM-DD] /wrap-up: [learning] | Evidence: [source]`
 
-### Step 6: Mandatory daily audit
+### Step 6: Mandatory daily audit (NEVER SKIP)
+
+**This step is MANDATORY. Do not skip it.** Do not estimate the cost
+and then decide not to pay it. Do not invoke conciseness, efficiency,
+or any other self-generated justification to bypass it. The
+`allowed-tools` frontmatter includes `Agent` specifically for this
+step. Only an explicit user override can waive it.
 
 Spawn the auditor agent to review today's work:
 
@@ -138,15 +145,44 @@ Agent(auditor): Review today's work in Daily Notes/YYYY-MM-DD.md. Check:
 Tier: T1 (quick scan). Report findings.
 ```
 
-### Step 6b: Security scan (if code was changed today)
+### Step 6b: Security scan (NEVER SKIP when code changed)
 
-Check `git diff --stat HEAD~1..HEAD`. If any source code files were modified today, invoke:
+**This step is MANDATORY when code was changed today.** You MUST run
+the check command below BEFORE deciding whether code was changed.
+Do not rely on your memory of what was committed — your memory is
+unreliable across long sessions, and the check exists precisely for
+that reason. Only the output of the check determines scope, not
+your recollection.
+
+```bash
+git diff --stat $(git log --format=%H --after="$(date +%Y-%m-%d) 00:00:00" --reverse | head -1)^..HEAD 2>/dev/null || git diff --stat HEAD~1..HEAD
+```
+
+If the output shows ANY source code files were modified today, spawn a
+security-focused sub-agent to scan today's diff:
 
 ```
-/autoresearch:security --diff --depth shallow
+Agent(general-purpose): Run a shallow STRIDE + OWASP Top 10 security
+review on today's code changes. Context:
+
+1. Run: git diff $(git log --format=%H --after="$(date +%Y-%m-%d) 00:00:00" --reverse | head -1)^..HEAD
+2. For each changed file, check for:
+   - Injection risks (SQL, command, path traversal)
+   - Authentication/authorization gaps
+   - Secrets or credentials in code
+   - Unsafe deserialization
+   - Missing input validation at system boundaries
+   - CORS/CSRF misconfigurations
+   - Hardcoded URLs or IPs that should be config
+3. Classify each finding as CRITICAL / HIGH / MEDIUM / LOW
+4. Return a structured table: File | Line | Finding | Severity
+
+Keep it fast — this is a daily hygiene scan, not a deep audit.
+Do NOT read files outside the diff. Focus on what changed today.
 ```
 
-This scans only today's diff — fast STRIDE + OWASP pass. If findings are CRITICAL or HIGH, add to incident log and create a corrective task on the Task Board.
+If findings are CRITICAL or HIGH, add to `.claude/logs/incident-log.md`
+and create a corrective task on the Task Board.
 
 ### Step 6c: Documentation update (Fridays only)
 
@@ -166,6 +202,23 @@ Read `.claude/logs/incident-log.md`. Summarize any notable events.
 
 Based on Task Board and Open Threads, suggest 1-3 priorities for tomorrow.
 Add them to Task Board → Today.
+
+### Step 8b: Stop session timer
+
+Stop the session timer and record the total working time:
+
+```bash
+bash "$CLAUDE_PROJECT_DIR/.claude/hooks/session-timer.sh" stop
+```
+
+The output is the formatted elapsed time (e.g., "2h 34m").
+Add it to today's daily note under End of Day Summary as the first line:
+```
+- **Session duration**: [elapsed time]
+```
+
+If the timer was not running (e.g., /start was never called), note
+"Session duration: unknown (timer was not started)" instead.
 
 ### Step 9: Update daily note
 

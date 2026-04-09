@@ -80,6 +80,7 @@ def _dict_to_state(d: dict) -> AgentState:
         session_factory=d.get("session_factory"),
         gateway=d.get("gateway"),
         memory_loader=d.get("memory_loader"),
+        llm_caller=d.get("llm_caller"),
         memory_snapshot_text=d.get("memory_snapshot_text", ""),
         memory_snapshots=d.get("memory_snapshots") or {},
         error=d.get("error"),
@@ -94,6 +95,7 @@ async def run_agent_cycle(
     session_factory=None,
     gateway=None,
     memory_loader=None,
+    llm_caller=None,
 ) -> AgentState:
     """Run one full Scout → Analyst → Risk → Executor cycle.
 
@@ -101,6 +103,7 @@ async def run_agent_cycle(
         symbol: Trading pair, e.g. "BTC/USDT"
         market_snapshot: Pre-fetched MarketSnapshot (injected by the feed layer).
         portfolio_context: Live portfolio state for risk gate decisions.
+        llm_caller: LLMCaller instance for structured LLM calls (optional).
 
     Returns:
         Final AgentState with all agent outputs populated.
@@ -113,6 +116,7 @@ async def run_agent_cycle(
         session_factory=session_factory,
         gateway=gateway,
         memory_loader=memory_loader,
+        llm_caller=llm_caller,
     )
     logger.info("[Graph] starting cycle run_id=%s symbol=%s", initial_state.run_id, symbol)
 

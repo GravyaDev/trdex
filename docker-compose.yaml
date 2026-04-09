@@ -102,6 +102,13 @@ services:
       # degrades but app still runs). `?` (not `:?`) for the same reason
       # as TRDEX_API_KEY: enforce definition in Coolify, tolerate empty dev.
       TRDEX_JINA_API_KEY: '${TRDEX_JINA_API_KEY?TRDEX_JINA_API_KEY must be defined (can be empty; enables Qdrant embeddings when set)}'
+      # LLM provider API keys (llm-agents branch — all optional, empty = LLM disabled)
+      TRDEX_ANTHROPIC_API_KEY: '${TRDEX_ANTHROPIC_API_KEY:-}'
+      TRDEX_OPENAI_API_KEY: '${TRDEX_OPENAI_API_KEY:-}'
+      TRDEX_GOOGLE_API_KEY: '${TRDEX_GOOGLE_API_KEY:-}'
+      TRDEX_LLM_DAILY_BUDGET: '${TRDEX_LLM_DAILY_BUDGET:-20.0}'
+      TRDEX_LLM_MONTHLY_BUDGET: '${TRDEX_LLM_MONTHLY_BUDGET:-500.0}'
+      TRDEX_LLM_MAX_PROMPT_TOKENS: '${TRDEX_LLM_MAX_PROMPT_TOKENS:-4096}'
       # Telegram — disabled by default for Phase 2. A persistent volume
       # will be added when telegram signal tracking is re-enabled.
       TRDEX_TELEGRAM_API_ID: '${TRDEX_TELEGRAM_API_ID:-0}'

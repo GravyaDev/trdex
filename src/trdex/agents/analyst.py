@@ -1,4 +1,17 @@
-"""Analyst Agent — technical indicators + LLM-style reasoning with RAG context."""
+"""Analyst Agent — technical indicators + LLM reasoning with RAG context.
+
+Two execution paths:
+
+1. **LLM path** (when ``state.llm_caller`` is injected and analyst config has
+   ``llm_enabled=True``): computes indicators deterministically, assembles a
+   prompt with indicators + sentiment + memory, calls the LLM via
+   ``LLMCaller.invoke()``, parses the structured ``AnalystOutput``.
+
+2. **Fallback path** (LLM disabled, budget exhausted, or LLM call fails):
+   runs the original ``_rule_based_signal()`` deterministic rule engine.
+   This is a known quality degradation — the ``llm_used`` flag on
+   ``AnalysisResult`` makes the difference visible to the dashboard.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +24,9 @@ from trdex.agents.state import AgentState, AnalysisResult
 from trdex.backtest.indicators import rsi_from_list
 
 logger = logging.getLogger(__name__)
+
+
+# ── Deterministic helpers (unchanged from rule-engine era) ───────────────────
 
 
 def _classify_volatility(closes: list[float]) -> str:
@@ -67,7 +83,7 @@ def _rule_based_signal(
     price: float,
     sentiment_avg: float | None,
 ) -> tuple[str, float, str]:
-    """Simple rule engine. Returns (signal, confidence, reasoning)."""
+    """Simple rule engine fallback. Returns (signal, confidence, reasoning)."""
     signals: list[tuple[str, float]] = []
     notes: list[str] = []
 
@@ -114,8 +130,66 @@ def _rule_based_signal(
     return "HOLD", 0.0, "; ".join(notes)
 
 
+# ── LLM path ────────────────────────────────────────────────────────────────
+
+
+async def _llm_analyst_signal(
+    state: AgentState,
+    indicators: dict[str, float],
+    regime: str,
+    cv: float | None,
+    price: float,
+) -> tuple[str, float, str, float | None, float | None] | None:
+    """Call the LLM via LLMCaller and return (signal, confidence, reasoning, sl, tp).
+
+    Returns ``None`` if the LLM is unavailable or fails — caller should
+    fall back to ``_rule_based_signal()``.
+    """
+    if state.llm_caller is None:
+        return None
+
+    from trdex.agents.prompt_builder import build_analyst_messages
+    from trdex.agents.structured_output import AnalystOutput
+    from trdex.config import get_settings
+
+    settings = get_settings()
+
+    # Get system prompt from config (LLMCaller holds the configs)
+    config = state.llm_caller.configs.get("analyst")
+    system_prompt = config.system_prompt if config else ""
+
+    messages = build_analyst_messages(
+        state,
+        system_prompt=system_prompt,
+        indicators=indicators,
+        regime=regime,
+        cv=cv,
+        price=price,
+        max_prompt_tokens=settings.llm_max_prompt_tokens,
+    )
+
+    result = await state.llm_caller.invoke("analyst", messages, AnalystOutput)
+    if result is None:
+        return None
+
+    return (
+        result.signal,
+        result.confidence,
+        result.reasoning,
+        result.suggested_stop_loss,
+        result.suggested_take_profit,
+    )
+
+
+# ── Main node ────────────────────────────────────────────────────────────────
+
+
 async def analyst_node(state: AgentState) -> AgentState:
-    """Compute technical indicators and produce a trading signal."""
+    """Compute technical indicators and produce a trading signal.
+
+    Tries the LLM path first; falls back to the deterministic rule engine
+    if the LLM is disabled, fails, or returns None.
+    """
     logger.info("[Analyst] analysing %s", state.symbol)
 
     if state.market is None:
@@ -148,14 +222,7 @@ async def analyst_node(state: AgentState) -> AgentState:
     ]
     sentiment_avg = statistics.mean(sentiments) if sentiments else None
 
-    signal, confidence, reasoning = _rule_based_signal(
-        rsi, sma_short, sma_long, price, sentiment_avg
-    )
-
-    # D5: rule engine stays portfolio-ignorant. Translation to Intent
-    # happens here, downstream, with the live portfolio context.
-    intent = signal_to_intent(signal, state.symbol, state.portfolio)
-
+    # Build indicator dict for both paths
     indicators: dict[str, float] = {}
     if rsi is not None:
         indicators["rsi"] = rsi
@@ -166,14 +233,38 @@ async def analyst_node(state: AgentState) -> AgentState:
     if sentiment_avg is not None:
         indicators["sentiment_avg"] = sentiment_avg
 
+    # ── Try LLM path first ──────────────────────────────────────────────
+    llm_result = await _llm_analyst_signal(state, indicators, regime, cv, price)
+
+    if llm_result is not None:
+        signal, confidence, reasoning, suggested_sl, suggested_tp = llm_result
+        llm_used = True
+        logger.info("[Analyst] LLM signal=%s confidence=%.2f", signal, confidence)
+    else:
+        # ── Fallback: deterministic rule engine ─────────────────────────
+        signal, confidence, reasoning = _rule_based_signal(
+            rsi, sma_short, sma_long, price, sentiment_avg
+        )
+        suggested_sl = None
+        suggested_tp = None
+        llm_used = False
+        logger.info("[Analyst] fallback rule engine signal=%s confidence=%.2f", signal, confidence)
+
+    # D5: rule engine stays portfolio-ignorant. Translation to Intent
+    # happens here, downstream, with the live portfolio context.
+    intent = signal_to_intent(signal, state.symbol, state.portfolio)
+
     state.analysis = AnalysisResult(
         intent=intent,
         confidence=confidence,
         reasoning=reasoning,
         indicators=indicators,
+        suggested_stop_loss=suggested_sl,
+        suggested_take_profit=suggested_tp,
+        llm_used=llm_used,
     )
     logger.info(
-        "[Analyst] signal=%s → intent=%s confidence=%.2f | %s",
-        signal, intent.value, confidence, reasoning,
+        "[Analyst] signal=%s → intent=%s confidence=%.2f llm=%s | %s",
+        signal, intent.value, confidence, llm_used, reasoning,
     )
     return state

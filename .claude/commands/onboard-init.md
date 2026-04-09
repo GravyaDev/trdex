@@ -45,7 +45,6 @@ Use an Explore agent to map the project structure.
 - `Scratchpad.md` — quick capture (runtime)
 - `Task Board.md` — today's priorities (runtime)
 - `__NEEDS_ONBOARD` — first-run sentinel
-- `SETUP.md` — Kloudify's setup doc
 - `README.md` — when present at root and is Kloudify's own (not the user project's README)
 
 ```
@@ -58,7 +57,6 @@ Agent(Explore): Scan this project thoroughly. EXCLUDE these Kloudify-installed p
   Scratchpad.md
   Task Board.md
   __NEEDS_ONBOARD
-  SETUP.md
   README.md (only if it is Kloudify's own)
 
 These are NOT user project code — they are infrastructure that Kloudify

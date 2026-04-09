@@ -1,20 +1,31 @@
 #!/usr/bin/env bash
-# PostToolUse hook: regenerate .claude/project-stack.md when structural files change.
+# PostToolUse hook AND standalone regenerator for .claude/project-stack.md.
+#
+# Two modes:
+#   1. PostToolUse mode (default): $CLAUDE_TOOL_INPUT contains the edited
+#      file's JSON. The hook checks whether the file is "structural"
+#      (package.json, Dockerfile, etc.) and only regenerates if it is.
+#   2. Full-regen mode: called with no $CLAUDE_TOOL_INPUT (empty or unset).
+#      Skips all filtering and regenerates unconditionally. This is the
+#      mode used by /wrap-up Step 3b when it runs the script standalone.
 #
 # Structural files: package.json, requirements.txt, Dockerfile*, docker-compose*.yml,
 # tsconfig*.json, Cargo.toml, go.mod, pyproject.toml, *.config.js, *.config.ts,
 # Makefile, Gemfile, build.gradle, pom.xml
 #
-# Input: $CLAUDE_TOOL_INPUT (JSON with file_path)
-# This hook is async — does not block the user.
+# This hook is async when called from PostToolUse — does not block the user.
 
 set -euo pipefail
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
 STACK_FILE="$PROJECT_DIR/.claude/project-stack.md"
 
-# Extract the file path that was just written/edited
-FILE_PATH="$(echo "${CLAUDE_TOOL_INPUT:-}" | python3 -c "
+# --- Mode selection ---
+# If CLAUDE_TOOL_INPUT is empty, this is a standalone full-regen call.
+# Skip the file-path extraction and structural-file guard entirely.
+if [ -n "${CLAUDE_TOOL_INPUT:-}" ]; then
+  # PostToolUse mode: extract the file path and check if it is structural
+  FILE_PATH="$(echo "$CLAUDE_TOOL_INPUT" | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
@@ -23,21 +34,23 @@ except:
     print('')
 " 2>/dev/null || echo "")"
 
-[ -n "$FILE_PATH" ] || exit 0
+  [ -n "$FILE_PATH" ] || exit 0
 
-# Check if the changed file is structural
-BASENAME="$(basename "$FILE_PATH")"
-case "$BASENAME" in
-  package.json|requirements.txt|pyproject.toml|Cargo.toml|go.mod|go.sum|\
-  Gemfile|Gemfile.lock|build.gradle|pom.xml|Makefile|justfile|\
-  tsconfig.json|tsconfig.*.json|*.config.js|*.config.ts|*.config.mjs|\
-  Dockerfile|Dockerfile.*|docker-compose*.yml|docker-compose*.yaml|\
-  .env.example|setup.py|setup.cfg)
-    ;;  # structural — proceed
-  *)
-    exit 0  # not structural — skip
-    ;;
-esac
+  BASENAME="$(basename "$FILE_PATH")"
+  case "$BASENAME" in
+    package.json|requirements.txt|pyproject.toml|Cargo.toml|go.mod|go.sum|\
+    Gemfile|Gemfile.lock|build.gradle|pom.xml|Makefile|justfile|\
+    tsconfig.json|tsconfig.*.json|*.config.js|*.config.ts|*.config.mjs|\
+    Dockerfile|Dockerfile.*|docker-compose*.yml|docker-compose*.yaml|\
+    .env.example|setup.py|setup.cfg)
+      ;;  # structural — proceed to regeneration
+    *)
+      exit 0  # not structural — skip
+      ;;
+  esac
+fi
+# If we reach here, either the file was structural (PostToolUse) or
+# CLAUDE_TOOL_INPUT was empty (full-regen mode). Either way, regenerate.
 
 # --- Regenerate project-stack.md ---
 
@@ -80,7 +93,7 @@ for section in ('dependencies', 'devDependencies', 'peerDependencies'):
   echo "## Runtimes Detected"
   echo ""
   # Node.js — detect package manager from lockfile
-  if find "$PROJECT_DIR" -maxdepth 3 -name "package.json" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/ai-operations-registry/*" -not -path "*/Daily Notes/*" 2>/dev/null | head -1 | grep -q .; then
+  if find "$PROJECT_DIR" -maxdepth 3 -name "package.json" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/Daily Notes/*" 2>/dev/null | head -1 | grep -q .; then
     if [ -f "$PROJECT_DIR/pnpm-lock.yaml" ] || find "$PROJECT_DIR" -maxdepth 2 -name "pnpm-lock.yaml" 2>/dev/null | head -1 | grep -q .; then
       echo "- **Node.js** (pnpm)"
     elif [ -f "$PROJECT_DIR/yarn.lock" ] || find "$PROJECT_DIR" -maxdepth 2 -name "yarn.lock" 2>/dev/null | head -1 | grep -q .; then
@@ -92,7 +105,7 @@ for section in ('dependencies', 'devDependencies', 'peerDependencies'):
     fi
   fi
   # Python
-  if find "$PROJECT_DIR" -maxdepth 4 -name "requirements.txt" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/ai-operations-registry/*" -not -path "*/Daily Notes/*" 2>/dev/null | head -1 | grep -q .; then
+  if find "$PROJECT_DIR" -maxdepth 4 -name "requirements.txt" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/Daily Notes/*" 2>/dev/null | head -1 | grep -q .; then
     echo "- **Python** (pip)"
   elif [ -f "$PROJECT_DIR/pyproject.toml" ]; then
     echo "- **Python** (pyproject)"
@@ -116,13 +129,13 @@ for section in ('dependencies', 'devDependencies', 'peerDependencies'):
   echo ""
 
   # Find all package.json (up to depth 3, skip node_modules)
-  for pj in $(find "$PROJECT_DIR" -maxdepth 3 -name "package.json" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/ai-operations-registry/*" -not -path "*/Daily Notes/*" 2>/dev/null | sort); do
+  for pj in $(find "$PROJECT_DIR" -maxdepth 3 -name "package.json" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/Daily Notes/*" 2>/dev/null | sort); do
     rel="${pj#$PROJECT_DIR/}"
     collect_deps "Node: $rel" "$rel"
   done
 
   # Python
-  for req in $(find "$PROJECT_DIR" -maxdepth 4 -name "requirements.txt" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/ai-operations-registry/*" -not -path "*/Daily Notes/*" 2>/dev/null | sort); do
+  for req in $(find "$PROJECT_DIR" -maxdepth 4 -name "requirements.txt" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/Daily Notes/*" 2>/dev/null | sort); do
     rel="${req#$PROJECT_DIR/}"
     collect_deps "Python: $rel" "$rel"
   done
@@ -135,7 +148,7 @@ for section in ('dependencies', 'devDependencies', 'peerDependencies'):
   # Config files
   echo "## Configuration Files"
   echo ""
-  for cfg in $(find "$PROJECT_DIR" -maxdepth 3 \( -name "tsconfig*.json" -o -name "*.config.js" -o -name "*.config.ts" -o -name "*.config.mjs" -o -name ".env.example" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/ai-operations-registry/*" -not -path "*/Daily Notes/*" 2>/dev/null | sort); do
+  for cfg in $(find "$PROJECT_DIR" -maxdepth 3 \( -name "tsconfig*.json" -o -name "*.config.js" -o -name "*.config.ts" -o -name "*.config.mjs" -o -name ".env.example" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/Daily Notes/*" 2>/dev/null | sort); do
     rel="${cfg#$PROJECT_DIR/}"
     echo "- \`$rel\`"
   done

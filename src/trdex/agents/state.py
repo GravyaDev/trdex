@@ -31,6 +31,8 @@ class SentimentContext:
 
     items: list[dict] = field(default_factory=list)  # from ContextIngestionPipeline.query()
     summary: str = ""
+    sentiment_score: float | None = None    # LLM-extracted, -1.0 to +1.0 (Task 3)
+    key_events: list[str] = field(default_factory=list)  # LLM-extracted (Task 3)
 
 
 @dataclass
@@ -48,6 +50,9 @@ class AnalysisResult:
     confidence: float = 0.0           # 0.0 – 1.0
     reasoning: str = ""
     indicators: dict[str, float] = field(default_factory=dict)
+    suggested_stop_loss: float | None = None     # LLM suggestion (Task 2)
+    suggested_take_profit: float | None = None   # LLM suggestion (Task 2)
+    llm_used: bool = False                       # True if LLM produced this result
 
 
 @dataclass
@@ -118,6 +123,11 @@ class AgentState:
     # Memory context loader — injected by AgentRunner. MemoryContextLoader | None.
     # Used by nodes to read aggregated context from the 6-tier memory stack.
     memory_loader: Any = field(default=None, repr=False)
+
+    # LLM call helper — injected by AgentRunner, not serialized by LangGraph.
+    # Encapsulates config loading, structured output, fallback, usage tracking.
+    # Nodes call: result = await state.llm_caller.invoke("analyst", messages, schema)
+    llm_caller: Any = field(default=None, repr=False)  # LLMCaller | None
 
     # Pre-built memory snapshot text from the 6-tier stack, set by the first
     # node that loads it (typically Analyst). Downstream nodes can read it

@@ -20,11 +20,10 @@ default set in the global user instructions (`~/.claude/CLAUDE.md`), **the
 project knowledge-base wins**. Always. No exceptions.
 
 The most frequent case where this matters is **commit identity**: the global
-user instructions may define a default `Co-Authored-By` trailer (e.g.
-`Claude Opus 4.6 <noreply@anthropic.com>`) that applies across all projects.
-If the project knowledge-base declares its own `Commit Identity` rule (e.g.
-`Kloud <kloud@gravya.it>`), that project rule takes precedence and the
-global default MUST NOT be used in commits for this project.
+user instructions may define a default `Co-Authored-By` trailer that applies
+across all projects. If the project knowledge-base declares its own `Commit
+Identity` rule, that project rule takes precedence and the global default
+MUST NOT be used in commits for this project.
 
 This is enforced mechanically by `.claude/hooks/guard-commit-identity.sh`:
 the hook reads the knowledge-base, extracts the required email, and HARD
@@ -32,14 +31,15 @@ BLOCKS any `git commit` whose message contains a `Co-Authored-By` trailer
 with a different email. If no identity is configured in the knowledge-base,
 the hook is fail-open (allows any trailer) — this is the base-repo case.
 
-**Why this rule exists**: on 2026-04-08 an agent session inherited the
-global `Claude Opus` trailer and committed 4 times with it, violating the
-project's explicit `Kloud <kloud@gravya.it>` rule. The violation required
-a force-push rewrite to fix. This guard is the root-cause fix.
-
 ## First-Run Onboarding
 
-If the file `__NEEDS_ONBOARD` exists in the project root, execute `/onboard-init` before any other action. This runs the automated first-time setup: project scan, profile generation, and system configuration.
+If the file `__NEEDS_ONBOARD` exists in the project root:
+- If the project is **already onboardated** (`.claude/memory.md` or
+  `.claude/knowledge-base.md` exists), delete the sentinel silently
+  and continue — the onboarding was already done.
+- Otherwise, execute `/onboard-init` before any other action. This
+  runs the automated first-time setup: project scan, profile
+  generation, and system configuration.
 
 ## Date Format
 

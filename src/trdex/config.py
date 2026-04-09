@@ -81,6 +81,21 @@ class Settings(BaseSettings):
     jina_api_key: str = ""          # https://jina.ai — free tier, 100 req/min
     qdrant_url: str = "http://localhost:6333"
 
+    # LLM provider API keys (Task 1 — llm-agents branch)
+    anthropic_api_key: str = ""     # sk-ant-... — required for Claude models
+    openai_api_key: str = ""        # sk-... — required for GPT models
+    google_api_key: str = ""        # AIza... — required for Gemini models
+
+    # LLM cost guardrails
+    llm_daily_budget: float = Field(default=20.0, description="Hard cap $/day for LLM calls")
+    llm_monthly_budget: float = Field(default=500.0, description="Hard cap $/month for LLM calls")
+
+    # LLM prompt assembly
+    llm_max_prompt_tokens: int = Field(
+        default=4096,
+        description="Max input tokens for prompt assembly — memory tiers truncated LIFO if exceeded",
+    )
+
     # Telegram signal following (my.telegram.org)
     telegram_api_id: int = 0
     telegram_api_hash: str = ""
