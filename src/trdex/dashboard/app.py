@@ -518,6 +518,55 @@ with st.expander("📋 Scheduler Symbols"):
     else:
         st.info("Scheduler not running or API unreachable.")
 
+# ── Price Feed Selection ───────────────────────────────────────────────────
+
+with st.expander("📡 Price Feeds (aggregation)"):
+    feed_data = get("/v1/agent/feeds")
+    if feed_data:
+        available = feed_data.get("available", [])
+        selected = feed_data.get("selected", [])
+
+        st.caption(
+            f"{len(selected)}/{len(available)} feeds selected. "
+            f"{'Median price from multiple sources.' if len(selected) > 1 else 'Single source (no aggregation).'}"
+        )
+
+        # Checkbox per feed
+        new_selection = []
+        cols = st.columns(min(len(available), 4)) if available else []
+        for i, feed_name in enumerate(available):
+            with cols[i % len(cols)] if cols else st.container():
+                checked = st.checkbox(
+                    feed_name,
+                    value=feed_name in selected,
+                    key=f"feed_{feed_name}",
+                )
+                if checked:
+                    new_selection.append(feed_name)
+
+        if st.button("Apply feed selection", key="apply_feeds"):
+            if not new_selection:
+                st.error("Select at least one feed.")
+            else:
+                import httpx as _httpx
+                headers = {"X-API-Key": api_key} if api_key else {}
+                try:
+                    _httpx.put(
+                        f"{base_url}/v1/agent/feeds",
+                        json={"feeds": new_selection},
+                        headers=headers,
+                        timeout=10,
+                    )
+                    st.success(f"Selected: {', '.join(new_selection)}")
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(_format_http_error("/v1/agent/feeds", "PUT", e))
+
+        st.caption("Runtime-only. On restart, all feeds are selected by default.")
+    else:
+        st.info("Feed manager not available.")
+
 # ── Status ────────────────────────────────────────────────────────────────────
 
 with st.expander("System Status"):

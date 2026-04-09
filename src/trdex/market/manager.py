@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import statistics
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from trdex.market.rate_limiter import RateLimiter
@@ -23,6 +26,25 @@ _DEFAULT_RPM: dict[str, int] = {
     "forex": 1,             # Free: 100 req/MONTH — must be extremely conservative
     "freecryptoapi": 50,    # Unverified; conservative default
 }
+
+
+# ── Runtime-configurable feed selection for aggregation ────────────────
+# The user selects which feeds to use via the dashboard. If empty/None,
+# all registered feeds are queried.
+
+_selected_feeds: list[str] | None = None
+
+
+def set_selected_feeds(names: list[str]) -> None:
+    """Set which feeds are used for aggregated price queries."""
+    global _selected_feeds
+    _selected_feeds = list(names) if names else None
+    logger.info("[FeedManager] aggregation feeds set to: %s", _selected_feeds or "ALL")
+
+
+def get_selected_feeds() -> list[str] | None:
+    """Return the current feed selection, or None (= all)."""
+    return _selected_feeds
 
 
 class FeedError(RuntimeError):
@@ -108,6 +130,83 @@ class PriceFeedManager:
 
         msg = f"All feeds failed for ticker {symbol}"
         raise FeedError(msg) from last_error
+
+    async def get_ticker_aggregated(
+        self,
+        symbol: str,
+        feed_names: list[str] | None = None,
+        outlier_pct: float = 0.02,
+    ) -> Ticker:
+        """Query selected feeds in parallel and return the median price.
+
+        Args:
+            symbol: Trading pair (e.g. "BTC/USDT").
+            feed_names: List of feed names to query (e.g. ["binance", "coingecko"]).
+                        If None or empty, queries ALL registered feeds.
+            outlier_pct: Max deviation from median before a price is discarded
+                         as an outlier (default 2%).
+
+        If only 1 feed is selected (or only 1 responds), returns that
+        feed's price directly (no median needed). If 2+ respond, returns
+        the median after outlier filtering.
+        """
+        from trdex.market.models import Ticker as TickerModel
+
+        self._check_feeds()
+
+        # Select which feeds to query
+        if feed_names:
+            selected = {n: f for n, f in self._feeds.items() if n in feed_names}
+        else:
+            selected = dict(self._feeds)
+
+        if not selected:
+            raise FeedError(f"No matching feeds for aggregation: {feed_names}")
+
+        async def _fetch_one(name: str, feed) -> tuple[str, float] | None:
+            try:
+                t = await self._rate_limited_call(name, feed.get_ticker(symbol))
+                return (name, float(t.price))
+            except Exception as e:
+                logger.debug("Aggregation: feed %s failed for %s: %s", name, symbol, e)
+                return None
+
+        results = await asyncio.gather(
+            *[_fetch_one(name, feed) for name, feed in selected.items()]
+        )
+        prices = [(name, price) for r in results if r is not None for name, price in [r]]
+
+        if not prices:
+            raise FeedError(f"All selected feeds failed for ticker {symbol}")
+
+        if len(prices) == 1:
+            name, price = prices[0]
+            return await self.get_ticker(symbol, source=name)
+
+        # Compute median
+        price_values = [p for _, p in prices]
+        median = statistics.median(price_values)
+
+        # Filter outliers
+        filtered = [(n, p) for n, p in prices if abs(p - median) / median <= outlier_pct]
+        if not filtered:
+            filtered = prices
+
+        final_price = statistics.median([p for _, p in filtered])
+        sources = ",".join(n for n, _ in filtered)
+
+        from datetime import datetime, timezone
+        logger.info(
+            "[Aggregation] %s: %d/%d feeds, median=%.6f, sources=%s",
+            symbol, len(filtered), len(prices), final_price, sources,
+        )
+
+        return TickerModel(
+            symbol=symbol,
+            price=Decimal(str(final_price)),
+            timestamp=datetime.now(tz=timezone.utc),
+            source=f"aggregated({sources})",
+        )
 
     async def get_ohlcv(
         self,
