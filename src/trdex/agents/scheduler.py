@@ -56,6 +56,25 @@ def _is_active_now(window: tuple[int, int] | None) -> bool:
     return hour >= start or hour < end
 
 
+# ── Runtime-mutable symbol list ────────────────────────────────────────────
+# The scheduler reads this at every tick. The API endpoint updates it.
+# Not persisted — on restart, re-read from env var (Coolify UI).
+
+_runtime_symbols: list[str] | None = None
+
+
+def set_runtime_symbols(symbols: list[str]) -> None:
+    """Replace the scheduler's symbol list at runtime (no restart needed)."""
+    global _runtime_symbols
+    _runtime_symbols = list(symbols)
+    logger.info("[AgentScheduler] symbols updated at runtime: %s", _runtime_symbols)
+
+
+def get_runtime_symbols() -> list[str] | None:
+    """Return the runtime symbol list, or None if not overridden."""
+    return _runtime_symbols
+
+
 async def agent_scheduler_loop(
     session_factory,
     feed_manager,
@@ -99,11 +118,17 @@ async def agent_scheduler_loop(
     from trdex.agents.runner import AgentRunner
     from trdex.risk.stop_loss import get_kill_switch
 
-    symbols_list = list(symbols)
+    initial_symbols = list(symbols)
+    # Seed the runtime list so get_runtime_symbols() is never None
+    # after the first call. API updates override this.
+    if _runtime_symbols is None:
+        set_runtime_symbols(initial_symbols)
     hours_window = _parse_active_hours(active_hours)
     iterations = 0
 
     while max_iterations is None or iterations < max_iterations:
+        # Re-read symbols every tick so runtime updates take effect
+        symbols_list = get_runtime_symbols() or initial_symbols
         try:
             if get_kill_switch().active:
                 logger.warning(

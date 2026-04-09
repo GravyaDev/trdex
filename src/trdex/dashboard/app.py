@@ -290,7 +290,7 @@ if risk_status:
     else:
         st.success("✅ Kill switch inactive — trading enabled")
 
-    with st.expander("Stop-Loss Thresholds"):
+    with st.expander("Stop-Loss Thresholds (base — adaptive scales up for volatile coins)"):
         thresholds = risk_status.get("thresholds", {})
         c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("Position SL", f"{thresholds.get('position_sl_pct', 0):.1%}")
@@ -298,6 +298,42 @@ if risk_status:
         c3.metric("Trailing Stop", f"{thresholds.get('trailing_stop_pct', 0):.1%}")
         c4.metric("Daily DD limit", f"{thresholds.get('daily_drawdown_pct', 0):.1%}")
         c5.metric("Max DD limit", f"{thresholds.get('max_drawdown_pct', 0):.1%}")
+
+        with st.form("edit_thresholds_form"):
+            st.caption("Edit base thresholds (runtime, not persisted — reverts on restart)")
+            tc1, tc2, tc3, tc4, tc5 = st.columns(5)
+            with tc1:
+                new_sl = st.number_input("SL %", value=thresholds.get("position_sl_pct", 0.05) * 100, min_value=0.1, max_value=50.0, step=0.5, format="%.1f")
+            with tc2:
+                new_tp = st.number_input("TP %", value=thresholds.get("position_tp_pct", 0.10) * 100, min_value=1.0, max_value=100.0, step=1.0, format="%.1f")
+            with tc3:
+                new_trail = st.number_input("Trail %", value=thresholds.get("trailing_stop_pct", 0.03) * 100, min_value=0.5, max_value=50.0, step=0.5, format="%.1f")
+            with tc4:
+                new_dd = st.number_input("Daily DD %", value=thresholds.get("daily_drawdown_pct", 0.10) * 100, min_value=1.0, max_value=50.0, step=1.0, format="%.1f")
+            with tc5:
+                new_maxdd = st.number_input("Max DD %", value=thresholds.get("max_drawdown_pct", 0.20) * 100, min_value=5.0, max_value=100.0, step=5.0, format="%.1f")
+            if st.form_submit_button("Apply"):
+                import httpx as _httpx
+                headers = {"X-API-Key": api_key} if api_key else {}
+                try:
+                    r = _httpx.put(
+                        f"{base_url}/v1/risk/thresholds",
+                        json={
+                            "position_sl_pct": new_sl / 100,
+                            "position_tp_pct": new_tp / 100,
+                            "trailing_stop_pct": new_trail / 100,
+                            "daily_drawdown_pct": new_dd / 100,
+                            "max_drawdown_pct": new_maxdd / 100,
+                        },
+                        headers=headers,
+                        timeout=10,
+                    )
+                    r.raise_for_status()
+                    st.success("Thresholds updated")
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(_format_http_error("/v1/risk/thresholds", "PUT", e))
 
     col_check, col_kill = st.columns(2)
     with col_check:
@@ -405,40 +441,82 @@ with st.expander("📰 News Ingestion Status"):
                 "or TRDEX_STOCKDATA_API_KEY in the environment to enable."
             )
 
-# ── Symbol Watchlist Management ───────────────────────────────────────────────
+# ── Scheduler Symbol Watchlist ──────────────────────────────────────────────
 
-with st.expander("Symbol Watchlist"):
-    ctx_status_wl = get("/v1/context/status")
-    current_symbols = ctx_status_wl.get("symbols", []) if ctx_status_wl else []
+with st.expander("📋 Scheduler Symbols"):
+    sched_data = get("/v1/agent/scheduler/symbols")
+    if sched_data:
+        current_symbols = sched_data.get("symbols", [])
+        rl = sched_data.get("rate_limit_estimate", {})
+        util_pct = rl.get("utilization_pct", 0)
 
-    if current_symbols:
-        st.write("**Active symbols:**")
-        cols = st.columns(min(len(current_symbols), 6))
-        for i, sym in enumerate(current_symbols):
-            with cols[i % len(cols)]:
-                if st.button(f"X {sym}", key=f"rm_{sym}"):
-                    import httpx as _httpx
-                    headers = {"X-API-Key": api_key} if api_key else {}
-                    try:
-                        _httpx.delete(f"{base_url}/v1/context/symbols/{sym}", headers=headers, timeout=10)
-                        st.cache_data.clear()
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Failed to remove {sym}: {e}")
+        # Rate limit budget bar
+        if util_pct < 50:
+            st.progress(util_pct / 100, text=f"Binance API budget: {util_pct:.0f}%")
+        elif util_pct < 80:
+            st.warning(f"Binance API budget: {util_pct:.0f}% — consider reducing symbols")
+        else:
+            st.error(f"Binance API budget: {util_pct:.0f}% — risk of rate limiting!")
+
+        st.caption(
+            f"{sched_data.get('count', 0)} symbols | "
+            f"Agent ~{rl.get('agent_rpm', 0):.0f} rpm + "
+            f"StopLoss ~{rl.get('stoploss_rpm_max', 0):.0f} rpm max = "
+            f"~{rl.get('total_rpm_max', 0):.0f} / {rl.get('binance_budget_rpm', 120)} rpm"
+        )
+
+        if current_symbols:
+            cols = st.columns(min(len(current_symbols), 6))
+            for i, sym in enumerate(current_symbols):
+                with cols[i % len(cols)]:
+                    if st.button(f"✕ {sym}", key=f"rm_sched_{sym}"):
+                        new_list = [s for s in current_symbols if s != sym]
+                        import httpx as _httpx
+                        headers = {"X-API-Key": api_key} if api_key else {}
+                        try:
+                            _httpx.put(
+                                f"{base_url}/v1/agent/scheduler/symbols",
+                                json={"symbols": new_list},
+                                headers=headers,
+                                timeout=10,
+                            )
+                            st.cache_data.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(_format_http_error("/v1/agent/scheduler/symbols", "PUT", e))
+
+        col_add, col_btn = st.columns([3, 1])
+        with col_add:
+            new_symbol = st.text_input(
+                "Add symbol (e.g. SOL/USDT)",
+                key="add_sched_sym",
+                value="",
+            )
+        with col_btn:
+            st.write("")
+            if st.button("+ Add", key="add_sched_btn") and new_symbol:
+                new_list = current_symbols + [new_symbol.strip().upper()]
+                import httpx as _httpx
+                headers = {"X-API-Key": api_key} if api_key else {}
+                try:
+                    _httpx.put(
+                        f"{base_url}/v1/agent/scheduler/symbols",
+                        json={"symbols": new_list},
+                        headers=headers,
+                        timeout=10,
+                    )
+                    st.success(f"Added {new_symbol.upper()}")
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(_format_http_error("/v1/agent/scheduler/symbols", "PUT", e))
+
+        st.caption(
+            "Changes are runtime-only. For permanent changes, update "
+            "TRDEX_AGENT_SCHEDULER_SYMBOLS in Coolify and restart."
+        )
     else:
-        st.info("No symbols in watchlist.")
-
-    col_add, col_btn = st.columns([3, 1])
-    with col_add:
-        new_symbol = st.text_input("Add symbol (e.g. BTC/USDT)", key="new_sym", value="")
-    with col_btn:
-        st.write("")
-        if st.button("+ Add", key="add_sym") and new_symbol:
-            result = post("/v1/context/symbols", params={"symbol": new_symbol})
-            if result is not None:
-                st.success(f"Added {new_symbol}")
-                st.cache_data.clear()
-                st.rerun()
+        st.info("Scheduler not running or API unreachable.")
 
 # ── Status ────────────────────────────────────────────────────────────────────
 
