@@ -1,0 +1,49 @@
+- generic:
+  - generic [ref=e2]:
+    - generic [ref=e11]:
+      - heading "⚙️ Config" [level=1] [ref=e15]
+      - generic [ref=e17]:
+        - paragraph [ref=e21]: API URL
+        - textbox "API URL" [ref=e24]:
+          - /placeholder: ""
+      - generic [ref=e26]:
+        - paragraph [ref=e30]: API Key
+        - generic [ref=e32]
+      - generic [ref=e38]:
+        - paragraph [ref=e42]: Auto-refresh
+        - generic [ref=e44]
+      - button "🔄 Refresh now" [ref=e54] [cursor=pointer]:
+        - paragraph [ref=e58]: 🔄 Refresh now
+    - generic [ref=e3]:
+      - banner [ref=e61]:
+        - generic [ref=e64]
+      - generic [ref=e78]:
+        - heading "📈 trdex Dashboard" [level=1] [ref=e83]
+        - paragraph [ref=e89]: "API status: ✅ v0.1.0"
+        - alert [ref=e92]
+        - group [ref=e100]
+        - heading "Portfolio" [level=2] [ref=e112]
+        - generic [ref=e115]
+        - heading "Open Positions" [level=3] [ref=e175]
+        - generic [ref=e181]
+        - heading "Realized P&L History (30d)" [level=3] [ref=e219]
+        - generic [ref=e226]
+        - heading "Telegram Signal Tracker" [level=2] [ref=e273]
+        - alert [ref=e277]
+        - heading "Realized P&L by Source" [level=3] [ref=e287]
+        - generic [ref=e294]
+        - heading "🤖 Agent Decisions" [level=2] [ref=e341]
+        - generic [ref=e344]
+        - heading "Recent Agent History" [level=3] [ref=e386]
+        - generic [ref=e392]
+        - heading "🛡️ Risk Monitor" [level=2] [ref=e430]
+        - alert [ref=e434]
+        - group [ref=e445]
+        - generic [ref=e454]
+        - group [ref=e484]
+        - group [ref=e494]
+        - group [ref=e504]
+        - group [ref=e514]
+        - separator [ref=e526]
+        - generic [ref=e529] [cursor=pointer]
+  - img [ref=e535]

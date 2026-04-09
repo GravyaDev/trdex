@@ -177,3 +177,43 @@ async def update_scheduler_symbols(
     set_runtime_symbols(cleaned)
     # Re-fetch to return the rate limit estimate
     return await get_scheduler_symbols(_key)
+
+
+# ── Price feed selection for aggregation ───────────────────────────────
+
+
+class FeedSelectionBody(BaseModel):
+    feeds: list[str]
+
+
+@router.get("/feeds")
+async def get_feed_selection(_key: str = Depends(verify_api_key)) -> dict:
+    """Return available feeds and which are selected for price aggregation."""
+    from trdex.market.manager import get_selected_feeds
+    if _feed_manager is None:
+        return {"available": [], "selected": []}
+    available = list(_feed_manager.feeds.keys())
+    selected = get_selected_feeds() or available
+    return {"available": available, "selected": selected}
+
+
+@router.put("/feeds")
+async def update_feed_selection(
+    body: FeedSelectionBody,
+    _key: str = Depends(verify_api_key),
+) -> dict:
+    """Update which feeds are used for aggregated price queries.
+
+    Only selected feeds are queried in parallel when the agent fetches
+    the current price. If 1 feed selected → single price. If 2+ →
+    median with outlier filtering. Not persisted — reverts on restart.
+    """
+    from trdex.market.manager import set_selected_feeds
+    if _feed_manager is None:
+        raise HTTPException(status_code=503, detail="Feed manager not available.")
+    available = set(_feed_manager.feeds.keys())
+    valid = [f for f in body.feeds if f in available]
+    if not valid:
+        raise HTTPException(status_code=400, detail=f"No valid feeds. Available: {sorted(available)}")
+    set_selected_feeds(valid)
+    return await get_feed_selection(_key)

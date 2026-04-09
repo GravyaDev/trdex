@@ -149,20 +149,67 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
-  # Streamlit dashboard UI for Phase 2 observation.
+  # OAuth2 proxy — GitHub SSO for dashboard access.
+  # Replaces the old basic-auth middleware (popup browser, no MFA,
+  # hardcoded bcrypt hash in compose). Now the user logs in via
+  # GitHub OAuth, and oauth2-proxy validates the session cookie on
+  # every request before Traefik proxies to the Streamlit dashboard.
   #
-  # Reuses the trdex-app image (same build context) because streamlit
-  # and plotly are already declared in pyproject.toml — no new Dockerfile
-  # needed. The CMD is overridden to run Streamlit instead of uvicorn.
+  # Required Coolify env vars:
+  #   OAUTH2_PROXY_CLIENT_ID      — GitHub OAuth App Client ID
+  #   OAUTH2_PROXY_CLIENT_SECRET  — GitHub OAuth App Client Secret
+  #   OAUTH2_PROXY_COOKIE_SECRET  — random 32-char string for cookie signing
+  #   OAUTH2_PROXY_EMAIL_DOMAIN   — restrict to specific email domain (default: *)
+  #   OAUTH2_PROXY_GITHUB_USER    — restrict to specific GitHub username
+  # OAuth2 proxy — GitHub SSO for dashboard access.
+  # Acts as a REVERSE PROXY in front of the dashboard: all /dashboard
+  # traffic goes through oauth2-proxy, which handles login/redirect/
+  # cookie verification internally. Traefik routes to oauth2-proxy,
+  # NOT directly to the dashboard. oauth2-proxy then proxies to the
+  # dashboard container on the internal Docker network.
   #
-  # Served at https://trdex.gravya.it/dashboard behind Traefik with
-  # basic-auth middleware (credentials in TRDEX_DASHBOARD_BASICAUTH env
-  # var, generated with htpasswd -nb). Talks to the FastAPI app over
-  # the internal Docker network (http://app:8000), so the API key the
-  # user pastes into the sidebar is the only auth towards the backend.
-  #
-  # See Task Board "Upgrade auth dashboard" for the follow-up plan to
-  # replace basic-auth with Cloudflare Access or Tailscale.
+  # This is the "reverse proxy mode" (not forwardAuth mode). ForwardAuth
+  # does not work well because Traefik passes 401s directly to the
+  # client without redirecting to the login page.
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.7.1
+    environment:
+      OAUTH2_PROXY_PROVIDER: 'github'
+      OAUTH2_PROXY_CLIENT_ID: '${OAUTH2_PROXY_CLIENT_ID}'
+      OAUTH2_PROXY_CLIENT_SECRET: '${OAUTH2_PROXY_CLIENT_SECRET}'
+      OAUTH2_PROXY_COOKIE_SECRET: '${OAUTH2_PROXY_COOKIE_SECRET}'
+      OAUTH2_PROXY_COOKIE_SECURE: 'true'
+      OAUTH2_PROXY_COOKIE_DOMAIN: 'trdex.gravya.it'
+      OAUTH2_PROXY_COOKIE_PATH: '/'
+      OAUTH2_PROXY_COOKIE_SAMESITE: 'lax'
+      # Restrict access by email domain and/or GitHub username.
+      # Defaults to * (any). Set via Coolify env vars to restrict:
+      #   OAUTH2_PROXY_EMAIL_DOMAIN=gravya.it (or gmail.com, etc)
+      #   OAUTH2_PROXY_GITHUB_USER=GravyaDev
+      OAUTH2_PROXY_EMAIL_DOMAINS: '${OAUTH2_PROXY_EMAIL_DOMAIN:-*}'
+      OAUTH2_PROXY_GITHUB_USERS: '${OAUTH2_PROXY_GITHUB_USER:-}'
+      OAUTH2_PROXY_HTTP_ADDRESS: '0.0.0.0:4180'
+      # Upstream: proxy authenticated requests to the dashboard container
+      OAUTH2_PROXY_UPSTREAMS: 'http://dashboard:8501'
+      OAUTH2_PROXY_REVERSE_PROXY: 'true'
+      OAUTH2_PROXY_PROXY_PREFIX: '/oauth2'
+      OAUTH2_PROXY_REDIRECT_URL: 'https://trdex.gravya.it/oauth2/callback'
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: 'true'
+    restart: unless-stopped
+    logging: *default-logging
+    labels:
+      - "traefik.enable=true"
+      # Route ALL /dashboard and /oauth2 traffic to oauth2-proxy.
+      # oauth2-proxy handles auth check, login redirect, and proxying
+      # to the dashboard container internally.
+      - "traefik.http.routers.trdex-dashboard.rule=Host(`trdex.gravya.it`) && (PathPrefix(`/dashboard`) || PathPrefix(`/oauth2`))"
+      - "traefik.http.routers.trdex-dashboard.entrypoints=https"
+      - "traefik.http.routers.trdex-dashboard.tls=true"
+      - "traefik.http.routers.trdex-dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.trdex-dashboard.service=trdex-oauth2-svc"
+      - "traefik.http.services.trdex-oauth2-svc.loadbalancer.server.port=4180"
+
+  # Streamlit dashboard — no direct Traefik route (proxied via oauth2-proxy).
   dashboard:
     build: .
     command: >
@@ -173,19 +220,12 @@ services:
       --server.headless=true
       --browser.gatherUsageStats=false
     environment:
-      # Pre-fill the dashboard's sidebar inputs so the operator doesn't
-      # have to paste values on every session. Both are overridable via
-      # the sidebar if needed.
       TRDEX_DASHBOARD_API_URL: 'http://app:8000'
       TRDEX_DASHBOARD_API_KEY: '${TRDEX_API_KEY:-}'
     depends_on:
       app:
         condition: service_healthy
     healthcheck:
-      # Streamlit exposes its health endpoint under the configured
-      # baseUrlPath, so with --server.baseUrlPath=/dashboard the URL
-      # becomes /dashboard/_stcore/health. curl is already installed
-      # in the base image (Bug 2 fix, commit c42c641).
       test: ["CMD-SHELL", "curl -sf http://localhost:8501/dashboard/_stcore/health || exit 1"]
       interval: 15s
       timeout: 5s
@@ -193,41 +233,6 @@ services:
       start_period: 30s
     restart: unless-stopped
     logging: *default-logging
-    labels:
-      # Traefik routing for Coolify. The main Application in Coolify
-      # already generates Host(`trdex.gravya.it`) -> app:8000; this
-      # second router is more specific (Host + PathPrefix) so Traefik
-      # routes /dashboard/* to the Streamlit container and everything
-      # else stays on the FastAPI app.
-      - "traefik.enable=true"
-      - "traefik.http.routers.trdex-dashboard.rule=Host(`trdex.gravya.it`) && PathPrefix(`/dashboard`)"
-      - "traefik.http.routers.trdex-dashboard.entrypoints=https"
-      - "traefik.http.routers.trdex-dashboard.tls=true"
-      - "traefik.http.routers.trdex-dashboard.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.trdex-dashboard.service=trdex-dashboard"
-      - "traefik.http.services.trdex-dashboard.loadbalancer.server.port=8501"
-      # Basic-auth middleware — hash is hardcoded per Coolify official
-      # pattern (https://coolify.io/docs/knowledge-base/proxy/traefik/basic-auth).
-      # Single quotes around the label value mean YAML treats the string
-      # as literal and docker-compose does NOT interpolate $VAR, so the
-      # bcrypt dollars stay as single `$` (not `$$`). Tried referencing
-      # via ${TRDEX_DASHBOARD_BASICAUTH} env var first but Coolify does
-      # not interpolate env vars inside Traefik labels at compose-up
-      # time — the literal `${...}` ended up on the container, Traefik
-      # rejected it, 401 forever. Hardcoded works.
-      #
-      # The hash is bcrypt ($2y$) of a 24-char random password; offline
-      # brute force is infeasible. Repo is private. Upgrade path is
-      # tracked in Task Board "Upgrade auth dashboard" (Cloudflare
-      # Access / Tailscale / oauth2-proxy) and should happen before
-      # any move to live mode.
-      #
-      # To rotate: regenerate with
-      #   docker run --rm httpd:2.4-alpine htpasswd -nbB <user> <pass>
-      # paste the output here verbatim (single $), commit, redeploy.
-      - 'traefik.http.routers.trdex-dashboard.middlewares=trdex-dashboard-auth'
-      - 'traefik.http.middlewares.trdex-dashboard-auth.basicauth.users=daniele:$2y$05$kB33xiQMcnxh25vJra3iVuuj/0UeRdhEKMC3KARtETCfB3gLUJeR6'
-      - 'traefik.http.middlewares.trdex-dashboard-auth.basicauth.realm=trdex'
 
 volumes:
   pgdata:

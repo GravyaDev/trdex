@@ -76,10 +76,9 @@ async def test_execute_calls_create_and_fetch_order():
 
     exchange.create_order.assert_awaited_once_with(
         symbol="BTC/USDT",
-        type="limit",
+        type="market",
         side="buy",
         amount=pytest.approx(0.01),
-        price=pytest.approx(90_000.0),
     )
     exchange.fetch_order.assert_awaited_once_with("order-999", "BTC/USDT")
     assert result.order_id == "order-999"
@@ -112,8 +111,12 @@ async def test_execute_raises_on_exchange_error():
 
 
 @pytest.mark.asyncio
-async def test_execute_raises_without_price():
-    exchange = _mock_exchange({}, {})
+async def test_execute_market_order_without_price():
+    """Market orders work without price — LiveExecutor uses type=market."""
+    exchange = _mock_exchange(
+        create_response={"id": "order-noprice"},
+        fetch_response={**_CCXT_FILLED, "id": "order-noprice"},
+    )
     executor = LiveExecutor(exchange)
     order_no_price = Order(
         symbol="BTC/USDT",
@@ -122,8 +125,14 @@ async def test_execute_raises_without_price():
         amount=Decimal("0.01"),
         price=None,
     )
-    with pytest.raises(ValueError, match="requires a price"):
-        await executor.execute(order_no_price)
+    result = await executor.execute(order_no_price)
+    assert result.order_id == "order-noprice"
+    exchange.create_order.assert_awaited_once_with(
+        symbol="BTC/USDT",
+        type="market",
+        side="buy",
+        amount=pytest.approx(0.01),
+    )
 
 
 # ── LiveExecutor.cancel() ─────────────────────────────────────────────────────

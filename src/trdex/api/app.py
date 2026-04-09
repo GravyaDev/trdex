@@ -228,6 +228,9 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         _scheduler.register(CryptoCompareNewsSource(api_key=settings.cryptocompare_api_key))
     if settings.stockdata_api_key:
         _scheduler.register(StockDataNewsSource(api_key=settings.stockdata_api_key))
+    if settings.perplexity_api_key:
+        from trdex.context.news_sources.perplexity import PerplexityNewsSource
+        _scheduler.register(PerplexityNewsSource(api_key=settings.perplexity_api_key))
     _scheduler.set_symbols(settings.ingestion_symbols_list)
     from trdex.api.routes import context as context_routes
     context_routes.set_scheduler(_scheduler)
@@ -364,6 +367,11 @@ def create_app() -> FastAPI:
     app.add_middleware(_RequestLoggingMiddleware)
 
     # --- Public endpoints (no auth) ---
+
+    @app.get("/", include_in_schema=False)
+    async def root_redirect():
+        from starlette.responses import RedirectResponse
+        return RedirectResponse(url="/dashboard/")
 
     @app.get("/v1/health")
     async def health() -> dict[str, str]:

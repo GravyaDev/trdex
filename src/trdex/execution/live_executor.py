@@ -1,4 +1,8 @@
-"""LiveExecutor — routes orders to a real exchange via CCXT (Binance testnet by default)."""
+"""LiveExecutor — routes orders to a real exchange via CCXT.
+
+Supports both Binance testnet (for testing) and production.
+Controlled by TRDEX_BINANCE_TESTNET env var (default: true = testnet).
+"""
 
 from __future__ import annotations
 
@@ -41,9 +45,6 @@ def _parse_ccxt_result(raw: dict[str, Any], simulated: bool = False) -> Executio
 class LiveExecutor(ExecutionGateway):
     """Routes orders to a real exchange via CCXT.
 
-    Default target: Binance testnet (spot).
-    Can be pointed at any CCXT-compatible exchange by passing a pre-built exchange object.
-
     Usage:
         executor = LiveExecutor.from_settings(settings)
         result = await executor.execute(order)
@@ -51,58 +52,84 @@ class LiveExecutor(ExecutionGateway):
     """
 
     def __init__(self, exchange: Any) -> None:
-        """
-        Args:
-            exchange: A CCXT async exchange instance (e.g. ccxt.async_support.binance(...)).
-        """
         self._exchange = exchange
 
     @classmethod
     def from_settings(cls, settings: Settings) -> LiveExecutor:
-        """Build a LiveExecutor pointed at Binance testnet using credentials from Settings."""
-        try:
-            import ccxt.async_support as ccxt  # type: ignore[import-untyped]
-        except ImportError as e:
-            raise RuntimeError(
-                "ccxt is required for live execution. Install it with: pip install ccxt"
-            ) from e
+        """Build a LiveExecutor from Settings.
 
-        exchange = ccxt.binance({
+        Uses Binance testnet by default (TRDEX_BINANCE_TESTNET=true).
+        Set to false for production Binance (requires real API keys
+        and real money — never do this without passing the readiness
+        gate first).
+        """
+        try:
+            import ccxt.async_support as ccxt
+        except ImportError as e:
+            raise RuntimeError("ccxt required for live execution") from e
+
+        secret = settings.binance_effective_secret
+        is_pem = "PRIVATE KEY" in secret
+        config: dict[str, Any] = {
             "apiKey": settings.binance_api_key,
-            "secret": settings.binance_api_secret,
+            "secret": secret,
+            "enableRateLimit": True,
             "options": {"defaultType": "spot"},
-            "urls": {
-                "api": {
-                    "public": "https://testnet.binance.vision/api",
-                    "private": "https://testnet.binance.vision/api",
-                }
-            },
-        })
+        }
+        if is_pem:
+            logger.info("[Live] using Ed25519 PEM key for authentication")
+
+        if settings.binance_testnet:
+            # Use CCXT's built-in sandbox mode instead of manually
+            # overriding URLs. CCXT knows the correct testnet endpoints
+            # and path structure for each API version.
+            config["sandbox"] = True
+            # Testnet does not support /sapi endpoints (capital config,
+            # deposit/withdraw, etc). Skip fetch_currencies to avoid
+            # AuthenticationError on load_markets().
+            config["options"]["fetchCurrencies"] = False
+            logger.info("[Live] using Binance TESTNET (sandbox mode)")
+        else:
+            logger.warning("[Live] using Binance PRODUCTION — real money at risk")
+
+        exchange = ccxt.binance(config)
         return cls(exchange)
 
     async def execute(self, order: Order) -> ExecutionResult:
         """Send order to exchange, wait for fill, return result."""
-        if order.price is None:
-            raise ValueError(f"LiveExecutor requires a price for {order.symbol}.")
+        from trdex.market import specs as market_specs
 
-        # CCXT symbol format: "BTC/USDT" (already our format)
+        # Truncate quantity to exchange lot size (same as Simulator)
+        amount = market_specs.truncate_qty(order.symbol, order.amount)
+        if amount <= 0:
+            raise ValueError(
+                f"LiveExecutor: qty truncated to 0 for {order.symbol} "
+                f"(raw={order.amount}, step={market_specs.get_step_size(order.symbol)})"
+            )
+
         try:
+            # Use market order for immediate execution. Limit orders
+            # on testnet often hang unfilled because the order book
+            # is thin. Market orders fill instantly.
             raw = await self._exchange.create_order(
                 symbol=order.symbol,
-                type="limit",
-                side=order.side.value,          # "buy" or "sell"
-                amount=float(order.amount),
-                price=float(order.price),
+                type="market",
+                side=order.side.value,
+                amount=float(amount),
             )
             order_id = str(raw["id"])
-            logger.info("[Live] order placed id=%s %s %s @ %s",
-                        order_id, order.side.value.upper(), order.amount, order.price)
+            logger.info(
+                "[Live] market order placed id=%s %s %s qty=%s",
+                order_id, order.side.value.upper(), order.symbol, amount,
+            )
 
-            # Fetch the actual fill (may be immediate on testnet)
+            # Fetch the fill details (price, fee, filled amount)
             filled_raw = await self._exchange.fetch_order(order_id, order.symbol)
             result = _parse_ccxt_result(filled_raw, simulated=False)
-            logger.info("[Live] fill confirmed id=%s filled=%s @ %s",
-                        order_id, result.filled_amount, result.filled_price)
+            logger.info(
+                "[Live] fill confirmed id=%s filled=%s @ %s fee=%s",
+                order_id, result.filled_amount, result.filled_price, result.fee,
+            )
             return result
 
         except Exception as exc:

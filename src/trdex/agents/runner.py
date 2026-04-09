@@ -100,12 +100,17 @@ class AgentRunner:
         2. Falls back to live feed if DB has no data for the symbol
         3. Current price always fetched live for accuracy
         """
-        # 1. Fetch current price live
+        # 1. Fetch current price — aggregated across selected feeds for
+        #    robustness against single-exchange flash spikes. The user
+        #    selects which feeds to query via the dashboard.
         try:
-            ticker = await self._feeds.get_ticker(symbol)
+            from trdex.market.manager import get_selected_feeds
+            ticker = await self._feeds.get_ticker_aggregated(
+                symbol, feed_names=get_selected_feeds()
+            )
             current_price = float(ticker.price)
         except Exception:
-            logger.exception("[runner] failed to fetch live ticker for %s", symbol)
+            logger.exception("[runner] failed to fetch aggregated ticker for %s", symbol)
             current_price = 0.0
 
         # 2. Fetch OHLCV — prefer DB, fallback to live feed

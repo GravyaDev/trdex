@@ -49,8 +49,21 @@ class Settings(BaseSettings):
     cors_origins: str = ""  # Comma-separated origins; empty = no CORS
 
     # Exchange keys (optional — only needed when connecting)
-    binance_api_key: str = ""
-    binance_api_secret: str = ""
+    # Accept both BINANCE_API_KEY (no prefix) and TRDEX_BINANCE_API_KEY (with prefix)
+    binance_api_key: str = Field(default="", validation_alias=AliasChoices("TRDEX_BINANCE_API_KEY", "BINANCE_API_KEY"))
+    binance_api_secret: str = Field(default="", validation_alias=AliasChoices("TRDEX_BINANCE_API_SECRET", "BINANCE_API_SECRET"))
+    binance_api_secret_file: str = Field(default="", validation_alias=AliasChoices("TRDEX_BINANCE_API_SECRET_FILE", "BINANCE_API_SECRET_FILE"))
+    binance_testnet: bool = Field(default=True, description="Use Binance testnet (true) or production (false)")
+
+    @property
+    def binance_effective_secret(self) -> str:
+        """Return the effective Binance secret: PEM file content if configured, else raw secret."""
+        if self.binance_api_secret_file:
+            from pathlib import Path
+            p = Path(self.binance_api_secret_file).expanduser()
+            if p.exists():
+                return p.read_text().strip()
+        return self.binance_api_secret
 
     # Aggregator keys
     coingecko_api_key: str = ""
@@ -79,6 +92,7 @@ class Settings(BaseSettings):
 
     # AI / Vector DB
     jina_api_key: str = ""          # https://jina.ai — free tier, 100 req/min
+    perplexity_api_key: str = ""    # https://perplexity.ai — sonar search API
     qdrant_url: str = "http://localhost:6333"
 
     # LLM provider API keys (Task 1 — llm-agents branch)
