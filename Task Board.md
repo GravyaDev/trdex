@@ -81,35 +81,21 @@ Fix deployato oggi: SL adattivo a CV + per-symbol config + fee nel P&L
   - Multi-agent brainstorming: 23 objections, 18 accepted, 3 deferred, 1 rejected
   - 4 critical revisions applied: prompt heuristics removed, conditional calling redesigned, LLMCaller injection, RAG sanitization day-1
 
-- [ ] **Task 1: Provider abstraction + schemas + LLMCaller** (3-4h)
-  - `llm_provider.py` (factory + structured output wrapper per Google GenAI)
-  - `llm_caller.py` (invoke/fallback/budget/usage — injected via AgentState, not serialized)
-  - 3 migrations: agent_config (CHECK constraints), agent_llm_usage, agent_runs extension
-  - Config repo, Settings extension, 3 provider deps in pyproject.toml
+- [x] **Task 1-7: ALL COMPLETE** — committed `d294159`, `a4d2dcb`, `4af323a`. Pushed.
+  - Provider abstraction + LLMCaller + 3 migrations + structured output schemas
+  - LLM Analyst (dual path + prompt builder + RAG sanitizer)
+  - LLM Scout (dual path + sentiment calibration)
+  - Dashboard config pages (4 agents + cost forecast + fallback banner + restore default)
+  - Reflection memory (wired in Task 2)
+  - Redis cost guardrails (LLMBudgetTracker)
+  - Risk annotation (optional Haiku)
 
-- [ ] **Task 2: LLM Analyst node** (3-4h) — depends: Task 1
-  - Replace `_rule_based_signal()` with LLM call via LLMCaller
-  - Prompt assembly with `max_prompt_tokens` budget + LIFO truncation
-  - RAG sanitizer (`sanitize_rag_content()`) — day-1 prompt injection defense
-  - Fallback to rule engine on failure (documented quality gap)
+- [ ] **Deploy trdex-llm on Coolify** — see `docs/deploy-llm-instance.md`
+  - DNS `trdex-llm.gravya.it` created
+  - Needs: Coolify app setup, ANTHROPIC_API_KEY, OAuth callback URL
 
-- [ ] **Task 3: LLM Scout node** (2-3h) — depends: Task 1
-  - LLM summarization + sentiment extraction with calibration check vs naive average
-
-- [ ] **Task 4: Dashboard config pages** (4-5h) — depends: Task 1
-  - 4 agent pages + restore default + keyword validation + recommended badges
-  - Cost forecast widget + fallback banner + LLM usage stats
-
-- [ ] **Task 5: Reflection memory injection** (2h) — depends: Task 2
-  - Wire MemoryContextLoader.build() into Analyst prompt
-
-- [ ] **Task 6: Cost guardrails** (2h) — depends: Task 1
-  - Redis daily/monthly budget + dashboard widget
-
-- [ ] **Task 7: Risk annotation** (1h, optional) — depends: Task 1
-
-- [ ] **Task 8: Testing + validation** (3-4h) — depends: Task 2, 3
-  - Unit (mocked), integration (gated), eval framework (50 scenarios), directional consistency
+- [ ] **Task 8: Evaluation framework** (deferred — needs live data from deployed instance)
+  - 50 golden scenarios, LLM vs rule engine A/B, directional consistency tests
 
 ### 🔵 Phase 3 (post-osservazione, quando hai 7-14+ giorni di dati)
 

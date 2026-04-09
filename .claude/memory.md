@@ -17,20 +17,18 @@
   3. **Active hours**: scheduler skippa fuori da fascia oraria configurable (default 8-22 UTC)
   4. **Reflection memory**: ogni agent legge la propria storia di trade dal day 1
   5. **Multi-agent reale**: 4 LLM call separate (non un monolith), day 1
-- **Design doc**: **DA SCRIVERE nella prossima sessione** aprendo Claude Code su `trdex-llm/` (non qui). Path: `trdex-llm/.claude/reports/llm-agents-design-2026-04-08.md`
-- **Workflow fix**: i bug di production scoperti su `main` vanno fixati qui, poi merged forward nel branch (`cd ../trdex-llm && git merge origin/main`). MAI il contrario.
-- **Da QUESTA sessione (main) NON modificare `../trdex-llm/`**: usa sessione separata.
+- **Design doc**: SCRITTO + Rev 1 (multi-agent brainstorming review, 23 objections). Path: `.claude/reports/llm-agents-design-2026-04-08.md`
+- **Implementation**: Task 1-7 ALL COMPLETE. Commits: `d294159` (Task 1+2), `a4d2dcb` (Task 3-7), `4af323a` (deploy guide). 312/312 test pass. Pushed to `origin/llm-agents`.
+- **Deploy guide**: `docs/deploy-llm-instance.md` — parallel Coolify app on `trdex-llm.gravya.it` (DNS created)
+- **Next**: deploy on Coolify as separate app, set ANTHROPIC_API_KEY, enable Analyst LLM from dashboard, monitor 24-48h
+- **Workflow fix**: i bug di production scoperti su `main` vanno fixati lì, poi merged forward nel branch (`git merge origin/main`). MAI il contrario.
 
-## Prossima sessione (due vie possibili)
+## Prossima sessione
 
-**Via A — Continuare su main (production/rule-engine)**:
-- Leggi `inspect_runs --hours 24` per vedere trade della notte, Bug 11 cosmetic, o feature dashboard backlog
-- Lavora su questa directory `trdex/`
-
-**Via B — Iniziare il lavoro LLM**:
-- Apri Claude Code in `C:\Users\Daniele\Antigravity\trdex-llm\` (nuova sessione, fresca)
-- Scrivi il design doc completo `llm-agents-design-2026-04-08.md` dal contesto delle 5 decisioni sopra
-- Solo DOPO il design, inizia a toccare codice agenti
+1. Deploy `trdex-llm` su Coolify come app separata (guida: `docs/deploy-llm-instance.md`)
+2. Set `TRDEX_ANTHROPIC_API_KEY`, abilita Analyst LLM dal dashboard
+3. Monitora costi e segnali per 24-48h
+4. A/B compare con rule engine su `trdex.gravya.it`
 
 ## Project: trdex
 
