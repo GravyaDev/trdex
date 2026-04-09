@@ -153,4 +153,53 @@ async def risk_node(state: AgentState) -> AgentState:
     )
     logger.info("[Risk] APPROVED — position_size=%.3f", position_size)
     await _write_last_signal(state, approved=True, reason=approved_reason)
+
+    # Optional LLM risk annotation (observability-only, never changes the decision)
+    await _maybe_annotate_risk(state)
+
     return state
+
+
+async def _maybe_annotate_risk(state: AgentState) -> None:
+    """Call Haiku for a 1-2 sentence risk commentary. Best-effort, never blocks."""
+    if state.llm_caller is None:
+        return
+
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from pydantic import BaseModel, Field
+
+    class RiskAnnotation(BaseModel):
+        annotation: str = Field(max_length=500)
+
+    config = state.llm_caller.configs.get("risk")
+    if config is None or not config.llm_enabled:
+        return
+
+    narrative = state.memory_snapshots.get("risk", "")
+    prompt = (
+        f"Symbol: {state.symbol}\n"
+        f"Analyst signal: {state.analysis.intent.value} (confidence {state.analysis.confidence:.2f})\n"
+        f"Risk decision: {'APPROVED' if state.risk.approved else 'BLOCKED'} — {state.risk.reason}\n"
+        f"Portfolio: equity={state.portfolio.equity:.2f}, drawdown={state.portfolio.drawdown_pct:.1%}\n"
+    )
+    if narrative:
+        prompt += f"\nRecent history:\n{narrative[:500]}\n"
+
+    messages = [
+        SystemMessage(content=(
+            "You are reviewing a risk decision for trdex. This is an ANNOTATION — "
+            "your output does NOT change the approve/block decision. "
+            "In 1-2 sentences, note any risk factors the deterministic gates might miss: "
+            "correlation between open positions, unusual loss/win streaks, market regime concerns. "
+            "If nothing notable, output: 'No additional concerns.'"
+        )),
+        HumanMessage(content=prompt),
+    ]
+
+    try:
+        result = await state.llm_caller.invoke("risk", messages, RiskAnnotation)
+        if result is not None:
+            state.risk.annotation = result.annotation
+            logger.info("[Risk] annotation: %s", result.annotation[:100])
+    except Exception:
+        logger.debug("[Risk] annotation call failed — non-critical, continuing")

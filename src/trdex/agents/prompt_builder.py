@@ -123,3 +123,68 @@ def build_analyst_messages(
         )
 
     return [sys_msg, HumanMessage(content=user_text)]
+
+
+# ── Scout prompt ─────────────────────────────────────────────────────────────
+
+_DEFAULT_SCOUT_SYSTEM_PROMPT = """\
+You are the Scout Agent for trdex, an AI trading platform.
+
+Your sole job is to SUMMARIZE market context for {symbol}. You do NOT make trading decisions.
+
+## Rules
+- Report ONLY facts and computed sentiment. No opinions, no recommendations.
+- Never output BUY/SELL/HOLD signals.
+- Never evaluate technical indicators (that's the Analyst's job).
+- Extract a single numeric sentiment score from -1.0 (extremely bearish) to +1.0 (extremely bullish).
+- If documents conflict, note the contradiction explicitly.
+- If no meaningful context is available, say so honestly."""
+
+
+def build_scout_messages(
+    state: AgentState,
+    *,
+    system_prompt: str = "",
+    rag_hits: list[dict],
+    max_prompt_tokens: int = 4096,
+) -> list[SystemMessage | HumanMessage]:
+    """Assemble the messages list for the Scout LLM call."""
+    raw_sys = system_prompt.strip() or _DEFAULT_SCOUT_SYSTEM_PROMPT
+    sys_text = raw_sys.replace("{symbol}", state.symbol)
+    sys_msg = SystemMessage(content=sys_text)
+
+    budget = max_prompt_tokens - _estimate_tokens(sys_text) - 200
+
+    sections: list[str] = []
+
+    # 1. RAG documents (sanitized)
+    sections.append(f"## Retrieved context for {state.symbol}\n")
+    if rag_hits:
+        for i, h in enumerate(rag_hits, 1):
+            text = sanitize_rag_content(h.get("text", ""))[:500]
+            source = h.get("source", "unknown")
+            sentiment = h.get("sentiment")
+            sent_str = f" (sentiment={sentiment:.2f})" if isinstance(sentiment, (int, float)) else ""
+            sections.append(f"{i}. [{source}]{sent_str}: {text}")
+    else:
+        sections.append("No documents retrieved.")
+
+    # 2. Memory snapshot (if available)
+    memory_text = state.memory_snapshots.get("scout", "")
+    if memory_text:
+        sections.append(f"\n## Memory context\n{memory_text}")
+
+    # Enforce budget
+    user_text = "\n".join(sections)
+    tokens = _estimate_tokens(user_text)
+    if tokens > budget and memory_text:
+        excess = tokens - budget
+        chars_to_cut = excess * 4
+        truncated = memory_text[:max(0, len(memory_text) - chars_to_cut)]
+        if truncated:
+            sections[-1] = f"\n## Memory context (truncated)\n{truncated}..."
+        else:
+            sections.pop()
+        user_text = "\n".join(sections)
+
+    return [sys_msg, HumanMessage(content=user_text)]

@@ -273,6 +273,139 @@ if history:
 else:
     st.info("No agent runs yet.")
 
+# ── LLM Agent Configuration ──────────────────────────────────────────────────
+
+st.header("🧠 LLM Agent Configuration")
+
+# Fallback banner (Rev 1 — U3)
+llm_usage_data = get("/v1/agent/llm-usage?period=today")
+if llm_usage_data and llm_usage_data.get("total_calls", 0) > 0:
+    fb_count = llm_usage_data.get("fallback_count", 0)
+    total = llm_usage_data.get("total_calls", 1)
+    if fb_count / max(total, 1) > 0.5:
+        st.warning(f"⚠ LLM fallback active — {fb_count}/{total} calls used rule engine today")
+
+# Cost forecast + usage (Rev 1 — U4)
+if llm_usage_data:
+    cost_today = llm_usage_data.get("total_cost_usd", 0)
+    calls_today = llm_usage_data.get("total_calls", 0)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("LLM calls today", calls_today)
+    c2.metric("Cost today", f"${cost_today:.2f}")
+    if calls_today > 0:
+        avg_cost = cost_today / calls_today
+        # Estimate: symbols × ticks/day × 30 days
+        sched_data = get("/v1/agent/scheduler/symbols")
+        n_symbols = sched_data.get("count", 5) if sched_data else 5
+        est_monthly = avg_cost * n_symbols * 168 * 30  # 168 ticks/day at 5min interval, 14h
+        c3.metric("Est. monthly", f"${est_monthly:.0f}")
+    else:
+        c3.metric("Est. monthly", "—")
+
+# Model recommended badges
+_MODEL_RECOMMENDATIONS = {
+    "scout": ("Haiku", "Fast, cheap — context summarization"),
+    "analyst": ("Sonnet", "Best reasoning — the decision that counts"),
+    "risk": ("N/A", "Deterministic — LLM optional annotation only"),
+    "executor": ("N/A", "Deterministic — no LLM needed"),
+}
+
+all_configs = get("/v1/agent/config")
+if all_configs:
+    for cfg in all_configs:
+        agent = cfg["agent_name"]
+        rec_model, rec_tip = _MODEL_RECOMMENDATIONS.get(agent, ("—", ""))
+
+        with st.expander(f"**{agent.title()}** — {'🟢 LLM enabled' if cfg['llm_enabled'] else '⚪ Deterministic'}"):
+            st.caption(f"Recommended: {rec_model} — {rec_tip}")
+
+            col_toggle, col_provider, col_model = st.columns([1, 1, 2])
+            with col_toggle:
+                new_enabled = st.toggle(
+                    "LLM enabled",
+                    value=cfg["llm_enabled"],
+                    key=f"llm_en_{agent}",
+                )
+            with col_provider:
+                providers = ["anthropic", "openai", "google"]
+                new_provider = st.selectbox(
+                    "Provider",
+                    providers,
+                    index=providers.index(cfg["provider"]) if cfg["provider"] in providers else 0,
+                    key=f"prov_{agent}",
+                )
+            with col_model:
+                models_by_provider = {
+                    "anthropic": ["claude-haiku-4-5-20251001", "claude-sonnet-4-6-20250514", "claude-opus-4-6-20250514"],
+                    "openai": ["gpt-4o-mini", "gpt-4o"],
+                    "google": ["gemini-2.0-flash", "gemini-2.0-pro"],
+                }
+                model_options = models_by_provider.get(new_provider, [cfg["model_id"]])
+                current_idx = model_options.index(cfg["model_id"]) if cfg["model_id"] in model_options else 0
+                new_model = st.selectbox("Model", model_options, index=current_idx, key=f"model_{agent}")
+
+            col_temp, col_maxtok, col_topp = st.columns(3)
+            with col_temp:
+                new_temp = st.slider("Temperature", 0.0, 2.0, float(cfg["temperature"]), 0.05, key=f"temp_{agent}")
+            with col_maxtok:
+                new_maxtok = st.number_input("Max tokens", 64, 8192, cfg["max_tokens"], key=f"maxtok_{agent}")
+            with col_topp:
+                new_topp = st.slider("Top P", 0.0, 1.0, float(cfg["top_p"]), 0.05, key=f"topp_{agent}")
+
+            # System prompt editor
+            new_prompt = st.text_area(
+                "System prompt (empty = use default)",
+                value=cfg["system_prompt"],
+                height=150,
+                key=f"prompt_{agent}",
+            )
+
+            col_save, col_restore = st.columns([1, 1])
+            with col_save:
+                if st.button("💾 Save", key=f"save_{agent}"):
+                    import httpx as _httpx
+                    headers = {"X-API-Key": api_key} if api_key else {}
+                    body = {
+                        "llm_enabled": new_enabled,
+                        "provider": new_provider,
+                        "model_id": new_model,
+                        "temperature": new_temp,
+                        "max_tokens": new_maxtok,
+                        "top_p": new_topp,
+                        "system_prompt": new_prompt,
+                    }
+                    try:
+                        r = _httpx.put(
+                            f"{base_url}/v1/agent/config/{agent}",
+                            json=body,
+                            headers=headers,
+                            timeout=10,
+                        )
+                        r.raise_for_status()
+                        st.success(f"Saved {agent} config")
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(_format_http_error(f"/v1/agent/config/{agent}", "PUT", e))
+            with col_restore:
+                if st.button("↩ Restore default", key=f"restore_{agent}"):
+                    import httpx as _httpx
+                    headers = {"X-API-Key": api_key} if api_key else {}
+                    body = {"system_prompt": ""}  # empty = use hardcoded default
+                    try:
+                        r = _httpx.put(
+                            f"{base_url}/v1/agent/config/{agent}",
+                            json=body,
+                            headers=headers,
+                            timeout=10,
+                        )
+                        r.raise_for_status()
+                        st.success(f"Restored default prompt for {agent}")
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(_format_http_error(f"/v1/agent/config/{agent}", "PUT", e))
+
 # ── Risk / Stop-Loss ──────────────────────────────────────────────────────────
 
 st.header("🛡️ Risk Monitor")

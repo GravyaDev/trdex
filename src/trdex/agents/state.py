@@ -64,6 +64,7 @@ class RiskDecision:
     position_size: float = 0.0        # fraction of portfolio (0.0 – 1.0)
     stop_loss_pct: float = 0.02       # default 2%
     take_profit_pct: float = 0.04     # default 4%
+    annotation: str | None = None     # LLM risk commentary (observability-only, Task 7)
 
 
 @dataclass

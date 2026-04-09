@@ -73,9 +73,12 @@ class LLMCaller:
     # api_keys: {"anthropic": "sk-ant-...", "openai": "sk-...", "google": "AIza..."}
 
     daily_budget: float = 20.0
-    daily_spend: float = 0.0  # accumulated during this process lifetime
+    daily_spend: float = 0.0  # in-process accumulator (fallback if Redis unavailable)
 
     timeout_seconds: float = 10.0
+
+    # Redis-backed budget tracker (optional — set by runner if Redis available)
+    budget_tracker: Any = field(default=None, repr=False)  # LLMBudgetTracker | None
 
     # Usage records collected during this cycle, persisted by runner at the end.
     usage_records: list[LLMUsageRecord] = field(default_factory=list)
@@ -100,8 +103,14 @@ class LLMCaller:
         if config is None or not config.llm_enabled:
             return None
 
-        # Budget check (simple in-process; Redis version in Task 6)
-        if self.daily_spend >= self.daily_budget:
+        # Budget check — Redis-backed if available, in-process fallback
+        if self.budget_tracker is not None:
+            allowed, reason = await self.budget_tracker.check_budget()
+            if not allowed:
+                logger.warning("[LLMCaller] budget blocked: %s — skipping LLM for %s", reason, agent_name)
+                self._record_usage(agent_name, config, fallback_used=True, error=reason)
+                return None
+        elif self.daily_spend >= self.daily_budget:
             logger.warning(
                 "[LLMCaller] daily budget exhausted (%.2f/%.2f) — skipping LLM for %s",
                 self.daily_spend, self.daily_budget, agent_name,
@@ -154,6 +163,8 @@ class LLMCaller:
         input_tokens, output_tokens = self._extract_tokens(result)
         cost = self._estimate_cost(config.model_id, input_tokens, output_tokens)
         self.daily_spend += cost
+        if self.budget_tracker is not None:
+            await self.budget_tracker.record_spend(cost)
 
         self._record_usage(
             agent_name, config,

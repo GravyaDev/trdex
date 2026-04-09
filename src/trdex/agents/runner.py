@@ -329,6 +329,7 @@ class AgentRunner:
                 llm_used=state.analysis.llm_used,
                 suggested_sl=state.analysis.suggested_stop_loss,
                 suggested_tp=state.analysis.suggested_take_profit,
+                risk_annotation=state.risk.annotation,
             )
             self._session.add(record)
             await self._session.commit()
