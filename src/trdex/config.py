@@ -51,6 +51,22 @@ class Settings(BaseSettings):
     # Exchange keys (optional — only needed when connecting)
     binance_api_key: str = ""
     binance_api_secret: str = ""
+    # Path to Ed25519 PEM private key file. If set, overrides binance_api_secret.
+    # The PEM content is read at startup and passed to CCXT as the secret.
+    # CCXT auto-detects Ed25519 vs HMAC based on whether the secret contains
+    # "PRIVATE KEY" (PEM format) or not (raw HMAC hex string).
+    binance_api_secret_file: str = ""
+    binance_testnet: bool = Field(default=True, description="Use Binance testnet (true) or production (false)")
+
+    @property
+    def binance_effective_secret(self) -> str:
+        """Return the effective Binance secret: PEM file content if configured, else raw secret."""
+        if self.binance_api_secret_file:
+            from pathlib import Path
+            p = Path(self.binance_api_secret_file).expanduser()
+            if p.exists():
+                return p.read_text().strip()
+        return self.binance_api_secret
 
     # Aggregator keys
     coingecko_api_key: str = ""
