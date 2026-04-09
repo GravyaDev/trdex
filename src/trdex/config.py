@@ -31,6 +31,11 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("TRDEX_DATABASE_URL", "DATABASE_URL"),
     )
 
+    @property
+    def _uses_default_db_creds(self) -> bool:
+        """True if the DB URL still has the dev-only default password."""
+        return "trdex:trdex@" in self.database_url
+
     # Redis — accepts REDIS_URL or TRDEX_REDIS_URL
     redis_url: str = Field(
         default="redis://localhost:6379/0",
@@ -110,6 +115,7 @@ class Settings(BaseSettings):
     agent_scheduler_enabled: bool = Field(default=False, description="Auto-run agent cycle on interval")
     agent_scheduler_interval: int = Field(default=300, description="Seconds between agent cycles")
     agent_scheduler_symbols: str = Field(default="", description="Comma-separated symbols for auto agent runs")
+    agent_scheduler_active_hours: str = Field(default="", description="Active hours window 'HH:MM-HH:MM' UTC (empty = H24)")
 
 
 def pin_event_loop_policy() -> None:

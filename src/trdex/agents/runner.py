@@ -228,12 +228,10 @@ class AgentRunner:
         repo = PortfolioRepository(self._session)
         service = PortfolioService(repo, self._feeds)
 
-        # Budget is the cash committed to the position at entry:
-        # price * qty (fees are paid on top by the simulator and
-        # accounted for at close time).
         filled_price_dec = Decimal(str(state.order.filled_price))
         filled_qty_dec = Decimal(str(state.order.filled_qty))
         budget = filled_price_dec * filled_qty_dec
+        fee = state.order.fee if state.order.fee is not None else Decimal("0")
 
         await service.record_open_fill(
             symbol=state.symbol,
@@ -241,6 +239,7 @@ class AgentRunner:
             amount=filled_qty_dec,
             entry_price=filled_price_dec,
             budget=budget,
+            fee=fee,
             source="agent",
             signal_id=state.run_id,
         )
@@ -277,10 +276,11 @@ class AgentRunner:
 
         service = PortfolioService(repo, self._feeds)
         filled_price_dec = Decimal(str(state.order.filled_price))
+        fee = state.order.fee if state.order.fee is not None else Decimal("0")
         await service.record_close_fill(
             position=match,
             exit_price=filled_price_dec,
-            fee=Decimal("0"),
+            fee=fee,
             closed_by="agent_signal",
         )
 
