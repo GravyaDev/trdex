@@ -49,13 +49,10 @@ class Settings(BaseSettings):
     cors_origins: str = ""  # Comma-separated origins; empty = no CORS
 
     # Exchange keys (optional — only needed when connecting)
-    binance_api_key: str = ""
-    binance_api_secret: str = ""
-    # Path to Ed25519 PEM private key file. If set, overrides binance_api_secret.
-    # The PEM content is read at startup and passed to CCXT as the secret.
-    # CCXT auto-detects Ed25519 vs HMAC based on whether the secret contains
-    # "PRIVATE KEY" (PEM format) or not (raw HMAC hex string).
-    binance_api_secret_file: str = ""
+    # Accept both BINANCE_API_KEY (no prefix) and TRDEX_BINANCE_API_KEY (with prefix)
+    binance_api_key: str = Field(default="", validation_alias=AliasChoices("TRDEX_BINANCE_API_KEY", "BINANCE_API_KEY"))
+    binance_api_secret: str = Field(default="", validation_alias=AliasChoices("TRDEX_BINANCE_API_SECRET", "BINANCE_API_SECRET"))
+    binance_api_secret_file: str = Field(default="", validation_alias=AliasChoices("TRDEX_BINANCE_API_SECRET_FILE", "BINANCE_API_SECRET_FILE"))
     binance_testnet: bool = Field(default=True, description="Use Binance testnet (true) or production (false)")
 
     @property

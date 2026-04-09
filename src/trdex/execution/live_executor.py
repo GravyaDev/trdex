@@ -80,13 +80,15 @@ class LiveExecutor(ExecutionGateway):
             logger.info("[Live] using Ed25519 PEM key for authentication")
 
         if settings.binance_testnet:
-            config["urls"] = {
-                "api": {
-                    "public": "https://testnet.binance.vision/api",
-                    "private": "https://testnet.binance.vision/api",
-                }
-            }
-            logger.info("[Live] using Binance TESTNET")
+            # Use CCXT's built-in sandbox mode instead of manually
+            # overriding URLs. CCXT knows the correct testnet endpoints
+            # and path structure for each API version.
+            config["sandbox"] = True
+            # Testnet does not support /sapi endpoints (capital config,
+            # deposit/withdraw, etc). Skip fetch_currencies to avoid
+            # AuthenticationError on load_markets().
+            config["options"]["fetchCurrencies"] = False
+            logger.info("[Live] using Binance TESTNET (sandbox mode)")
         else:
             logger.warning("[Live] using Binance PRODUCTION — real money at risk")
 

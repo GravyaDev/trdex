@@ -33,7 +33,7 @@ from decimal import Decimal
 
 from trdex.config import get_settings
 from trdex.execution.live_executor import LiveExecutor
-from trdex.execution.models import Order, Side
+from trdex.execution.models import Order, OrderType, Side
 from trdex.market import specs as market_specs
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s | %(message)s")
@@ -52,8 +52,8 @@ async def main() -> int:
         logger.critical("REFUSING to run: TRDEX_BINANCE_TESTNET is false (production mode)")
         return 1
 
-    if not settings.binance_api_key or not settings.binance_api_secret:
-        logger.critical("BINANCE_API_KEY and BINANCE_API_SECRET must be set (testnet keys)")
+    if not settings.binance_api_key or not settings.binance_effective_secret:
+        logger.critical("BINANCE_API_KEY and BINANCE_API_SECRET (or TRDEX_BINANCE_API_SECRET_FILE) must be set")
         return 1
 
     logger.info("=== LiveExecutor testnet test ===")
@@ -80,8 +80,9 @@ async def main() -> int:
         buy_order = Order(
             symbol=args.symbol,
             side=Side.BUY,
+            type=OrderType.MARKET,
             amount=qty,
-            price=None,  # market order, price not used by LiveExecutor
+            price=None,
         )
         buy_result = await executor.execute(buy_order)
         logger.info(
@@ -98,7 +99,8 @@ async def main() -> int:
         sell_order = Order(
             symbol=args.symbol,
             side=Side.SELL,
-            amount=buy_result.filled_amount,  # sell exactly what we bought
+            type=OrderType.MARKET,
+            amount=buy_result.filled_amount,
             price=None,
         )
         sell_result = await executor.execute(sell_order)
