@@ -20,6 +20,7 @@ Every entry MUST cite its source using one of:
 
 ## Platform & Tool Rules
 - **Windows + pnpm: inline env vars don't work.** `VAR=value docker compose up` fails on Windows. Always use a `.env` file in the project root. [Source: empirical 2026-03-27]
+- **Coolify non interpola `${VAR}` dentro `command:` né dentro `labels:` del compose — solo dentro `environment:`.** Qualsiasi valore che dipende da env var Coolify DEVE stare nel blocco `environment:`. Nei `labels:` usare valori hardcoded (con single quotes per `$` literal). Nei `command:` spostare la configurazione a env var native se il software le supporta. Violato due volte: (1) basic-auth hash in label `${TRDEX_DASHBOARD_BASICAUTH}` → fix hardcoded; (2) oauth2-proxy `--client-id=${OAUTH2_PROXY_CLIENT_ID}` in command → fix spostato a `OAUTH2_PROXY_CLIENT_ID` in environment. [Source: empirical 2026-04-08 + 2026-04-09]
 
 ## Project Patterns
 - **RSI deve usare Wilder smoothing** (`com=period-1` in Polars), non EWM standard (`span=period`). Wilder è lo standard di TradingView, Bloomberg e MetaTrader. EWM standard diverge di 2-5 punti RSI in periodi volatili e produce segnali non comparabili con dati esterni. [Source: user override 2026-04-05]

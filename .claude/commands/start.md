@@ -83,7 +83,78 @@ Create `Daily Notes/YYYY-MM-DD.md` (if it doesn't exist):
 -
 ```
 
-### Step 4: Upstream check (if configured)
+### Step 5: Kloudify version check
+
+Check whether this project's Kloudify installation is up to date.
+
+**5a. Read the version marker.** Read `.claude/kloudify-version.json`.
+If the file does not exist, skip this step silently (the project was
+set up before versioning was introduced, or Kloudify was copied
+manually without install.sh).
+
+**5b. Query the remote for the latest version.** Extract `source_repo`
+from the version marker. If it is a GitHub URL, run:
+
+```bash
+gh release view --repo <source_repo> --json tagName,publishedAt,body 2>/dev/null
+```
+
+If `gh` is not available or the repo is not accessible, try:
+
+```bash
+git ls-remote --tags <source_repo> 2>/dev/null | tail -5
+```
+
+If neither works, skip with a note: "Could not check Kloudify
+upstream — verify manually."
+
+**5c. Compare versions.** Compare the `version` field in the marker
+against the latest remote tag. If they match, output one line:
+"Kloudify: up to date (vX.Y.Z)" and move on.
+
+**5d. If an update is available**, show the user:
+
+```
+Kloudify update available: vX.Y.Z → vA.B.C
+  Released: YYYY-MM-DD
+  Changes: <first 3 lines of the release body, or "see release notes">
+
+Update now? This will:
+  1. Run install.sh --upgrade to copy new infrastructure files
+  2. Deduplicate your knowledge-base.md against the new universal-rules.md
+  3. Preserve all project-specific rules and session state
+
+Type "yes" to update, or "skip" to continue without updating.
+```
+
+**5e. If the user says yes**, execute the upgrade:
+
+1. Run `bash <kloudify-source>/install.sh <project-dir> --upgrade`
+   (the source path is NOT in the version marker — the agent must
+   ask the user where the Kloudify repo is cloned, or check if it
+   is a known path from memory.md or the user's environment).
+
+2. After install.sh finishes, perform **knowledge-base migration**:
+   - Read `.claude/universal-rules.md` (the new version just installed)
+   - Read `.claude/knowledge-base.md` (the project's existing rules)
+   - For each rule in the KB, check if it is **already covered** by a
+     universal rule (same intent, same constraint, possibly different
+     wording). If yes, remove it from the KB — it is now redundant.
+   - Show the user what was removed and what was kept, with a brief
+     explanation for each decision.
+   - If any `.kloudify-new` files were created by install.sh (conflict
+     markers), show them to the user and ask how to resolve each one.
+
+3. Re-read `.claude/kloudify-version.json` to confirm the new version
+   is written. Output: "Kloudify upgraded to vA.B.C. KB migrated:
+   N rules removed (now in universal-rules), M rules kept
+   (project-specific)."
+
+**5f. If the user says skip**, continue with the rest of /start
+normally. Do not nag — the user has decided. Add one line to the
+daily note: "Kloudify update vA.B.C available, skipped by user."
+
+### Step 6: Upstream check (if configured)
 
 If `memory.md` mentions an upstream remote, check for new upstream commits:
 
@@ -99,18 +170,37 @@ Show a one-line summary:
 
 If no upstream is configured, skip this step silently.
 
-### Step 6: Dependency vulnerability check + auto-patch
+### Step 7: Dependency vulnerability check + auto-patch
 
-Detect the project's package managers by scanning for manifest files, then run the appropriate audit tool(s).
+**7a. Read the project stack.** Read `.claude/project-stack.md`. This
+file is maintained by the PostToolUse hook `update-project-stack.sh`
+(incremental, on every structural file edit) and by `/wrap-up` Step 3b
+(full regeneration, end of day). It contains the authoritative list of
+runtimes, package managers, dependency manifests, Docker files, and
+config files for this project.
 
-**Detection logic:**
-- `package.json` found → run `npm audit` (or `pnpm audit` / `yarn audit` based on lockfile)
-- `requirements.txt` or `pyproject.toml` found → run `pip-audit`
-- `Cargo.toml` found → run `cargo audit`
-- `go.mod` found → run `govulncheck`
-- No manifest found → skip with message "No dependency manifests detected"
+If `.claude/project-stack.md` does not exist or is older than 48 hours
+(check the "Last updated" timestamp in its header), regenerate it now:
 
-Search up to depth 3 from project root (skip `node_modules`, `.git`, `vendor`).
+```bash
+bash "$CLAUDE_PROJECT_DIR/.claude/hooks/update-project-stack.sh"
+```
+
+**7b. Derive audit targets from project-stack.md.** Do NOT re-scan
+the filesystem. Read the "Runtimes Detected" and "Dependencies"
+sections of project-stack.md and derive which audit tools to run:
+
+- "Node.js (npm)" or Node dependency sections present → `npm audit`
+- "Node.js (pnpm)" → `pnpm audit`
+- "Node.js (yarn)" → `yarn audit`
+- "Python (pip)" or Python dependency sections present → `pip-audit`
+- "Python (pyproject)" → `pip-audit` (via pyproject.toml)
+- "Rust (cargo)" → `cargo audit`
+- "Go (modules)" → `govulncheck`
+- No runtimes detected → skip with "No dependency manifests in project-stack.md"
+
+This ensures /start and /wrap-up agree on what the project contains,
+instead of running independent filesystem scans that can diverge.
 
 **Auto-patch logic** — apply immediately for each open advisory:
 
@@ -146,14 +236,14 @@ git revert HEAD --no-edit
 # Then reinstall dependencies
 ```
 
-### Step 7: Open task board
+### Step 8: Open task board
 
 Read `Task Board.md`. Scan for:
 - Overdue items (anything from previous days still open)
 - Today's priorities
 - Blocked items
 
-### Step 8: Task review
+### Step 9: Task review
 
 For each task in Today:
 1. Is it still relevant?
@@ -162,7 +252,7 @@ For each task in Today:
 
 Move stale tasks to Backlog. Flag blocked items.
 
-### Step 9: Ready to work
+### Step 10: Ready to work
 
 Output a brief orientation:
 - What day it is

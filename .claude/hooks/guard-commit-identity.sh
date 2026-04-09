@@ -3,10 +3,9 @@
 #
 # Purpose: block `git commit` if the message contains a Co-Authored-By
 # trailer that doesn't match the identity declared in knowledge-base.md.
-# This is the root-cause fix for the 2026-04-08 commit-identity violation
-# where an agent used the global ~/.claude/CLAUDE.md default trailer
-# (Claude Opus / noreply@anthropic.com) instead of the project-specific
-# Kloud <kloud@gravya.it> trailer from the project knowledge-base.
+# This prevents agents from using the global ~/.claude/CLAUDE.md default
+# Co-Authored-By trailer when the project knowledge-base declares a
+# different identity.
 #
 # Behavior:
 # - fail-open if no Commit Identity entry is found in knowledge-base.md
