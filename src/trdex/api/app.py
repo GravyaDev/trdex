@@ -232,6 +232,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         max_drawdown_pct=settings.gate_max_drawdown,
     )
     risk_routes.set_monitor(sl_monitor)
+    risk_routes.set_session_factory(session_factory)
     await sl_monitor.start()
 
     # --- Agent scheduler ---

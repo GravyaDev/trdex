@@ -277,10 +277,11 @@ class AgentRunner:
 
         service = PortfolioService(repo, self._feeds)
         filled_price_dec = Decimal(str(state.order.filled_price))
+        fee = state.order.fee if state.order.fee is not None else Decimal("0")
         await service.record_close_fill(
             position=match,
             exit_price=filled_price_dec,
-            fee=Decimal("0"),
+            fee=fee,
             closed_by="agent_signal",
         )
 
