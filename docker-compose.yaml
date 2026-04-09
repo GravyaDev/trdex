@@ -162,7 +162,7 @@ services:
       - --client-secret=${OAUTH2_PROXY_CLIENT_SECRET}
       - --cookie-secret=${OAUTH2_PROXY_COOKIE_SECRET}
       - --cookie-secure=true
-      - --cookie-domains=trdex.gravya.it
+      - --cookie-domain=trdex.gravya.it
       - --email-domain=${OAUTH2_PROXY_EMAIL_DOMAIN:-*}
       - --github-user=${OAUTH2_PROXY_GITHUB_USER:-}
       - --http-address=0.0.0.0:4180
