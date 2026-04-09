@@ -177,12 +177,11 @@ services:
       OAUTH2_PROXY_PROXY_PREFIX: '/oauth2'
       OAUTH2_PROXY_REDIRECT_URL: 'https://trdex.gravya.it/oauth2/callback'
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: 'true'
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:4180/ping || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+    # No healthcheck: the oauth2-proxy image is a static binary with
+    # no shell, no wget, no curl — CMD-SHELL fails with "no such file".
+    # The process either starts or crashes; there is no "unhealthy but
+    # running" state. Coolify treats a running container without
+    # healthcheck as healthy by default.
     restart: unless-stopped
     logging: *default-logging
     labels:
@@ -219,7 +218,7 @@ services:
       app:
         condition: service_healthy
       oauth2-proxy:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8501/dashboard/_stcore/health || exit 1"]
       interval: 15s
