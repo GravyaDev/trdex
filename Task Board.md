@@ -77,22 +77,39 @@ Fix deployato oggi: SL adattivo a CV + per-symbol config + fee nel P&L
 
 ### 🟢 Branch `llm-agents` (sessione separata su `trdex-llm/`)
 
-- [ ] **Design doc `llm-agents-design-2026-04-08.md`** — architettura completa per LLM veri
-  - 8 sezioni: stato attuale, architettura target, cost model, schema DB, prompt template, roadmap, testing, risk
-  - **Effort**: ~1-2h di scrittura
-  - **Trigger**: prossima sessione fresca su `trdex-llm/`
+- [x] **Design doc Rev 1** — `.claude/reports/llm-agents-design-2026-04-08.md` (8 sezioni + review log)
+  - Multi-agent brainstorming: 23 objections, 18 accepted, 3 deferred, 1 rejected
+  - 4 critical revisions applied: prompt heuristics removed, conditional calling redesigned, LLMCaller injection, RAG sanitization day-1
 
-- [ ] **Implement LLM Analyst** — il cuore della trasformazione: sostituire `_rule_based_signal()` con una chiamata LLM che legge indicatori + news + storia trade + entity graph
-  - **Effort**: ~4-6h (prompt engineering + schema + test)
+- [ ] **Task 1: Provider abstraction + schemas + LLMCaller** (3-4h)
+  - `llm_provider.py` (factory + structured output wrapper per Google GenAI)
+  - `llm_caller.py` (invoke/fallback/budget/usage — injected via AgentState, not serialized)
+  - 3 migrations: agent_config (CHECK constraints), agent_llm_usage, agent_runs extension
+  - Config repo, Settings extension, 3 provider deps in pyproject.toml
 
-- [ ] **Implement LLM Scout** — ricerca e sintesi news contestualizzata al symbol
-  - **Effort**: ~2-3h
+- [ ] **Task 2: LLM Analyst node** (3-4h) — depends: Task 1
+  - Replace `_rule_based_signal()` with LLM call via LLMCaller
+  - Prompt assembly with `max_prompt_tokens` budget + LIFO truncation
+  - RAG sanitizer (`sanitize_rag_content()`) — day-1 prompt injection defense
+  - Fallback to rule engine on failure (documented quality gap)
 
-- [ ] **Dashboard config pages** — 4 pagine (Scout/Analyst/Risk/Executor) con prompt editor + parametri + model selector
-  - **Effort**: ~3-4h
+- [ ] **Task 3: LLM Scout node** (2-3h) — depends: Task 1
+  - LLM summarization + sentiment extraction with calibration check vs naive average
 
-- [ ] **Reflection memory wiring** — fare in modo che ogni LLM agent riceva nel prompt la storia dei trade recenti, i pattern di win/loss, e le note dell'entity graph
-  - **Effort**: ~2-3h
+- [ ] **Task 4: Dashboard config pages** (4-5h) — depends: Task 1
+  - 4 agent pages + restore default + keyword validation + recommended badges
+  - Cost forecast widget + fallback banner + LLM usage stats
+
+- [ ] **Task 5: Reflection memory injection** (2h) — depends: Task 2
+  - Wire MemoryContextLoader.build() into Analyst prompt
+
+- [ ] **Task 6: Cost guardrails** (2h) — depends: Task 1
+  - Redis daily/monthly budget + dashboard widget
+
+- [ ] **Task 7: Risk annotation** (1h, optional) — depends: Task 1
+
+- [ ] **Task 8: Testing + validation** (3-4h) — depends: Task 2, 3
+  - Unit (mocked), integration (gated), eval framework (50 scenarios), directional consistency
 
 ### 🔵 Phase 3 (post-osservazione, quando hai 7-14+ giorni di dati)
 
