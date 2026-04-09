@@ -92,6 +92,7 @@ class Settings(BaseSettings):
 
     # AI / Vector DB
     jina_api_key: str = ""          # https://jina.ai — free tier, 100 req/min
+    perplexity_api_key: str = ""    # https://perplexity.ai — sonar search API
     qdrant_url: str = "http://localhost:6333"
 
     # Telegram signal following (my.telegram.org)
