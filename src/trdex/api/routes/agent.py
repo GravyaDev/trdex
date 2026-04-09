@@ -127,3 +127,53 @@ async def agent_history(
         )
         for r in records
     ]
+
+
+# ── Scheduler symbols management ──────────────────────────────────────────
+
+
+class SchedulerSymbolsBody(BaseModel):
+    symbols: list[str]
+
+
+@router.get("/scheduler/symbols")
+async def get_scheduler_symbols(_key: str = Depends(verify_api_key)) -> dict:
+    """Return the current scheduler symbol list."""
+    from trdex.agents.scheduler import get_runtime_symbols
+    symbols = get_runtime_symbols() or []
+    # Rate limit budget estimate (Binance 120 rpm)
+    rpm_agent = len(symbols) * 2 / 5  # 2 calls per symbol per 5-min tick
+    rpm_stoploss = len(symbols) * 2 * 2  # 2 calls per symbol per 30s tick (worst case all positions open)
+    rpm_total = rpm_agent + rpm_stoploss
+    return {
+        "symbols": symbols,
+        "count": len(symbols),
+        "rate_limit_estimate": {
+            "agent_rpm": round(rpm_agent, 1),
+            "stoploss_rpm_max": round(rpm_stoploss, 1),
+            "total_rpm_max": round(rpm_total, 1),
+            "binance_budget_rpm": 120,
+            "utilization_pct": round(rpm_total / 120 * 100, 1),
+        },
+    }
+
+
+@router.put("/scheduler/symbols")
+async def update_scheduler_symbols(
+    body: SchedulerSymbolsBody,
+    _key: str = Depends(verify_api_key),
+) -> dict:
+    """Update the scheduler symbol list at runtime (no restart needed).
+
+    Not persisted — reverts to env var on container restart.
+    For permanent changes, update TRDEX_AGENT_SCHEDULER_SYMBOLS in Coolify.
+    """
+    from trdex.agents.scheduler import set_runtime_symbols
+    cleaned = [s.strip().upper() for s in body.symbols if s.strip()]
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="At least one symbol required")
+    if len(cleaned) > 30:
+        raise HTTPException(status_code=400, detail="Max 30 symbols (rate limit safety)")
+    set_runtime_symbols(cleaned)
+    # Re-fetch to return the rate limit estimate
+    return await get_scheduler_symbols(_key)

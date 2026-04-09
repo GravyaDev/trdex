@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from slowapi import Limiter
@@ -79,6 +83,50 @@ _session_factory = None
 def set_session_factory(sf) -> None:  # type: ignore[no-untyped-def]
     global _session_factory
     _session_factory = sf
+
+
+class ThresholdsBody(BaseModel):
+    position_sl_pct: float | None = None
+    position_tp_pct: float | None = None
+    trailing_stop_pct: float | None = None
+    daily_drawdown_pct: float | None = None
+    max_drawdown_pct: float | None = None
+
+
+@router.put("/thresholds")
+async def update_thresholds(
+    body: ThresholdsBody,
+    _key: str = Depends(verify_api_key),
+) -> dict:
+    """Update global risk thresholds at runtime (no restart needed).
+
+    Only non-null fields are updated. NULL fields keep their current value.
+    Not persisted — reverts to env var on container restart.
+    """
+    if _monitor is None:
+        raise HTTPException(status_code=503, detail="Stop-loss monitor not running.")
+    if body.position_sl_pct is not None:
+        if not 0.001 <= body.position_sl_pct <= 0.50:
+            raise HTTPException(status_code=400, detail="position_sl_pct must be 0.1%-50%")
+        _monitor._sl_pct = body.position_sl_pct
+    if body.position_tp_pct is not None:
+        if not 0.01 <= body.position_tp_pct <= 1.0:
+            raise HTTPException(status_code=400, detail="position_tp_pct must be 1%-100%")
+        _monitor._tp_pct = body.position_tp_pct
+    if body.trailing_stop_pct is not None:
+        if not 0.005 <= body.trailing_stop_pct <= 0.50:
+            raise HTTPException(status_code=400, detail="trailing_stop_pct must be 0.5%-50%")
+        _monitor._trailing_pct = body.trailing_stop_pct
+    if body.daily_drawdown_pct is not None:
+        if not 0.01 <= body.daily_drawdown_pct <= 0.50:
+            raise HTTPException(status_code=400, detail="daily_drawdown_pct must be 1%-50%")
+        _monitor._daily_dd_pct = body.daily_drawdown_pct
+    if body.max_drawdown_pct is not None:
+        if not 0.05 <= body.max_drawdown_pct <= 1.0:
+            raise HTTPException(status_code=400, detail="max_drawdown_pct must be 5%-100%")
+        _monitor._max_dd_pct = body.max_drawdown_pct
+    logger.info("[Risk] thresholds updated at runtime: %s", _monitor.status.get("thresholds"))
+    return _monitor.status
 
 
 class SymbolConfigBody(BaseModel):
