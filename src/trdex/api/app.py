@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 
 from trdex import __version__
-from trdex.config import settings
+from trdex.config import TrdexMode, settings
 from trdex.context.news_sources.cryptocompare import CryptoCompareNewsSource
 from trdex.context.news_sources.stockdata import StockDataNewsSource
 from trdex.context.scheduler import IngestionScheduler
@@ -124,12 +124,19 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # --- Session factory (needed early for tracker load) ---
     session_factory = get_session_factory()
 
-    # --- Security check ---
+    # --- Security checks ---
     if not settings.api_key:
         logger.warning(
             "[security] TRDEX_API_KEY is not set — API is unauthenticated. "
             "Set TRDEX_API_KEY before deploying to production."
         )
+    if settings.mode != TrdexMode.SIMULATION and settings._uses_default_db_creds:
+        logger.critical(
+            "[security] REFUSING TO START in %s mode with default DB password "
+            "'trdex:trdex'. Set a strong POSTGRES_PASSWORD in .env / Coolify.",
+            settings.mode.value,
+        )
+        raise RuntimeError("Default DB credentials not allowed outside simulation mode")
 
     # --- Restore KillSwitch state from DB (survives restarts) ---
     from trdex.risk.stop_loss import get_kill_switch
@@ -153,6 +160,19 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     feed_manager.register(FreeCryptoAPIFeed(api_key=settings.freecryptoapi_key))
     ws_feed = BinanceWSFeed()
     feed_manager.register(ws_feed)
+
+    # --- Load market specs (lot size, precision, min notional) ---
+    # Must run after BinanceFeed is registered. Uses the underlying CCXT
+    # exchange to call load_markets() once. The cached specs are used by
+    # the Simulator and LiveExecutor to truncate quantities to valid
+    # step sizes before placing orders.
+    from trdex.market import specs as market_specs
+    binance_feed = feed_manager.feeds.get("binance")
+    if binance_feed:
+        try:
+            await market_specs.load(binance_feed._exchange)
+        except Exception as exc:
+            logger.warning("[lifespan] market specs load failed: %s — lot size truncation disabled", exc)
 
     # --- Execution gateway (shared by SL monitor + agent runner + routes) ---
     from trdex.execution.default_gateway import DefaultExecutionGateway
@@ -247,6 +267,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 agent_symbols,
                 settings.agent_scheduler_interval,
                 gateway=gateway,
+                active_hours=settings.agent_scheduler_active_hours,
             ),
             name="agent-scheduler",
         )
