@@ -27,6 +27,15 @@ services:
       - "6333:6333"   # REST API
       - "6334:6334"   # gRPC
 
+  # In dev, oauth2-proxy is not needed (no GitHub OAuth App for localhost).
+  # We disable it and remove the dashboard dependency on it.
+  oauth2-proxy:
+    profiles: ["production"]  # never started in dev (no matching profile)
+
   dashboard:
     ports:
       - "8501:8501"   # Streamlit, access at http://localhost:8501/dashboard/
+    depends_on:
+      app:
+        condition: service_healthy
+      # Override: remove oauth2-proxy dependency for dev
