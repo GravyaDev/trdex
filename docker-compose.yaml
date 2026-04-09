@@ -156,23 +156,27 @@ services:
   #   OAUTH2_PROXY_GITHUB_USER    — restrict to specific GitHub username
   oauth2-proxy:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.7.1
-    command:
-      - --provider=github
-      - --client-id=${OAUTH2_PROXY_CLIENT_ID}
-      - --client-secret=${OAUTH2_PROXY_CLIENT_SECRET}
-      - --cookie-secret=${OAUTH2_PROXY_COOKIE_SECRET}
-      - --cookie-secure=true
-      - --cookie-domain=trdex.gravya.it
-      - --email-domain=${OAUTH2_PROXY_EMAIL_DOMAIN:-*}
-      - --github-user=${OAUTH2_PROXY_GITHUB_USER:-}
-      - --http-address=0.0.0.0:4180
-      - --upstream=static://202
-      - --reverse-proxy=true
-      - --set-xauthrequest=true
-      - --cookie-path=/dashboard
-      - --proxy-prefix=/oauth2
-      - --redirect-url=https://trdex.gravya.it/oauth2/callback
-      - --skip-provider-button=true
+    # All config via environment variables — Coolify injects env vars
+    # into the container runtime but does NOT interpolate ${VAR} inside
+    # compose command args. oauth2-proxy reads OAUTH2_PROXY_* env vars
+    # natively (each --flag has a matching env var with underscores).
+    environment:
+      OAUTH2_PROXY_PROVIDER: 'github'
+      OAUTH2_PROXY_CLIENT_ID: '${OAUTH2_PROXY_CLIENT_ID}'
+      OAUTH2_PROXY_CLIENT_SECRET: '${OAUTH2_PROXY_CLIENT_SECRET}'
+      OAUTH2_PROXY_COOKIE_SECRET: '${OAUTH2_PROXY_COOKIE_SECRET}'
+      OAUTH2_PROXY_COOKIE_SECURE: 'true'
+      OAUTH2_PROXY_COOKIE_DOMAIN: 'trdex.gravya.it'
+      OAUTH2_PROXY_COOKIE_PATH: '/dashboard'
+      OAUTH2_PROXY_EMAIL_DOMAINS: '${OAUTH2_PROXY_EMAIL_DOMAIN:-*}'
+      OAUTH2_PROXY_GITHUB_USERS: '${OAUTH2_PROXY_GITHUB_USER:-}'
+      OAUTH2_PROXY_HTTP_ADDRESS: '0.0.0.0:4180'
+      OAUTH2_PROXY_UPSTREAMS: 'static://202'
+      OAUTH2_PROXY_REVERSE_PROXY: 'true'
+      OAUTH2_PROXY_SET_XAUTHREQUEST: 'true'
+      OAUTH2_PROXY_PROXY_PREFIX: '/oauth2'
+      OAUTH2_PROXY_REDIRECT_URL: 'https://trdex.gravya.it/oauth2/callback'
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: 'true'
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:4180/ping || exit 1"]
       interval: 15s
