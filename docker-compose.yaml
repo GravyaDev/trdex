@@ -175,8 +175,11 @@ services:
       OAUTH2_PROXY_COOKIE_DOMAIN: 'trdex.gravya.it'
       OAUTH2_PROXY_COOKIE_PATH: '/'
       OAUTH2_PROXY_COOKIE_SAMESITE: 'lax'
-      OAUTH2_PROXY_EMAIL_DOMAINS: '${OAUTH2_PROXY_EMAIL_DOMAIN:-*}'
-      OAUTH2_PROXY_GITHUB_USERS: '${OAUTH2_PROXY_GITHUB_USER:-}'
+      # Accept any authenticated GitHub user. Restrict via Coolify env
+      # vars OAUTH2_PROXY_GITHUB_USERS or OAUTH2_PROXY_EMAIL_DOMAINS
+      # if needed (note: email domain filter requires the GitHub email
+      # to match — many users have non-obvious primary emails).
+      OAUTH2_PROXY_EMAIL_DOMAINS: '*'
       OAUTH2_PROXY_HTTP_ADDRESS: '0.0.0.0:4180'
       # Upstream: proxy authenticated requests to the dashboard container
       OAUTH2_PROXY_UPSTREAMS: 'http://dashboard:8501'
