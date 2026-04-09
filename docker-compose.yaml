@@ -193,12 +193,20 @@ services:
       - "traefik.http.routers.trdex-oauth2.tls.certresolver=letsencrypt"
       - "traefik.http.routers.trdex-oauth2.service=trdex-oauth2-svc"
       - "traefik.http.services.trdex-oauth2-svc.loadbalancer.server.port=4180"
-      # ForwardAuth middleware — Traefik calls oauth2-proxy /auth endpoint
-      # before proxying to dashboard. If oauth2-proxy returns 401,
-      # Traefik redirects the user to the GitHub login page.
-      - "traefik.http.middlewares.trdex-oauth2-auth.forwardauth.address=http://oauth2-proxy:4180/oauth2/auth"
-      - "traefik.http.middlewares.trdex-oauth2-auth.forwardauth.trustForwardHeader=true"
-      - "traefik.http.middlewares.trdex-oauth2-auth.forwardauth.authResponseHeaders=X-Auth-Request-User,X-Auth-Request-Email"
+      # ForwardAuth middleware — Traefik calls oauth2-proxy /oauth2/auth.
+      # On 401, forwardAuth passes the 401 to the client (Traefik does
+      # NOT auto-redirect). The errors middleware below catches the 401
+      # and redirects the user to /oauth2/sign_in which starts the
+      # GitHub OAuth flow.
+      - "traefik.http.middlewares.trdex-oauth2-verify.forwardauth.address=http://oauth2-proxy:4180/oauth2/auth"
+      - "traefik.http.middlewares.trdex-oauth2-verify.forwardauth.trustForwardHeader=true"
+      - "traefik.http.middlewares.trdex-oauth2-verify.forwardauth.authResponseHeaders=X-Auth-Request-User,X-Auth-Request-Email,Set-Cookie"
+      # Errors middleware — catches 401 from forwardAuth and redirects
+      # to the oauth2-proxy sign-in page. The `query` field is the URL
+      # where the user is sent; oauth2-proxy will then redirect to GitHub.
+      - "traefik.http.middlewares.trdex-oauth2-redirect.errors.status=401"
+      - "traefik.http.middlewares.trdex-oauth2-redirect.errors.service=trdex-oauth2-svc"
+      - "traefik.http.middlewares.trdex-oauth2-redirect.errors.query=/oauth2/sign_in?rd={url}"
 
   # Streamlit dashboard UI for Phase 2 observation.
   # Protected by oauth2-proxy + GitHub SSO via Traefik forwardAuth.
@@ -235,8 +243,8 @@ services:
       - "traefik.http.routers.trdex-dashboard.tls.certresolver=letsencrypt"
       - "traefik.http.routers.trdex-dashboard.service=trdex-dashboard"
       - "traefik.http.services.trdex-dashboard.loadbalancer.server.port=8501"
-      # ForwardAuth middleware — delegates auth to oauth2-proxy
-      - "traefik.http.routers.trdex-dashboard.middlewares=trdex-oauth2-auth"
+      # Auth chain: verify session (forwardAuth) → redirect to login on 401 (errors)
+      - "traefik.http.routers.trdex-dashboard.middlewares=trdex-oauth2-verify,trdex-oauth2-redirect"
 
 volumes:
   pgdata:
