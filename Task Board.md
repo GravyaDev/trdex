@@ -46,23 +46,25 @@ Auth: GitHub OAuth via oauth2-proxy
 - [ ] **Task 8: Evaluation framework** (deferred — needs live data)
   - 50 golden scenarios, LLM vs rule engine A/B, directional consistency tests
 
-- [ ] **Active hours mode** — scheduler skippa cicli fuori fascia configurable
-  - Infrastruttura RuntimeConfig già presente (migration 012), serve solo la logica scheduler
+- [x] **Active hours mode** — già implementato (scheduler.py `_parse_active_hours` + `_is_active_now`, config via RuntimeConfig)
 
 ---
 
-## 🔴 Blockers per live mode (da fare PRIMA di soldi veri)
+## 🔴 Blockers per live mode (tutti risolti su main, mergiati in llm-agents)
 
-- [ ] **Lot size compliance** — Simulator non rispetta lot/step size Binance. Live orders verrebbero rifiutati.
-  - Fix: `exchange.load_markets()` al lifespan, cache min/step, truncare qty
-  - **Effort**: ~2-3h
+✅ Tutti i blocker originali sono stati risolti su main e mergiati in llm-agents:
+- Lot size compliance (`market/specs.py` + `truncate_qty()`)
+- Open-side fee tracking (migration 010 + `fee_open` column)
+- Reject default DB creds (guard in `app.py` lifespan)
+- Live executor test (Ed25519 testnet passed)
 
-- [ ] **Open-side fee tracking** — Solo close fee sottratta. P&L gonfiato ~0.1%/trade.
-  - Fix: colonna `fee_open`, migration, scrivere in `record_open_fill`
-  - **Effort**: ~1h
+---
 
-- [ ] **Reject default DB creds in non-dev modes**
-  - **Effort**: ~30 min
+## 🛡️ Security corrective tasks (da security scan 2026-04-10)
+
+- [ ] **[HIGH] Harden verify_api_key** — refuse startup se `settings.mode != SIMULATION` e `api_key` vuoto. Oggi l'API cade in dev-mode silenzioso con TUTTI gli endpoint esposti (incluso `/v1/debug/*`). Mirror del pattern default-DB-creds guard in `app.py:137-143`. **Effort**: ~30 min
+- [ ] **[MEDIUM] Sanitize memory snapshot text prima dell'iniezione LLM** — `memory_text` in `prompt_builder.py:111-113` e `state.memory_snapshots[agent]` vanno passati per `sanitize_rag_content()` per defense-in-depth. Oggi tutto il contenuto è interno, ma il pattern è un vettore di prompt-injection diretto nell'Analyst. **Effort**: ~20 min
+- [ ] **[LOW] CLI input validation** su `backfill_ohlcv.py` e `generate_episodes.py` — regex su `symbol` (`^[A-Z0-9]{2,10}/[A-Z0-9]{2,10}$`), cap `--days` a 3650, validate `window > 0` e `stride > 0`. **Effort**: ~15 min
 
 ---
 
@@ -77,21 +79,27 @@ Auth: GitHub OAuth via oauth2-proxy
 
 ## ⚪ Tech debt / minor
 
-- [ ] Pass feed/strategy registries into create_app() for /status endpoint
+Risolti via merge da main oggi:
+- [x] `/status` endpoint con feed/strategy registries (via `app.state`)
+- [x] `PositionSide` enum in ORM
+- [x] Forex weekend gap closure rule (`market/hours.py` + risk gate 4b)
+- [x] Circuit breaker IngestionScheduler per Qdrant failures
+
+Aperti:
 - [ ] Alembic migration runner (sostituisce script custom)
-- [ ] Circuit breaker IngestionScheduler per Qdrant failures
-- [ ] Define `PositionSide` enum (replace plain str in ORM)
-- [ ] Forex weekend gap closure rule
-- [ ] Persistent stop-loss event log (oggi in-memory)
+- [ ] Persistent stop-loss event log (oggi in-memory, perso al restart)
 - [ ] `fill_reconciliation` table per riconciliazione DB ↔ exchange (live mode)
+- [ ] Tier 3+4 features (kline WS stream, CoinGecko screener, hyperopt, Redis cache, Ollama LLM)
 
 ---
 
 ## Done — 2026-04-10
 
-- [x] Merge forward `origin/main` → `llm-agents` (Runtime Config + aggressive tuning, 0 conflitti)
-- [x] Commit Step 1 RAG pipeline (indicators extraction)
-- [x] **Historical Market Episode RAG pipeline COMPLETE** (Step 1-8): backfill, episodes, generate, context integration, scheduler wiring, market brief, 32 test
+- [x] **Merge forward #1** `origin/main` → `llm-agents` (Runtime Config + aggressive tuning, 0 conflitti)
+- [x] **Historical Market Episode RAG pipeline COMPLETE** (Step 1-8): backfill, episodes, generate, context integration, scheduler wiring, market brief, 33 test (commit `0431781`)
+- [x] **Merge forward #2** `origin/main` → `llm-agents` (tech debt fixes: /status, PositionSide, forex hours, circuit breaker, StopLoss Binance pin), `app.py` auto-merge pulito, Task Board preservato (commit `0121bc6`)
+- [x] 344/344 test pass dopo entrambi i merge
+- [x] Push `llm-agents` su origin
 
 ## Done — 2026-04-09
 
