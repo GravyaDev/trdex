@@ -25,10 +25,9 @@
 
 ## Prossima sessione
 
-1. Deploy `trdex-llm` su Coolify come app separata (guida: `docs/deploy-llm-instance.md`)
-2. Set `TRDEX_ANTHROPIC_API_KEY`, abilita Analyst LLM dal dashboard
-3. Monitora costi e segnali per 24-48h
-4. A/B compare con rule engine su `trdex.gravya.it`
+1. **Historical RAG pipeline** — Step 2-8 del piano (`plans/rosy-pondering-horizon.md`). Step 1 fatto. Prossimo: `scripts/backfill_ohlcv.py`
+2. Deploy `trdex-llm` su Coolify (guida: `docs/deploy-llm-instance.md`)
+3. Merge forward Runtime Config da main quando committato
 
 ## Project: trdex
 

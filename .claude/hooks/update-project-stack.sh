@@ -118,10 +118,10 @@ for section in ('dependencies', 'devDependencies', 'peerDependencies'):
   # Docker
   echo "## Docker"
   echo ""
-  for f in $(find "$PROJECT_DIR" -maxdepth 3 \( -name "docker-compose*.yml" -o -name "docker-compose*.yaml" -o -name "Dockerfile" -o -name "Dockerfile.*" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" 2>/dev/null | sort); do
+  while IFS= read -r -d '' f; do
     rel="${f#$PROJECT_DIR/}"
     echo "- \`$rel\`"
-  done
+  done < <(find "$PROJECT_DIR" -maxdepth 3 \( -name "docker-compose*.yml" -o -name "docker-compose*.yaml" -o -name "Dockerfile" -o -name "Dockerfile.*" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -print0 2>/dev/null | sort -z)
   echo ""
 
   # Dependency manifests
@@ -129,16 +129,16 @@ for section in ('dependencies', 'devDependencies', 'peerDependencies'):
   echo ""
 
   # Find all package.json (up to depth 3, skip node_modules)
-  for pj in $(find "$PROJECT_DIR" -maxdepth 3 -name "package.json" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/Daily Notes/*" 2>/dev/null | sort); do
+  while IFS= read -r -d '' pj; do
     rel="${pj#$PROJECT_DIR/}"
     collect_deps "Node: $rel" "$rel"
-  done
+  done < <(find "$PROJECT_DIR" -maxdepth 3 -name "package.json" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/Daily Notes/*" -print0 2>/dev/null | sort -z)
 
   # Python
-  for req in $(find "$PROJECT_DIR" -maxdepth 4 -name "requirements.txt" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/Daily Notes/*" 2>/dev/null | sort); do
+  while IFS= read -r -d '' req; do
     rel="${req#$PROJECT_DIR/}"
     collect_deps "Python: $rel" "$rel"
-  done
+  done < <(find "$PROJECT_DIR" -maxdepth 4 -name "requirements.txt" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/Daily Notes/*" -print0 2>/dev/null | sort -z)
 
   # Other manifests
   for mf in pyproject.toml Cargo.toml go.mod; do
@@ -148,10 +148,10 @@ for section in ('dependencies', 'devDependencies', 'peerDependencies'):
   # Config files
   echo "## Configuration Files"
   echo ""
-  for cfg in $(find "$PROJECT_DIR" -maxdepth 3 \( -name "tsconfig*.json" -o -name "*.config.js" -o -name "*.config.ts" -o -name "*.config.mjs" -o -name ".env.example" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/Daily Notes/*" 2>/dev/null | sort); do
+  while IFS= read -r -d '' cfg; do
     rel="${cfg#$PROJECT_DIR/}"
     echo "- \`$rel\`"
-  done
+  done < <(find "$PROJECT_DIR" -maxdepth 3 \( -name "tsconfig*.json" -o -name "*.config.js" -o -name "*.config.ts" -o -name "*.config.mjs" -o -name ".env.example" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.claude/*" -not -path "*/Daily Notes/*" -print0 2>/dev/null | sort -z)
   echo ""
 
 } > "$STACK_FILE"

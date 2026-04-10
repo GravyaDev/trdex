@@ -228,6 +228,31 @@ Add to `Daily Notes/YYYY-MM-DD.md` → End of Day Summary:
 - Open items carried forward
 - Tomorrow's priorities
 
-### Step 10: Sign off
+### Step 10: Push day's work (user confirmation required)
+
+Check if there are unpushed commits on the current branch:
+
+```bash
+git log @{upstream}..HEAD --oneline 2>/dev/null
+```
+
+If there are **no unpushed commits**, skip this step silently.
+
+If there **are** unpushed commits, show the user a summary:
+
+```
+Unpushed commits (N):
+<list of one-line commit summaries>
+
+Push to origin/<branch>?
+```
+
+- **User says yes**: run `git push` and report the result.
+- **User says no/skip**: note "Push skipped by user" in the daily note
+  under Notes, and move on.
+
+Do NOT push without explicit user confirmation. Do NOT use `--force`.
+
+### Step 11: Sign off
 
 Brief message: what was accomplished today, what's next tomorrow.

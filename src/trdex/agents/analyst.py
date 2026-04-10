@@ -21,7 +21,11 @@ import statistics
 from trdex.agents.intent import Intent, signal_to_intent
 from trdex.agents.memory_helpers import attach_memory_snapshot
 from trdex.agents.state import AgentState, AnalysisResult
-from trdex.backtest.indicators import rsi_from_list
+from trdex.backtest.indicators import (
+    classify_volatility,
+    rsi_from_list,
+    sma_from_list,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,22 +36,11 @@ logger = logging.getLogger(__name__)
 def _classify_volatility(closes: list[float]) -> str:
     """Classify recent volatility regime from close prices.
 
-    Returns one of: "low", "medium", "high".
-    Uses coefficient of variation (std/mean) over the last 20 candles.
-    Thresholds: <1% low, 1-3% medium, >3% high.
+    Delegates to ``backtest.indicators.classify_volatility`` — kept as a
+    thin wrapper for backward compatibility of the private name.
     """
-    window = closes[-20:] if len(closes) >= 20 else closes
-    if len(window) < 3:
-        return "unknown"
-    mean = statistics.mean(window)
-    if mean == 0:
-        return "unknown"
-    cv = statistics.stdev(window) / mean
-    if cv < 0.01:
-        return "low"
-    if cv < 0.03:
-        return "medium"
-    return "high"
+    label, _ = classify_volatility(closes)
+    return label
 
 
 async def _write_volatility_regime(state: AgentState, regime: str, cv: float | None = None) -> None:
@@ -71,9 +64,7 @@ async def _write_volatility_regime(state: AgentState, regime: str, cv: float | N
 
 
 def _compute_sma(closes: list[float], period: int) -> float | None:
-    if len(closes) < period:
-        return None
-    return statistics.mean(closes[-period:])
+    return sma_from_list(closes, period)
 
 
 def _rule_based_signal(

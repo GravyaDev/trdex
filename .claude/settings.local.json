@@ -2,7 +2,22 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:developers.facebook.com)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(ls -d C:/Users/Daniele/Antigravity/trdex-llm/src/trdex/*/)",
+      "Bash(rtk gh:*)",
+      "Bash(uv pip:*)",
+      "Bash(pip show:*)",
+      "Bash(gh release:*)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(git ls-remote:*)",
+      "Bash(bash tmp-kloudify/install.sh . --upgrade)",
+      "Bash(cp .claude/hooks/guard-commit-identity.sh.kloudify-new .claude/hooks/guard-commit-identity.sh)",
+      "Bash(cp .claude/hooks/session-timer.sh.kloudify-new .claude/hooks/session-timer.sh)",
+      "Bash(cp .claude/hooks/update-project-stack.sh.kloudify-new .claude/hooks/update-project-stack.sh)",
+      "Bash(rm .claude/commands/resume.md.kloudify-new .claude/hooks/guard-commit-identity.sh.kloudify-new .claude/hooks/session-timer.sh.kloudify-new .claude/hooks/update-project-stack.sh.kloudify-new)",
+      "Bash(find tmp-kloudify:*)",
+      "Bash(rtk git:*)",
+      "Bash(bash:*)"
     ]
   }
 }

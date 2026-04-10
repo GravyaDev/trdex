@@ -12,7 +12,9 @@
 
 set -euo pipefail
 
-TIMER_FILE="${CLAUDE_PROJECT_DIR:-.}/.claude/session-timer.json"
+# Canonicalize project dir to prevent path traversal via symlinks or ..
+TIMER_DIR="$(cd "${CLAUDE_PROJECT_DIR:-.}" && pwd)"
+TIMER_FILE="$TIMER_DIR/.claude/session-timer.json"
 ACTION="${1:-status}"
 
 now_iso() {
@@ -25,6 +27,11 @@ now_epoch() {
 
 iso_to_epoch() {
   local iso="$1"
+  # Validate ISO 8601 format before passing to date to prevent injection
+  if ! echo "$iso" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'; then
+    echo "0"
+    return
+  fi
   # Handle both GNU and BSD date
   if date -d "$iso" +%s 2>/dev/null; then
     return
@@ -47,14 +54,11 @@ format_duration() {
 
 case "$ACTION" in
   start)
-    cat > "$TIMER_FILE" << EOF
-{
-  "started_at": "$(now_iso)",
-  "started_epoch": $(now_epoch),
-  "status": "running"
-}
-EOF
-    echo "Session timer started at $(now_iso)"
+    start_iso=$(now_iso)
+    start_epoch=$(now_epoch)
+    printf '{\n  "started_at": "%s",\n  "started_epoch": %d,\n  "status": "running"\n}\n' \
+      "$start_iso" "$start_epoch" > "$TIMER_FILE"
+    echo "Session timer started at $start_iso"
     ;;
 
   stop)
@@ -76,17 +80,9 @@ EOF
 
     # Update the timer file with final state
     STARTED_AT=$(grep -o '"started_at" *: *"[^"]*"' "$TIMER_FILE" | grep -o '"[^"]*"$' | tr -d '"')
-    cat > "$TIMER_FILE" << EOF
-{
-  "started_at": "$STARTED_AT",
-  "started_epoch": $START_EPOCH,
-  "stopped_at": "$(now_iso)",
-  "stopped_epoch": $NOW_EPOCH,
-  "elapsed_seconds": $ELAPSED,
-  "elapsed_formatted": "$FORMATTED",
-  "status": "stopped"
-}
-EOF
+    stop_iso=$(now_iso)
+    printf '{\n  "started_at": "%s",\n  "started_epoch": %d,\n  "stopped_at": "%s",\n  "stopped_epoch": %d,\n  "elapsed_seconds": %d,\n  "elapsed_formatted": "%s",\n  "status": "stopped"\n}\n' \
+      "$STARTED_AT" "$START_EPOCH" "$stop_iso" "$NOW_EPOCH" "$ELAPSED" "$FORMATTED" > "$TIMER_FILE"
     echo "$FORMATTED"
     ;;
 
