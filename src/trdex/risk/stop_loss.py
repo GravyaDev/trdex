@@ -255,7 +255,7 @@ class StopLossMonitor:
             age_seconds = (datetime.now(tz=timezone.utc) - price_age).total_seconds()
             if age_seconds > 60:
                 try:
-                    ticker = await self._feeds.get_ticker(position.symbol)
+                    ticker = await self._feeds.get_ticker(position.symbol, source="binance")
                     fresh_price = float(ticker.price)
                     logger.info(
                         "[StopLoss] refetched stale price for %s: %.4f → %.4f (was %.0fs old)",
@@ -263,7 +263,7 @@ class StopLossMonitor:
                     )
                     price = fresh_price
                 except Exception:
-                    logger.warning("[StopLoss] could not refetch price for %s — using stale price", position.symbol)
+                    logger.warning("[StopLoss] could not refetch Binance price for %s — using stale price", position.symbol)
 
         # Determine close direction: opposite of position side
         close_direction = "SELL" if position.side == "BUY" else "BUY"
@@ -367,17 +367,20 @@ class StopLossMonitor:
             self._last_check = datetime.now(tz=timezone.utc)
             return new_events
 
-        # Fetch current prices for all unique symbols (with timestamp for staleness check)
+        # Fetch current prices for all unique symbols (with timestamp for staleness check).
+        # IMPORTANT: use Binance only (source="binance") to avoid cross-feed price
+        # mismatch. If Binance fails for a symbol, skip it — never close a position
+        # based on a price from a secondary feed that may diverge significantly.
         prices: dict[str, float] = {}
         price_times: dict[str, datetime] = {}
         now = datetime.now(tz=timezone.utc)
         for sym in {p.symbol for p in open_positions}:
             try:
-                ticker = await self._feeds.get_ticker(sym)
+                ticker = await self._feeds.get_ticker(sym, source="binance")
                 prices[sym] = float(ticker.price)
                 price_times[sym] = now
             except Exception:
-                logger.warning("[StopLoss] could not fetch price for %s", sym)
+                logger.warning("[StopLoss] could not fetch Binance price for %s — skipping SL check", sym)
 
         # Load per-symbol volatility CV from entity graph so that
         # SL/TP/trailing thresholds adapt to the coin's natural price
