@@ -240,7 +240,7 @@ class AgentRunner:
 
         await service.record_open_fill(
             symbol=state.symbol,
-            side="BUY",
+            side="BUY",  # PositionSide.BUY
             amount=filled_qty_dec,
             entry_price=filled_price_dec,
             budget=budget,

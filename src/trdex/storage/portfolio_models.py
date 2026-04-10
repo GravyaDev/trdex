@@ -4,11 +4,18 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
+from enum import StrEnum
 
 from sqlalchemy import BigInteger, Float, Index, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from trdex.storage.db import Base
+
+
+class PositionSide(StrEnum):
+    """Side of a position in the DB — always uppercase."""
+    BUY = "BUY"
+    SELL = "SELL"
 
 
 def _utcnow_naive() -> datetime:
@@ -27,7 +34,7 @@ class PositionRecord(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     symbol: Mapped[str] = mapped_column(String(20), nullable=False)
-    side: Mapped[str] = mapped_column(String(5), nullable=False)          # 'BUY' | 'SELL'
+    side: Mapped[str] = mapped_column(String(5), nullable=False)          # PositionSide.BUY | .SELL
     entry_price: Mapped[Decimal] = mapped_column(Numeric(28, 8), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(28, 8), nullable=False)
     budget: Mapped[Decimal] = mapped_column(Numeric(28, 8), nullable=False)

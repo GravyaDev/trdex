@@ -109,6 +109,18 @@ async def risk_node(state: AgentState) -> AgentState:
         await _write_last_signal(state, approved=False, reason=reason)
         return state
 
+    # Gate 4b: Forex weekend closure — block OPEN intents on forex pairs
+    # when the market is closed (Friday 22:00 → Sunday 22:00 UTC).
+    # CLOSE intents pass through to allow exiting positions.
+    if intent.is_open:
+        from trdex.market.hours import is_market_open
+        if not is_market_open(state.symbol):
+            reason = f"Market closed for {state.symbol} (forex weekend)."
+            state.risk = RiskDecision(approved=False, reason=reason)
+            logger.info("[Risk] BLOCKED — forex market closed for %s", state.symbol)
+            await _write_last_signal(state, approved=False, reason=reason)
+            return state
+
     # Gate 5: Live mode requires passing simulation gate criteria
     if settings.mode.value == "live" and state.session_factory is not None:
         from trdex.risk.readiness import evaluate_readiness

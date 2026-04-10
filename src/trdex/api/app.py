@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import AsyncIterator
 
-from fastapi import Depends, FastAPI, HTTPException, Security
+from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 
@@ -328,6 +328,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     else:
         logger.info("[AgentScheduler] disabled — set TRDEX_AGENT_SCHEDULER_ENABLED=true to enable")
 
+    # Expose lifespan-scoped objects to endpoints via app.state
+    _app.state.feed_manager = feed_manager
+    _app.state.agent_symbols = agent_symbols if _sched_enabled else []
+
     yield  # app runs here
 
     if _agent_task:
@@ -432,13 +436,23 @@ def create_app() -> FastAPI:
     # --- Authenticated endpoints ---
 
     @app.get("/v1/status")
-    async def status(_key: str = Depends(verify_api_key)) -> dict[str, object]:
+    async def status(request: Request, _key: str = Depends(verify_api_key)) -> dict[str, object]:
+        _fm = getattr(request.app.state, "feed_manager", None)
+        _as = getattr(request.app.state, "agent_symbols", [])
         return {
             "mode": settings.mode.value,
             "version": __version__,
             "timestamp": datetime.now(UTC).isoformat(),
-            "feeds": {},
-            "strategies": {},
+            "feeds": {name: type(feed).__name__ for name, feed in _fm.feeds.items()} if _fm else {},
+            "ingestion": {
+                "active": _scheduler is not None and _scheduler._running,
+                "sources": [type(s).__name__ for s in _scheduler._sources] if _scheduler else [],
+                "symbols": _scheduler._symbols if _scheduler else [],
+            },
+            "agent_scheduler": {
+                "active": _agent_task is not None and not _agent_task.done(),
+                "symbols": _as,
+            },
             "telegram": {
                 "streaming": _telegram_task is not None and not _telegram_task.done(),
                 "channels": settings.telegram_channels_list,

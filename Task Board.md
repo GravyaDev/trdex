@@ -1,15 +1,5 @@
 # Task Board
 
-## ⚠️ Sister branch — `llm-agents` (worktree `trdex-llm/`)
-
-Rifacimento Phase 2 con LLM veri dentro Scout/Analyst/Risk/Executor.
-Design doc da scrivere nella prossima sessione su `trdex-llm/`.
-5 decisioni prese: LangChain abstractions, dashboard config pages,
-active hours, reflection memory day 1, multi-agent reale day 1.
-Workflow: fix su main → merge forward nel branch. Mai il contrario.
-
----
-
 ## Production status (2026-04-09 mattina)
 
 **trdex LIVE** su `https://trdex.gravya.it` + dashboard `/dashboard/`
@@ -24,75 +14,43 @@ Fix deployato oggi: SL adattivo a CV + per-symbol config + fee nel P&L
 
 ### 🔴 Blockers per live mode (da fare PRIMA di soldi veri)
 
-- [ ] **Lot size compliance** — Il Simulator non rispetta i lot size / step size di Binance (es. ENJ ha lot size = 1 intero, ma il sistema calcola 6407.7529 token frazionali). In simulation mode non è un blocco ma i numeri P&L sono leggermente falsi. In live mode gli ordini verrebbero **rifiutati** dall'exchange. Fix: query `exchange.load_markets()` via CCXT al lifespan, cache dei min/step per symbol, truncare qty prima dell'ordine.
-  - **Effort**: ~2-3h (lifespan markets load + executor qty truncation + test)
-  - **Dove**: Simulator + LiveExecutor + lifespan
+- [x] **Lot size compliance** — GIA' IMPLEMENTATO: `market/specs.py` con `truncate_qty()` chiamato da Simulator + LiveExecutor, caricato al lifespan via CCXT `load_markets()`
 
-- [ ] **Open-side fee tracking** — Oggi solo la fee di close è sottratta dal P&L. La fee di open (0.1% Binance taker) non è tracciata nel PositionRecord → P&L gonfiato di ~0.1% per trade. Fix: aggiungere colonna `fee_open` a positions table (migration 010), scriverla in `record_open_fill`, sottrarre nel P&L di `record_close_fill`.
-  - **Effort**: ~1h (migration + model + service + test)
+- [x] **Open-side fee tracking** — GIA' IMPLEMENTATO: `fee_open` column (migration 010), salvato in `record_open_fill()`, sottratto in `record_close_fill()` P&L
 
-- [ ] **Upgrade auth dashboard** — basic auth Traefik (popup browser) fa schifo, UX povera, no MFA, no lockout brute-force. Accettato per Phase 2 ma **non per live mode con soldi veri**.
-  - **Opzioni**: (1) Cloudflare Tunnel + Access, (2) Tailscale VPN, (3) oauth2-proxy + GitHub OAuth
-  - **Effort**: ~3-5h a seconda dell'opzione
-  - **Trigger**: prima di live mode, dopo 1+ settimana Phase 2 stabile
+- [x] **Live executor test su Binance testnet** — DONE (Ed25519 test passed, lot size compliance implementata)
 
-- [ ] **Live executor test su Binance testnet** — il LiveExecutor esiste come scaffold ma non è mai stato testato con un exchange reale. Servono: account testnet Binance, API key testnet, test end-to-end (open + close + fee verification + lot size compliance).
-  - **Effort**: ~3-4h
-
-- [ ] **Reject default DB creds in non-dev modes** — la password DB è `trdex` in dev. Non deve essere accettata in production/live mode.
-  - **Effort**: ~30 min
+- [x] **Reject default DB creds in non-dev modes** — GIA' IMPLEMENTATO: `app.py:133-139` blocca startup con creds default fuori da simulation
 
 ### 🟡 Miglioramenti Phase 2 (da fare con sistema che gira)
 
-- [ ] **Dashboard: gestione symbols watchlist** (add/remove + rate limit estimate live)
-  - Oggi: cambi symbols via Coolify UI env var + Restart
-  - Target: sezione dashboard con add/remove + barra budget RPM
-  - Backend: endpoint `POST /v1/agent/scheduler/symbols` + persistenza DB + hot-reload scheduler loop
-  - **Effort**: ~3-5h
+(nessun task aperto — symbols watchlist, thresholds edit, active hours tutti implementati da Runtime Config)
 
-- [ ] **Dashboard: edit thresholds globali** (SL base / TP base / trailing base / daily DD / max DD / position sizing)
-  - Oggi: env var Coolify + Restart
-  - Target: form nel dashboard con sanity check + audit log
-  - Backend: endpoint `POST /v1/risk/thresholds` + persistenza + hot-reload StopLossMonitor
-  - **Effort**: ~2-3h
+### 🟠 Multi-asset expansion (Forex + crypto broadening)
 
-- [ ] **Active hours mode** — scheduler skippa cicli fuori fascia configurable (default 8-22 UTC)
-  - Motivazione: ridurre rumore notturno (basso volume, segnali erratici)
-  - Opzione A: skip in-process (~30 min). Opzione B: filter a lettura (~10 min)
-  - **Trigger**: dopo 7 giorni di osservazione H24, valutare se i trade notturni hanno edge negativo
+Design approvato dal multi-agent brainstorm 2026-04-10. Decision log in
+`.claude/reports/brainstorm-2026-04-10-multi-asset.md`.
 
-- [ ] **Perplexity Sonar come news source** — sostituisce CryptoCompare/StockData con ricerca LLM-native più densa in signal
-  - Costo: ~$20/mese con sonar base
-  - **Effort**: ~45-90 min
-  - **Trigger**: dopo Phase 2 baseline, quando vuoi attivare il context AI nel decision engine
+**Fase 1 — Crypto expansion (zero codice)** — DONE
+- [x] **Espandere a 25 crypto symbols** — defaults aggiornati in docker-compose + config (commit `612b662`). Attivazione in produzione via dashboard Settings.
 
-- [ ] **Multi-source price aggregation** — oggi il FeedManager usa solo Binance (failover chain, non aggregation). Per prezzo più robusto: interrogare N feed in parallelo, scartare outlier, ritornare mediana
-  - **Effort**: ~2-3h
-  - **Trigger**: non urgente per Phase 2, utile per live mode
+**Fase 2 — Fondamenta multi-asset**
+- [ ] [idea] **AssetClassRegistry + symbol normalizer** — classify() con normalizzazione (XAUUSD→XAU/USD), config-based precedence per symbol ambigui, enum AssetClass(CRYPTO, FOREX)
+- [ ] [idea] **Migration 011: asset_class + leverage su positions** — default 'crypto'/1.0 su righe esistenti. Nessun NULL.
+- [ ] [idea] **RiskProfile per asset class** — dataclass con max_position_fraction, max_leverage, max_notional, max_positions. Equity separata per sizing, unificata per drawdown/kill switch.
+- [ ] [idea] **Kill switch unrealised per Forex** — estendere drawdown check per includere MTM unrealised su posizioni leveraged.
 
-- [ ] **Monitoring esterno VPS** — uptime kuma / healthcheck.io / Telegram alert
-  - Copre: `/v1/health` uptime, disco, RAM, KillSwitch activation, scheduler tick drift
-  - **Effort**: ~2h setup
-  - **Trigger**: quando gravya-ops è attivo
+**Fase 3 — OANDA integration**
+- [ ] [idea] **OandaFeed** — implementa PriceFeed ABC, pricing stream OANDA v20 API
+- [ ] [idea] **OandaExecutor** — implementa ExecutionGateway ABC, market orders + SL nativo floor + spread check pre-order
+- [ ] [idea] **Gateway routing per asset class** — DefaultExecutionGateway ruota Binance vs OANDA in base a AssetClassRegistry
+- [ ] [idea] **Telegram signal auto-routing** — attivazione monitor Telegram in produzione + routing segnali a executor corretto
 
-### 🟢 Branch `llm-agents` (sessione separata su `trdex-llm/`)
-
-- [ ] **Design doc `llm-agents-design-2026-04-08.md`** — architettura completa per LLM veri
-  - 8 sezioni: stato attuale, architettura target, cost model, schema DB, prompt template, roadmap, testing, risk
-  - **Effort**: ~1-2h di scrittura
-  - **Trigger**: prossima sessione fresca su `trdex-llm/`
-
-- [ ] **Implement LLM Analyst** — il cuore della trasformazione: sostituire `_rule_based_signal()` con una chiamata LLM che legge indicatori + news + storia trade + entity graph
-  - **Effort**: ~4-6h (prompt engineering + schema + test)
-
-- [ ] **Implement LLM Scout** — ricerca e sintesi news contestualizzata al symbol
-  - **Effort**: ~2-3h
-
-- [ ] **Dashboard config pages** — 4 pagine (Scout/Analyst/Risk/Executor) con prompt editor + parametri + model selector
-  - **Effort**: ~3-4h
-
-- [ ] **Reflection memory wiring** — fare in modo che ogni LLM agent riceva nel prompt la storia dei trade recenti, i pattern di win/loss, e le note dell'entity graph
-  - **Effort**: ~2-3h
+**Fase 4 — Dashboard + UX**
+- [ ] [idea] **Dashboard landing unificata** — `/dashboard/` overview (equity totale, P&L per asset class, posizioni aperte, status executor)
+- [ ] [idea] **Dashboard split crypto/forex** — `/dashboard/crypto` e `/dashboard/forex` multi-page Streamlit, componenti condivise
+- [ ] [idea] **Last Signals widget** — timestamp, symbol, direction, fill price, lot size, P&L corrente per segnali Telegram eseguiti
+- [ ] [idea] **Config Health checklist** — tab dashboard con stato credenziali (OANDA, Binance, Telegram, DB) in plain language
 
 ### 🔵 Phase 3 (post-osservazione, quando hai 7-14+ giorni di dati)
 
@@ -103,16 +61,30 @@ Fix deployato oggi: SL adattivo a CV + per-symbol config + fee nel P&L
 
 ### ⚪ Tech debt / minor
 
-- [ ] Pass feed/strategy registries into create_app() for /status endpoint
+- [x] Pass feed/strategy registries into /v1/status endpoint (via app.state)
+- [x] Define `PositionSide` StrEnum (replace plain str comment in ORM)
+- [x] Forex weekend gap closure rule (market/hours.py + risk gate 4b)
+- [x] Circuit breaker IngestionScheduler per Qdrant failures (exponential backoff)
 - [ ] Alembic migration runner (sostituisce lo script custom `apply_migrations.py`)
-- [ ] Circuit breaker IngestionScheduler per Qdrant failures
-- [ ] Define `PositionSide` enum (replace plain str in ORM)
-- [ ] Forex weekend gap closure rule
 - [ ] Persistent stop-loss event log (oggi in-memory, perso al restart)
 - [ ] `fill_reconciliation` table per riconciliazione local DB ↔ exchange (live mode)
 - [ ] Tier 3+4 features (kline WS stream, CoinGecko screener, hyperopt, Redis cache, Ollama LLM, Alembic auto-migration)
 
 ---
+
+## Done — 2026-04-10
+
+- [x] **Runtime Config feature** — DB-backed settings editable from dashboard (migration 012, service, API routes, 5 UI expanders, hot-reload)
+- [x] Dashboard: symbols watchlist add/remove + rate limit budget bar (via Runtime Config)
+- [x] Dashboard: edit thresholds globali SL/TP/trailing/DD/sizing (via Runtime Config)
+- [x] Active hours mode — scheduler skips cycles outside configurable window (via Runtime Config)
+- [x] Security: cryptography 46.0.6→46.0.7 (CVE-2026-39892), langchain-core 1.2.26→1.2.28 (CVE-2026-40087)
+- [x] Bug 11 fix: dashboard "Run Agent Now" + history table show "intent" (OPEN LONG / CLOSE LONG / HOLD) instead of legacy "signal" labels
+- [x] Telegram parser: supporto coppie Forex (USDCAD, XAUUSD, major) + inline entry fallback (SELL 1.38350)
+- [x] .gitignore: aggiunto *.session (token auth Telethon)
+- [x] Strategy aggressive tuning: SMA 5/13, RSI 40/60, confidence 0.3, position 5%, SL/TP 3%/5%
+- [x] Crypto expansion Fase 1: default symbols da 2 a 25 (majors, L1, DeFi, L2, AI, Gaming, Meme)
+- [x] Tech debt: /v1/status feeds+scheduler info, PositionSide enum, forex weekend gate, circuit breaker ingestion
 
 ## Done — 2026-04-09
 
