@@ -80,11 +80,11 @@ def _rule_based_signal(
 
     # RSI rule
     if rsi is not None:
-        if rsi < 30:
-            signals.append(("BUY", 0.6))
+        if rsi < 40:
+            signals.append(("BUY", 0.7))
             notes.append(f"RSI={rsi:.1f} oversold")
-        elif rsi > 70:
-            signals.append(("SELL", 0.6))
+        elif rsi > 60:
+            signals.append(("SELL", 0.7))
             notes.append(f"RSI={rsi:.1f} overbought")
         else:
             signals.append(("HOLD", 0.3))
@@ -94,10 +94,10 @@ def _rule_based_signal(
     if sma_short is not None and sma_long is not None:
         if sma_short > sma_long:
             signals.append(("BUY", 0.5))
-            notes.append(f"SMA{9}={sma_short:.2f} > SMA{21}={sma_long:.2f} bullish")
+            notes.append(f"SMA5={sma_short:.2f} > SMA13={sma_long:.2f} bullish")
         else:
             signals.append(("SELL", 0.5))
-            notes.append(f"SMA{9}={sma_short:.2f} < SMA{21}={sma_long:.2f} bearish")
+            notes.append(f"SMA5={sma_short:.2f} < SMA13={sma_long:.2f} bearish")
 
     # Sentiment nudge
     if sentiment_avg is not None:
@@ -194,8 +194,8 @@ async def analyst_node(state: AgentState) -> AgentState:
     price = state.market.price
 
     rsi = rsi_from_list(closes)
-    sma_short = _compute_sma(closes, 9)
-    sma_long = _compute_sma(closes, 21)
+    sma_short = _compute_sma(closes, 5)
+    sma_long = _compute_sma(closes, 13)
 
     # Classify and persist volatility regime
     regime = _classify_volatility(closes)
@@ -218,9 +218,9 @@ async def analyst_node(state: AgentState) -> AgentState:
     if rsi is not None:
         indicators["rsi"] = rsi
     if sma_short is not None:
-        indicators["sma_9"] = sma_short
+        indicators["sma_5"] = sma_short
     if sma_long is not None:
-        indicators["sma_21"] = sma_long
+        indicators["sma_13"] = sma_long
     if sentiment_avg is not None:
         indicators["sentiment_avg"] = sentiment_avg
 

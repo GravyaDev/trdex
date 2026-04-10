@@ -67,7 +67,7 @@ async def test_cycle_hold_when_no_candles() -> None:
 
 async def test_cycle_risk_blocks_low_confidence() -> None:
     """Risk manager blocks trades when there is insufficient data for confidence."""
-    # 5 candles — not enough for RSI(14) or SMA(21) → analyst returns HOLD → skipped
+    # 5 candles — not enough for RSI(14) or SMA(13) → analyst returns HOLD → skipped
     few_candles = _make_candles(n=5)
     snapshot = MarketSnapshot(symbol="BTC/USDT", price=50_000.0, candles=few_candles)
 
