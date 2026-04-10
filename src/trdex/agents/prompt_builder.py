@@ -2,9 +2,9 @@
 
 Builds the messages list (system + user) for each agent, enforcing
 the ``max_prompt_tokens`` budget from settings. Memory tiers are
-truncated LIFO (Tier 4 similar trades first, then Tier 6 narrative,
-then Tier 5 entity facts, then Tier 2 operational) if the assembled
-prompt exceeds the budget.
+truncated LIFO (Tier 4b episodes first, then Tier 4a similar trades,
+then Tier 6 narrative, then Tier 5 entity facts, then Tier 2
+operational) if the assembled prompt exceeds the budget.
 
 RAG content is sanitized via ``sanitize_rag_content()`` before inclusion.
 """
@@ -17,6 +17,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from trdex.agents.llm_provider import sanitize_rag_content
 from trdex.agents.state import AgentState
+from trdex.memory.market_brief import build_market_brief
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,14 @@ def build_analyst_messages(
 
     # === Build user message sections, ordered by priority (highest first) ===
     sections: list[str] = []
+
+    # 0. Market brief (static snapshot — small, high-signal preamble)
+    if state.market and state.market.candles:
+        closes = [c[4] for c in state.market.candles]
+        volumes = [c[5] for c in state.market.candles]
+        brief = build_market_brief(state.symbol, closes, volumes, price)
+        if brief:
+            sections.append(brief)
 
     # 1. Technical indicators (always included — small, critical)
     ind_lines = [f"## Technical Indicators for {state.symbol}"]

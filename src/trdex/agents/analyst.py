@@ -187,10 +187,16 @@ async def analyst_node(state: AgentState) -> AgentState:
         state.analysis = AnalysisResult(intent=Intent.HOLD, reasoning="No market data.")
         return state
 
-    # Pull aggregated memory snapshot from the 6-tier stack (best-effort).
-    await attach_memory_snapshot(state, "analyst")
-
     closes = [c[4] for c in state.market.candles]  # index 4 = close
+    volumes = [c[5] for c in state.market.candles]  # index 5 = volume
+
+    # Pull aggregated memory snapshot from the 7-tier stack (best-effort).
+    # Pass closes/volumes so Tier 4b can search for similar historical episodes.
+    await attach_memory_snapshot(
+        state, "analyst",
+        recent_closes=closes,
+        recent_volumes=volumes,
+    )
     price = state.market.price
 
     rsi = rsi_from_list(closes)

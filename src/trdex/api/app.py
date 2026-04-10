@@ -304,6 +304,35 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     config_svc.register_listener("symbols", _on_symbols_change)
     config_svc.register_listener("feeds", _on_feeds_change)
 
+    # --- Memory context loader (7-tier stack for agent prompts) ---
+    from pathlib import Path
+
+    from trdex.memory.context import MemoryContextLoader
+    from trdex.memory.kb_loader import KBLoader
+    from trdex.memory.market_episodes import MarketEpisodeService
+    from trdex.memory.trade_narratives import TradeNarrativeService
+
+    kb_dir = Path(__file__).resolve().parents[2] / "Riferimenti" / "agents"
+    kb_loader = KBLoader.from_directory(kb_dir) if kb_dir.is_dir() else None
+    trade_svc = TradeNarrativeService()
+    episode_svc = MarketEpisodeService()
+
+    try:
+        await trade_svc.setup()
+        await episode_svc.setup()
+        logger.info("[lifespan] Qdrant narrative + episode collections ensured")
+    except Exception as exc:
+        logger.warning("[lifespan] Qdrant memory collections setup failed: %s", exc)
+        trade_svc = None
+        episode_svc = None
+
+    memory_loader = MemoryContextLoader(
+        kb_loader=kb_loader,
+        session_factory=session_factory,
+        trade_narrative_service=trade_svc,
+        market_episode_service=episode_svc,
+    )
+
     # --- Agent scheduler ---
     _sched_syms_csv = config_svc.get("symbols", "agent_scheduler_symbols")
     agent_symbols = [s.strip() for s in _sched_syms_csv.split(",") if s.strip()] if _sched_syms_csv else settings.agent_scheduler_symbols_list
@@ -320,6 +349,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 agent_symbols,
                 _sched_interval,
                 gateway=gateway,
+                memory_loader=memory_loader,
                 active_hours=_sched_hours,
             ),
             name="agent-scheduler",

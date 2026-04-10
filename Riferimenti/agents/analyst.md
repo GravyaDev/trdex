@@ -509,7 +509,40 @@ AnalysisResult(
 
 ---
 
-## 10 — RIFERIMENTI
+## 10 — HISTORICAL CONTEXT (RAG)
+
+### `HEUR-ANALYST-RAG-001` — Market Brief & Historical Episodes
+**Tags**: `rag, memory, episodes, market_brief`
+
+```yaml
+market_brief:
+  source: memory/market_brief.py
+  injection: prompt section 0 (before technical indicators)
+  content: |
+    Static snapshot of current conditions: price, 24h change, volatility
+    regime, RSI zone, SMA alignment, volume activity, short-term trend.
+    Always present when candles are available. Small token footprint.
+
+historical_episodes:
+  source: memory/market_episodes.py
+  collection: trdex_market_episodes
+  injection: Tier 4b in memory snapshot (via MemoryContextLoader)
+  content: |
+    Semantically similar past market regimes retrieved from Qdrant.
+    Episode types: trend_reversal, volatility_spike, volume_surge,
+    consolidation_breakout, regime_change. Each includes price change %,
+    RSI, volume ratio, SMA state, volatility CV.
+  usage: |
+    When historical episodes are present in the memory snapshot, use them
+    as analogical evidence. If a similar past episode led to a reversal,
+    factor that into confidence calibration — but never override indicator
+    math based on a single historical analogy.
+  limit: 3 episodes per query (configurable via similar_episodes_limit)
+```
+
+---
+
+## 11 — RIFERIMENTI
 
 ### `REF-ANALYST-001` — Implementation Files
 
@@ -517,6 +550,10 @@ AnalysisResult(
 agent_file: src/trdex/agents/analyst.py
 indicators_file: src/trdex/backtest/indicators.py
 entity_graph_repo: src/trdex/storage/entity_graph_repo.py
+market_brief: src/trdex/memory/market_brief.py
+market_episodes: src/trdex/memory/market_episodes.py
+backfill_script: src/trdex/scripts/backfill_ohlcv.py
+generate_script: src/trdex/scripts/generate_episodes.py
 ```
 
 ### `REF-ANALYST-002` — Source Books
