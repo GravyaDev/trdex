@@ -124,6 +124,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # --- Session factory (needed early for tracker load) ---
     session_factory = get_session_factory()
 
+    # --- Runtime config: seed from env, then DB is source of truth ---
+    from trdex.services.runtime_config import init_config_service, get_config_service
+    config_svc = await init_config_service(session_factory, settings)
+
     # --- Security checks ---
     if not settings.api_key:
         logger.warning(
@@ -223,15 +227,21 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.info("[telegram] skipped — no channels configured")
 
     # --- News ingestion scheduler ---
-    _scheduler = IngestionScheduler(interval_seconds=settings.ingestion_interval)
-    if settings.cryptocompare_api_key:
-        _scheduler.register(CryptoCompareNewsSource(api_key=settings.cryptocompare_api_key))
-    if settings.stockdata_api_key:
-        _scheduler.register(StockDataNewsSource(api_key=settings.stockdata_api_key))
-    if settings.perplexity_api_key:
+    # Read API keys and symbols from RuntimeConfig (DB-backed, dashboard-editable)
+    _cc_key = config_svc.get("credentials", "cryptocompare_api_key")
+    _sd_key = config_svc.get("credentials", "stockdata_api_key")
+    _px_key = config_svc.get("credentials", "perplexity_api_key")
+    _ing_syms_csv = config_svc.get("symbols", "ingestion_symbols")
+    _ing_syms = [s.strip() for s in _ing_syms_csv.split(",") if s.strip()] if _ing_syms_csv else []
+    _scheduler = IngestionScheduler(interval_seconds=config_svc.get_typed("scheduler", "ingestion_interval", settings.ingestion_interval))
+    if _cc_key:
+        _scheduler.register(CryptoCompareNewsSource(api_key=_cc_key))
+    if _sd_key:
+        _scheduler.register(StockDataNewsSource(api_key=_sd_key))
+    if _px_key:
         from trdex.context.news_sources.perplexity import PerplexityNewsSource
-        _scheduler.register(PerplexityNewsSource(api_key=settings.perplexity_api_key))
-    _scheduler.set_symbols(settings.ingestion_symbols_list)
+        _scheduler.register(PerplexityNewsSource(api_key=_px_key))
+    _scheduler.set_symbols(_ing_syms)
     from trdex.api.routes import context as context_routes
     context_routes.set_scheduler(_scheduler)
     if _scheduler._sources:
@@ -247,34 +257,74 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         session_factory=session_factory,
         feed_manager=feed_manager,
         gateway=gateway,
-        check_interval=settings.sl_check_interval,
-        position_sl_pct=settings.sl_position_pct,
-        position_tp_pct=settings.sl_take_profit_pct,
-        trailing_stop_pct=settings.sl_trailing_stop_pct,
-        daily_drawdown_pct=settings.sl_daily_drawdown_pct,
-        max_drawdown_pct=settings.gate_max_drawdown,
+        check_interval=config_svc.get_typed("scheduler", "sl_check_interval", settings.sl_check_interval),
+        position_sl_pct=config_svc.get_typed("thresholds", "sl_position_pct", settings.sl_position_pct),
+        position_tp_pct=config_svc.get_typed("thresholds", "sl_take_profit_pct", settings.sl_take_profit_pct),
+        trailing_stop_pct=config_svc.get_typed("thresholds", "sl_trailing_stop_pct", settings.sl_trailing_stop_pct),
+        daily_drawdown_pct=config_svc.get_typed("thresholds", "sl_daily_drawdown_pct", settings.sl_daily_drawdown_pct),
+        max_drawdown_pct=config_svc.get_typed("thresholds", "gate_max_drawdown", settings.gate_max_drawdown),
     )
     risk_routes.set_monitor(sl_monitor)
     risk_routes.set_session_factory(session_factory)
     await sl_monitor.start()
 
+    # --- Hot-reload listeners ---
+    # When config changes via dashboard/API, update running components immediately.
+    def _on_thresholds_change(key: str, value: str) -> None:
+        attr_map = {
+            "sl_position_pct": "_sl_pct",
+            "sl_take_profit_pct": "_tp_pct",
+            "sl_trailing_stop_pct": "_trailing_pct",
+            "sl_daily_drawdown_pct": "_daily_dd_pct",
+            "gate_max_drawdown": "_max_dd_pct",
+        }
+        if attr := attr_map.get(key):
+            setattr(sl_monitor, attr, float(value))
+            logger.info("[hot-reload] threshold %s → %s", key, value)
+
+    def _on_symbols_change(key: str, value: str) -> None:
+        from trdex.agents.scheduler import set_runtime_symbols
+        sym_list = [s.strip() for s in value.split(",") if s.strip()]
+        if key == "agent_scheduler_symbols":
+            set_runtime_symbols(sym_list)
+            logger.info("[hot-reload] agent symbols → %d symbols", len(sym_list))
+        elif key == "ingestion_symbols":
+            if _scheduler:
+                _scheduler.set_symbols(sym_list)
+            logger.info("[hot-reload] ingestion symbols → %d symbols", len(sym_list))
+
+    def _on_feeds_change(key: str, value: str) -> None:
+        from trdex.market.manager import set_selected_feeds
+        if key == "selected_feeds":
+            feed_list = [f.strip() for f in value.split(",") if f.strip()] if value else None
+            set_selected_feeds(feed_list or [])
+            logger.info("[hot-reload] selected feeds → %s", feed_list or "ALL")
+
+    config_svc.register_listener("thresholds", _on_thresholds_change)
+    config_svc.register_listener("symbols", _on_symbols_change)
+    config_svc.register_listener("feeds", _on_feeds_change)
+
     # --- Agent scheduler ---
-    agent_symbols = settings.agent_scheduler_symbols_list
-    if settings.agent_scheduler_enabled and agent_symbols:
+    _sched_syms_csv = config_svc.get("symbols", "agent_scheduler_symbols")
+    agent_symbols = [s.strip() for s in _sched_syms_csv.split(",") if s.strip()] if _sched_syms_csv else settings.agent_scheduler_symbols_list
+    _sched_enabled = config_svc.get_typed("scheduler", "agent_scheduler_enabled", settings.agent_scheduler_enabled)
+    if _sched_enabled and agent_symbols:
         from trdex.agents.scheduler import agent_scheduler_loop
 
+        _sched_interval = config_svc.get_typed("scheduler", "agent_scheduler_interval", settings.agent_scheduler_interval)
+        _sched_hours = config_svc.get("scheduler", "agent_scheduler_active_hours") or settings.agent_scheduler_active_hours
         _agent_task = asyncio.create_task(
             agent_scheduler_loop(
                 session_factory,
                 feed_manager,
                 agent_symbols,
-                settings.agent_scheduler_interval,
+                _sched_interval,
                 gateway=gateway,
-                active_hours=settings.agent_scheduler_active_hours,
+                active_hours=_sched_hours,
             ),
             name="agent-scheduler",
         )
-        logger.info("[AgentScheduler] started — symbols=%s interval=%ds", agent_symbols, settings.agent_scheduler_interval)
+        logger.info("[AgentScheduler] started — symbols=%s interval=%ds", agent_symbols, _sched_interval)
     else:
         logger.info("[AgentScheduler] disabled — set TRDEX_AGENT_SCHEDULER_ENABLED=true to enable")
 
@@ -332,15 +382,17 @@ def create_app() -> FastAPI:
     from trdex.api.routes.context import router as context_router
     from trdex.api.routes.agent import router as agent_router
     from trdex.api.routes.risk import router as risk_router
+    from trdex.api.routes.settings import router as settings_router
     app.include_router(portfolio_router)
     app.include_router(context_router)
     app.include_router(agent_router)
     app.include_router(risk_router)
+    app.include_router(settings_router)
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()] if settings.cors_origins else [],
-        allow_methods=["GET", "POST", "DELETE"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["X-API-Key"],
     )
 

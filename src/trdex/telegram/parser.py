@@ -25,7 +25,7 @@ class TelegramSignal:
 # ── Regex patterns ──────────────────────────────────────────────────────────
 
 _SYMBOL_RE = re.compile(
-    r"\b([A-Z]{2,10})[/\-_]?(USDT|BTC|ETH|BUSD|USD)\b",
+    r"\b([A-Z]{2,10})[/\-_]?(USDT|BTC|ETH|BUSD|USD|EUR|GBP|JPY|CAD|CHF|AUD|NZD)\b",
     re.IGNORECASE,
 )
 _DIRECTION_BUY_RE = re.compile(r"\b(buy|long|compra|acquisto)\b", re.IGNORECASE)
@@ -69,11 +69,21 @@ def parse_signal(text: str, source: str) -> TelegramSignal | None:
         return None
     direction: Literal["BUY", "SELL"] = "BUY" if is_buy else "SELL"
 
-    # Entry
+    # Entry — try labeled pattern first ("entry: 1.38350"), then
+    # fall back to a price directly after the direction keyword on the
+    # first line ("SELL 1.38350"), common in Forex signal groups.
     entry: float | None = None
     entry_match = _ENTRY_RE.search(text)
     if entry_match:
         entry = _parse_number(entry_match.group(1))
+    else:
+        _inline_entry = re.search(
+            r"(?:buy|long|sell|short)\s+(\d{1,10}(?:[.,]\d+)?)",
+            text.split("\n")[0],
+            re.IGNORECASE,
+        )
+        if _inline_entry:
+            entry = _parse_number(_inline_entry.group(1))
 
     # Stop loss
     stop_loss: float | None = None

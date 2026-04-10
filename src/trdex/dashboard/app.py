@@ -91,6 +91,18 @@ def post(path: str, *, params: dict | None = None, timeout: int = 60) -> dict | 
         return None
 
 
+def put(path: str, json_body: dict, timeout: int = 10) -> dict | None:
+    """PUT to the configured API base URL with the current API key."""
+    headers = {"X-API-Key": api_key} if api_key else {}
+    try:
+        r = httpx.put(f"{base_url}{path}", json=json_body, headers=headers, timeout=timeout)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        st.error(_format_http_error(path, "PUT", e))
+        return None
+
+
 # ── Layout ───────────────────────────────────────────────────────────────────
 
 st.title("📈 trdex Dashboard")
@@ -237,8 +249,15 @@ if run_agent:
     with st.spinner(f"Running agent cycle for {agent_symbol}..."):
         result = post("/v1/agent/run", params={"symbol": agent_symbol, "timeframe": agent_tf})
         if result:
-            signal_color = {"BUY": "🟢", "SELL": "🔴", "HOLD": "🟡"}.get(result.get("signal", ""), "⚪")
-            st.success(f"{signal_color} Signal: **{result.get('signal')}** | Confidence: {result.get('confidence', 0):.1%} | Order: {result.get('order_status')}")
+            _intent_display = {
+                "open_long": ("🟢", "OPEN LONG"), "close_long": ("🔴", "CLOSE LONG"),
+                "open_short": ("🔴", "OPEN SHORT"), "close_short": ("🟢", "CLOSE SHORT"),
+                "hold": ("🟡", "HOLD"),
+                # Legacy values (pre-intent refactor rows still in DB)
+                "BUY": ("🟢", "BUY"), "SELL": ("🔴", "SELL"), "HOLD": ("🟡", "HOLD"),
+            }
+            _icon, _label = _intent_display.get(result.get("signal", ""), ("⚪", result.get("signal", "?")))
+            st.success(f"{_icon} Intent: **{_label}** | Confidence: {result.get('confidence', 0):.1%} | Order: {result.get('order_status')}")
             st.caption(f"Reasoning: {result.get('reasoning', '—')}")
             if result.get("indicators"):
                 st.json(result["indicators"])
@@ -256,16 +275,21 @@ if history:
         # Showing ❌ on every HOLD row suggests the system is blocking
         # something when in reality there is nothing to block. Use "—"
         # for HOLD, ✅/❌ only for actionable intents.
-        _hold_signals = {"hold", "HOLD", "🟡 HOLD"}
+        _hold_intents = {"hold", "HOLD"}
         df_agent["risk_approved"] = df_agent.apply(
-            lambda row: "—" if row.get("signal", "") in _hold_signals else ("✅" if row["risk_approved"] else "❌"),
+            lambda row: "—" if row.get("signal", "") in _hold_intents else ("✅" if row["risk_approved"] else "❌"),
             axis=1,
         )
-        signal_icons = {"BUY": "🟢 BUY", "SELL": "🔴 SELL", "HOLD": "🟡 HOLD",
-                        "open_long": "🟢 OPEN", "close_long": "🔴 CLOSE", "hold": "🟡 HOLD"}
-        df_agent["signal"] = df_agent["signal"].map(lambda s: signal_icons.get(s, s))
+        intent_icons = {
+            "open_long": "🟢 OPEN LONG", "close_long": "🔴 CLOSE LONG",
+            "open_short": "🔴 OPEN SHORT", "close_short": "🟢 CLOSE SHORT",
+            "hold": "🟡 HOLD",
+            # Legacy values (pre-intent refactor rows still in DB)
+            "BUY": "🟢 BUY", "SELL": "🔴 SELL", "HOLD": "🟡 HOLD",
+        }
+        df_agent["intent"] = df_agent["signal"].map(lambda s: intent_icons.get(s, s))
         st.dataframe(
-            df_agent[["symbol", "signal", "confidence", "risk_approved", "order_status", "ran_at"]],
+            df_agent[["symbol", "intent", "confidence", "risk_approved", "order_status", "ran_at"]],
             use_container_width=True,
         )
     else:
@@ -573,6 +597,156 @@ with st.expander("System Status"):
     status = get("/v1/status")
     if status:
         st.json(status)
+
+# ── Settings (persistent, DB-backed) ─────────────────────────────────────────
+
+st.header("Settings")
+st.caption("Changes take effect immediately and persist across restarts.")
+
+_settings_data = get("/v1/settings")
+_all_cfg = _settings_data.get("categories", {}) if _settings_data else {}
+
+with st.expander("API Keys"):
+    _creds = _all_cfg.get("credentials", {})
+    with st.form("settings_credentials", clear_on_submit=False):
+        st.caption("Leave blank to keep current value. Displayed values are masked.")
+        _cred_inputs = {}
+        for cred_key in [
+            "cryptocompare_api_key", "stockdata_api_key", "perplexity_api_key",
+            "jina_api_key", "binance_api_key", "binance_api_secret",
+            "telegram_api_id", "telegram_api_hash",
+        ]:
+            current = _creds.get(cred_key, "")
+            _cred_inputs[cred_key] = st.text_input(
+                cred_key.replace("_", " ").title(),
+                value="",
+                type="password",
+                placeholder=current or "(not set)",
+                key=f"cred_{cred_key}",
+            )
+        if st.form_submit_button("Save API Keys"):
+            pairs = {k: v for k, v in _cred_inputs.items() if v}
+            if pairs:
+                result = put("/v1/settings/credentials", {"values": pairs})
+                if result:
+                    st.success(f"Updated {len(pairs)} key(s)")
+                    st.cache_data.clear()
+                    st.rerun()
+            else:
+                st.warning("No changes — all fields were left blank")
+
+with st.expander("Symbols"):
+    _syms = _all_cfg.get("symbols", {})
+    with st.form("settings_symbols", clear_on_submit=False):
+        sched_syms = st.text_area(
+            "Agent Scheduler Symbols (comma-separated)",
+            value=_syms.get("agent_scheduler_symbols", ""),
+            height=80,
+            key="cfg_sched_syms",
+        )
+        ingest_syms = st.text_area(
+            "News Ingestion Symbols (comma-separated)",
+            value=_syms.get("ingestion_symbols", ""),
+            height=80,
+            key="cfg_ingest_syms",
+        )
+        if st.form_submit_button("Save Symbols"):
+            pairs = {}
+            if sched_syms.strip():
+                pairs["agent_scheduler_symbols"] = sched_syms.strip()
+            if ingest_syms.strip():
+                pairs["ingestion_symbols"] = ingest_syms.strip()
+            if pairs:
+                result = put("/v1/settings/symbols", {"values": pairs})
+                if result:
+                    st.success("Symbols updated — active immediately")
+                    st.cache_data.clear()
+                    st.rerun()
+
+with st.expander("Risk Thresholds"):
+    _thr = _all_cfg.get("thresholds", {})
+    with st.form("settings_thresholds", clear_on_submit=False):
+        _thr_inputs = {}
+        for thr_key, label, default in [
+            ("sl_position_pct", "Stop Loss %", "0.05"),
+            ("sl_take_profit_pct", "Take Profit %", "0.10"),
+            ("sl_trailing_stop_pct", "Trailing Stop %", "0.03"),
+            ("sl_daily_drawdown_pct", "Daily Drawdown Limit %", "0.10"),
+            ("gate_max_drawdown", "Max Drawdown Limit %", "0.20"),
+            ("max_position_pct", "Max Position Size %", "0.02"),
+        ]:
+            _thr_inputs[thr_key] = st.text_input(
+                label,
+                value=_thr.get(thr_key, default),
+                key=f"thr_{thr_key}",
+            )
+        if st.form_submit_button("Save Thresholds"):
+            pairs = {k: v for k, v in _thr_inputs.items() if v}
+            if pairs:
+                result = put("/v1/settings/thresholds", {"values": pairs})
+                if result:
+                    st.success("Thresholds updated — active immediately")
+                    st.cache_data.clear()
+                    st.rerun()
+
+with st.expander("Scheduler"):
+    _sch = _all_cfg.get("scheduler", {})
+    with st.form("settings_scheduler", clear_on_submit=False):
+        sch_enabled = st.selectbox(
+            "Agent Scheduler Enabled",
+            ["true", "false"],
+            index=0 if _sch.get("agent_scheduler_enabled", "false").lower() in ("true", "1") else 1,
+            key="cfg_sch_enabled",
+        )
+        sch_interval = st.text_input(
+            "Agent Scheduler Interval (seconds)",
+            value=_sch.get("agent_scheduler_interval", "300"),
+            key="cfg_sch_interval",
+        )
+        sch_hours = st.text_input(
+            "Active Hours (HH:MM-HH:MM UTC, empty = H24)",
+            value=_sch.get("agent_scheduler_active_hours", ""),
+            key="cfg_sch_hours",
+        )
+        sch_sl_interval = st.text_input(
+            "Stop-Loss Check Interval (seconds)",
+            value=_sch.get("sl_check_interval", "30"),
+            key="cfg_sl_interval",
+        )
+        sch_ingest_interval = st.text_input(
+            "News Ingestion Interval (seconds)",
+            value=_sch.get("ingestion_interval", "300"),
+            key="cfg_ingest_interval",
+        )
+        if st.form_submit_button("Save Scheduler Settings"):
+            pairs = {
+                "agent_scheduler_enabled": sch_enabled,
+                "agent_scheduler_interval": sch_interval,
+                "agent_scheduler_active_hours": sch_hours,
+                "sl_check_interval": sch_sl_interval,
+                "ingestion_interval": sch_ingest_interval,
+            }
+            result = put("/v1/settings/scheduler", {"values": {k: v for k, v in pairs.items() if v}})
+            if result:
+                st.success("Scheduler settings updated")
+                st.cache_data.clear()
+                st.rerun()
+
+with st.expander("Price Feeds"):
+    _feeds_cfg = _all_cfg.get("feeds", {})
+    current_feeds = _feeds_cfg.get("selected_feeds", "")
+    with st.form("settings_feeds", clear_on_submit=False):
+        feeds_input = st.text_input(
+            "Selected Feeds (comma-separated, empty = ALL)",
+            value=current_feeds,
+            key="cfg_feeds",
+        )
+        if st.form_submit_button("Save Feed Selection"):
+            result = put("/v1/settings/feeds", {"values": {"selected_feeds": feeds_input}})
+            if result:
+                st.success("Feed selection updated")
+                st.cache_data.clear()
+                st.rerun()
 
 # ── Debug Section (collapsible) ──────────────────────────────────────────────
 
