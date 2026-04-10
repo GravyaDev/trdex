@@ -32,7 +32,7 @@ def _make_narrative(**overrides) -> TradeNarrative:
         volatility_regime="high",
         run_id="run-1",
         closed_at=datetime(2026, 4, 7, 9, 0, 0),
-        indicators={"rsi": 28.4, "sma_9": 90100.0},
+        indicators={"rsi": 28.4, "sma_5": 90100.0},
     )
     base.update(overrides)
     return TradeNarrative(**base)

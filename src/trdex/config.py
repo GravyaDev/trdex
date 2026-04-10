@@ -116,13 +116,13 @@ class Settings(BaseSettings):
     gate_min_win_rate: float = Field(default=0.40, description="Minimum win rate (0-1)")
 
     # Risk defaults
-    max_position_pct: float = Field(default=0.02, description="Max % of portfolio per trade")
+    max_position_pct: float = Field(default=0.05, description="Max % of portfolio per trade")
 
     # Stop-loss monitor (external, independent of AI agents)
     sl_check_interval: float = Field(default=30.0, description="Seconds between stop-loss checks")
-    sl_position_pct: float = Field(default=0.05, description="Per-position stop-loss (5% = close at -5%)")
-    sl_take_profit_pct: float = Field(default=0.10, description="Per-position take-profit (10%)")
-    sl_trailing_stop_pct: float = Field(default=0.03, description="Trailing stop: close if price retraces 3% from peak")
+    sl_position_pct: float = Field(default=0.03, description="Per-position stop-loss (3% = close at -3%)")
+    sl_take_profit_pct: float = Field(default=0.05, description="Per-position take-profit (5%)")
+    sl_trailing_stop_pct: float = Field(default=0.02, description="Trailing stop: close if price retraces 2% from peak")
     sl_daily_drawdown_pct: float = Field(default=0.10, description="Daily portfolio drawdown → kill switch")
 
     # Agent scheduler

@@ -38,7 +38,7 @@ async def _write_last_signal(state: AgentState, approved: bool, reason: str) -> 
         logger.exception("[Risk] failed to write last_signal to entity graph")
 
 # Hard limits — never bypassed by the AI signal
-MIN_CONFIDENCE = 0.4          # Analyst must be at least 40% confident
+MIN_CONFIDENCE = 0.3          # Analyst must be at least 30% confident
 MAX_POSITION_FRACTION = 0.05  # Never more than 5% of portfolio per trade
 MAX_DRAWDOWN_BLOCK = 0.10     # Block new trades if drawdown exceeds 10%
 
@@ -148,8 +148,8 @@ async def risk_node(state: AgentState) -> AgentState:
         approved=True,
         reason=approved_reason,
         position_size=position_size,
-        stop_loss_pct=0.02,
-        take_profit_pct=0.04,
+        stop_loss_pct=0.03,
+        take_profit_pct=0.05,
     )
     logger.info("[Risk] APPROVED — position_size=%.3f", position_size)
     await _write_last_signal(state, approved=True, reason=approved_reason)
