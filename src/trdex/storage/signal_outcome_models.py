@@ -29,8 +29,8 @@ class SignalOutcomeRecord(Base):
     symbol: Mapped[str] = mapped_column(String(20), nullable=False)
     direction: Mapped[str] = mapped_column(String(5), nullable=False)   # BUY | SELL
     entry_price: Mapped[Decimal] = mapped_column(Numeric(28, 8), nullable=False)
-    exit_price: Mapped[Decimal] = mapped_column(Numeric(28, 8), nullable=False)
-    budget: Mapped[Decimal] = mapped_column(Numeric(28, 8), nullable=False)
+    exit_price: Mapped[Decimal | None] = mapped_column(Numeric(28, 8), nullable=True)
+    budget: Mapped[Decimal] = mapped_column(Numeric(28, 8), nullable=False, default=Decimal("0"))
     executed_at: Mapped[datetime] = mapped_column(nullable=False, default=_utcnow_naive)
     closed_at: Mapped[datetime | None] = mapped_column(nullable=True)
     note: Mapped[str] = mapped_column(Text, nullable=False, default="")

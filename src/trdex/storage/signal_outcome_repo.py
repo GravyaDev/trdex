@@ -25,12 +25,16 @@ class SignalOutcomeRepository:
         symbol: str,
         direction: str,
         entry_price: Decimal,
-        exit_price: Decimal,
-        budget: Decimal,
+        exit_price: Decimal | None = None,
+        budget: Decimal = Decimal("0"),
         executed_at: datetime | None = None,
         closed_at: datetime | None = None,
         note: str = "",
     ) -> SignalOutcomeRecord:
+        """Persist a signal outcome. In observe-only mode `exit_price`
+        is None and `budget` is 0 until a post-hoc evaluation resolves
+        the signal via `close_outcome()`.
+        """
         def _naive(dt: datetime | None) -> datetime | None:
             if dt is None:
                 return None
@@ -67,3 +71,34 @@ class SignalOutcomeRepository:
             .order_by(SignalOutcomeRecord.executed_at.asc())
         )
         return list(result.scalars().all())
+
+    async def open_outcomes(self, limit: int = 1_000) -> list[SignalOutcomeRecord]:
+        """Return outcomes not yet resolved (exit_price IS NULL).
+
+        Used by the post-hoc TP/SL evaluation job to find signals that
+        still need to be scored against historical OHLCV data.
+        """
+        result = await self._session.execute(
+            select(SignalOutcomeRecord)
+            .where(SignalOutcomeRecord.exit_price.is_(None))
+            .order_by(SignalOutcomeRecord.executed_at.asc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def close_outcome(
+        self,
+        outcome_id: int,
+        exit_price: Decimal,
+        closed_at: datetime,
+        note: str | None = None,
+    ) -> None:
+        """Resolve an open outcome with final exit price + close time."""
+        record = await self._session.get(SignalOutcomeRecord, outcome_id)
+        if record is None:
+            return
+        record.exit_price = exit_price
+        record.closed_at = closed_at.replace(tzinfo=None) if closed_at.tzinfo else closed_at
+        if note is not None:
+            record.note = note
+        await self._session.commit()

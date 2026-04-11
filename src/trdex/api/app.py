@@ -37,6 +37,7 @@ API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 # Shared state — populated by the background task, read by /v1/signals
 _tracker = SignalTracker()
 _telegram_task: asyncio.Task[None] | None = None
+_telegram_eval_task: asyncio.Task[None] | None = None
 _scheduler: IngestionScheduler | None = None
 _agent_task: asyncio.Task[None] | None = None
 
@@ -68,14 +69,83 @@ async def _ingest_signal_to_qdrant(signal) -> None:
         logger.exception("[telegram] Qdrant ingestion failed for signal %s", getattr(signal, "symbol", "?"))
 
 
-async def _telegram_background(monitor: TelegramMonitor, channels: list[str]) -> None:
-    """Background task: stream signals from Telegram, track P&L, ingest into Qdrant."""
+async def _telegram_background(
+    monitor: TelegramMonitor,
+    channels: list[str],
+    session_factory,
+) -> None:
+    """Background task: stream signals from Telegram, record them
+    observe-only, ingest into Qdrant.
+
+    Observe-only mode (Step 1 of Telegram Signal Integration): each
+    parsed signal is persisted to `signal_outcomes` with exit_price
+    NULL and budget 0. No position is opened, no capital at risk.
+    The post-hoc TP/SL evaluation job (see
+    `telegram.evaluator.evaluate_open_signals`) resolves outcomes
+    later by fetching historical OHLCV and scoring against the
+    signal's targets/stop.
+    """
+    from decimal import Decimal
+    from trdex.telegram.tracker import SignalOutcome
+
     try:
         async for signal in monitor.stream(channels):
             logger.info(
                 "[telegram] %s %s from %s entry=%s",
                 signal.direction, signal.symbol, signal.source, signal.entry,
             )
+
+            # Skip signals without a concrete entry price — we cannot
+            # score them post-hoc without a reference point.
+            if signal.entry is None:
+                logger.debug(
+                    "[telegram] skipping record for %s %s: no entry price",
+                    signal.direction, signal.symbol,
+                )
+            else:
+                # Serialize targets/stop into the `note` JSON so the
+                # post-hoc evaluator can read them without a schema change.
+                import json
+                note_payload = json.dumps({
+                    "targets": signal.targets,
+                    "stop_loss": signal.stop_loss,
+                })
+                outcome = SignalOutcome(
+                    source=signal.source,
+                    symbol=signal.symbol,
+                    direction=signal.direction,
+                    entry_price=Decimal(str(signal.entry)),
+                    exit_price=None,
+                    budget=Decimal("0"),
+                    executed_at=signal.parsed_at,
+                )
+                try:
+                    # record_and_persist() does not accept `note`; pass
+                    # through the repo directly so we can store it.
+                    from trdex.storage.signal_outcome_repo import (
+                        SignalOutcomeRepository,
+                    )
+                    async with session_factory() as session:
+                        repo = SignalOutcomeRepository(session)
+                        await repo.save(
+                            source=outcome.source,
+                            symbol=outcome.symbol,
+                            direction=outcome.direction,
+                            entry_price=outcome.entry_price,
+                            exit_price=None,
+                            budget=Decimal("0"),
+                            executed_at=outcome.executed_at,
+                            closed_at=None,
+                            note=note_payload,
+                        )
+                    _tracker.record(outcome)
+                except Exception:
+                    logger.exception(
+                        "[telegram] failed to record observe-only signal "
+                        "%s %s from %s",
+                        signal.direction, signal.symbol, signal.source,
+                    )
+
             # Ingest signal into Qdrant so Scout agent can read it as context
             await _ingest_signal_to_qdrant(signal)
     except asyncio.CancelledError:
@@ -91,7 +161,7 @@ async def _telegram_background(monitor: TelegramMonitor, channels: list[str]) ->
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    global _telegram_task, _scheduler, _agent_task
+    global _telegram_task, _telegram_eval_task, _scheduler, _agent_task
 
     # --- Apply DB migrations (idempotent, self-healing on fresh deploys) ---
     # Must run before anything else touches the database. The migration
@@ -213,7 +283,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             )
             await monitor.start()
             _telegram_task = asyncio.create_task(
-                _telegram_background(monitor, channels),
+                _telegram_background(monitor, channels, session_factory),
                 name="telegram-stream",
             )
             logger.info("[telegram] streaming %d channels", len(channels))
@@ -225,6 +295,23 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             _telegram_task = None
     else:
         logger.info("[telegram] skipped — no channels configured")
+
+    # --- Telegram post-hoc TP/SL evaluator ---
+    # Always-on background loop: scores open observe-only signals
+    # against historical OHLCV every hour. Runs even when the monitor
+    # is disabled so a restart can still resolve signals recorded in
+    # earlier sessions. Cheap when there are no open rows.
+    from trdex.telegram.evaluator import evaluator_loop
+    _tg_eval_interval = config_svc.get_typed(
+        "scheduler", "telegram_eval_interval", 3600,
+    )
+    _telegram_eval_task = asyncio.create_task(
+        evaluator_loop(session_factory, feed_manager, _tg_eval_interval),
+        name="telegram-evaluator",
+    )
+    logger.info(
+        "[tg-eval] scheduled — interval=%ds", _tg_eval_interval,
+    )
 
     # --- News ingestion scheduler ---
     # Read API keys and symbols from RuntimeConfig (DB-backed, dashboard-editable)
@@ -343,6 +430,9 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     if _telegram_task:
         _telegram_task.cancel()
         await asyncio.gather(_telegram_task, return_exceptions=True)
+    if _telegram_eval_task:
+        _telegram_eval_task.cancel()
+        await asyncio.gather(_telegram_eval_task, return_exceptions=True)
     if monitor:
         await monitor.stop()
     await feed_manager.close_all()
@@ -461,8 +551,68 @@ def create_app() -> FastAPI:
 
     @app.get("/v1/signals")
     async def signals(_key: str = Depends(verify_api_key)) -> dict[str, object]:
-        """Returns signal tracker report: P&L per source."""
-        return {"report": _tracker.report()}
+        """Signal tracker report + recent outcomes for the dashboard.
+
+        Response shape:
+          {
+            "report": [{source, total_signals, open_signals,
+                        closed_signals, wins, losses, total_pnl,
+                        budget_allocated, win_rate, roi_pct}, ...],
+            "recent": [{id, source, symbol, direction, entry_price,
+                        exit_price, budget, executed_at, closed_at,
+                        status}, ...]
+          }
+        `recent` is the last 50 outcomes from the DB, ordered by
+        executed_at desc. `status` is "open" | "tp" | "sl" | "stale"
+        — derived from exit_price presence and the note payload.
+        """
+        report_rows: list[dict[str, object]] = []
+        for stats in _tracker.report():
+            report_rows.append({
+                "source": stats.source,
+                "total_signals": stats.total_signals,
+                "open_signals": stats.open_signals,
+                "closed_signals": stats.closed_signals,
+                "wins": stats.wins,
+                "losses": stats.losses,
+                "total_pnl": float(stats.total_pnl),
+                "budget_allocated": float(stats.budget_allocated),
+                "win_rate": round(stats.win_rate, 4),
+                "roi_pct": float(stats.roi_pct),
+            })
+
+        recent: list[dict[str, object]] = []
+        try:
+            import json as _json
+            from trdex.storage.signal_outcome_repo import SignalOutcomeRepository
+            sf = get_session_factory()
+            async with sf() as session:
+                repo = SignalOutcomeRepository(session)
+                records = await repo.all(limit=50)
+            for r in reversed(records):  # newest first
+                status = "open"
+                if r.exit_price is not None:
+                    try:
+                        note_payload = _json.loads(r.note) if r.note else {}
+                        status = note_payload.get("resolution", "closed")
+                    except (ValueError, TypeError):
+                        status = "closed"
+                recent.append({
+                    "id": r.id,
+                    "source": r.source,
+                    "symbol": r.symbol,
+                    "direction": r.direction,
+                    "entry_price": float(r.entry_price),
+                    "exit_price": float(r.exit_price) if r.exit_price is not None else None,
+                    "budget": float(r.budget) if r.budget is not None else 0.0,
+                    "executed_at": r.executed_at.isoformat() if r.executed_at else None,
+                    "closed_at": r.closed_at.isoformat() if r.closed_at else None,
+                    "status": status,
+                })
+        except Exception:
+            logger.exception("[/v1/signals] failed to load recent outcomes")
+
+        return {"report": report_rows, "recent": recent}
 
     @app.get("/v1/system/readiness")
     async def system_readiness(_key: str = Depends(verify_api_key)) -> dict[str, object]:

@@ -42,6 +42,7 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str, type]] = {
     ("scheduler", "agent_scheduler_active_hours"): ("agent_scheduler_active_hours", str),
     ("scheduler", "sl_check_interval"): ("sl_check_interval", float),
     ("scheduler", "ingestion_interval"): ("ingestion_interval", int),
+    ("scheduler", "telegram_eval_interval"): (None, int),
     # Feeds
     ("feeds", "selected_feeds"): (None, str),  # No env var equivalent
 }
