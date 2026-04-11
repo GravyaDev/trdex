@@ -546,6 +546,11 @@ def create_app() -> FastAPI:
             "telegram": {
                 "streaming": _telegram_task is not None and not _telegram_task.done(),
                 "channels": settings.telegram_channels_list,
+                "signals_tracked": len(_tracker._outcomes),
+                "evaluator_running": (
+                    _telegram_eval_task is not None
+                    and not _telegram_eval_task.done()
+                ),
             },
         }
 
