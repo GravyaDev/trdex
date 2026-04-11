@@ -48,6 +48,17 @@ class Settings(BaseSettings):
     api_key: str = ""  # Set to enable auth; empty = dev mode (no auth)
     cors_origins: str = ""  # Comma-separated origins; empty = no CORS
 
+    # Credentials encryption master key (Fernet, 44-char urlsafe base64).
+    # When set, runtime_config.credentials rows are encrypted at rest.
+    # When empty, the service runs in passthrough mode with a WARNING
+    # log at startup. Generate a new key with:
+    #   python -m trdex.services.credentials_crypto
+    # Never commit a key. Set only in Coolify / deployment secrets.
+    config_encryption_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("TRDEX_CONFIG_ENCRYPTION_KEY"),
+    )
+
     # Exchange keys (optional — only needed when connecting)
     # Accept both BINANCE_API_KEY (no prefix) and TRDEX_BINANCE_API_KEY (with prefix)
     binance_api_key: str = Field(default="", validation_alias=AliasChoices("TRDEX_BINANCE_API_KEY", "BINANCE_API_KEY"))

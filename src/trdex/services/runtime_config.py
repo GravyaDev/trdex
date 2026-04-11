@@ -2,6 +2,12 @@
 
 Env vars seed the DB on first boot. After that the DB is the source of truth
 and the dashboard/API can modify config without a deploy or restart.
+
+Credentials (category "credentials") are encrypted at rest using the
+Fernet wrapper in `credentials_crypto`. Ciphertext lives in the DB;
+the in-memory cache holds decrypted plaintext so reads stay O(1) and
+the rest of the service is unchanged. See `credentials_crypto` for
+the key-management model.
 """
 
 from __future__ import annotations
@@ -9,6 +15,8 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from typing import Any
+
+from trdex.services import credentials_crypto
 
 logger = logging.getLogger(__name__)
 
@@ -86,19 +94,70 @@ class RuntimeConfigService:
         self._listeners: dict[str, list[Callable]] = {}
 
     async def load(self) -> None:
-        """Load all config from DB into the in-memory cache."""
+        """Load all config from DB into the in-memory cache.
+
+        Credential values are decrypted here so the rest of the
+        service sees plaintext. Non-credential values pass through.
+        Legacy plaintext credentials (pre-encryption) are loaded
+        as-is and get upgraded on the next write or on the
+        explicit `migrate_plaintext_credentials()` pass.
+        """
         from trdex.storage.runtime_config_repo import RuntimeConfigRepository
         async with self._sf() as session:
             repo = RuntimeConfigRepository(session)
-            self._cache = await repo.get_all()
+            raw = await repo.get_all()
+
+        cache: dict[str, dict[str, str]] = {}
+        for category, pairs in raw.items():
+            if category == "credentials":
+                cache[category] = {
+                    k: credentials_crypto.decrypt(v) for k, v in pairs.items()
+                }
+            else:
+                cache[category] = dict(pairs)
+        self._cache = cache
         total = sum(len(v) for v in self._cache.values())
         logger.info("[RuntimeConfig] loaded %d keys from DB", total)
+
+    async def migrate_plaintext_credentials(self) -> int:
+        """One-time migration: re-save any plaintext credential rows
+        so they become encrypted at rest.
+
+        Idempotent: rows that are already Fernet ciphertext are
+        skipped. Does nothing when encryption is disabled (no key).
+        Returns the number of rows rewritten.
+        """
+        if not credentials_crypto.is_enabled():
+            return 0
+
+        from trdex.storage.runtime_config_repo import RuntimeConfigRepository
+        upgraded = 0
+        async with self._sf() as session:
+            repo = RuntimeConfigRepository(session)
+            raw = await repo.get_category("credentials")
+            for key, stored in raw.items():
+                if not stored:
+                    continue
+                if credentials_crypto.is_ciphertext(stored):
+                    continue
+                ciphertext = credentials_crypto.encrypt(stored)
+                await repo.put("credentials", key, ciphertext)
+                upgraded += 1
+        if upgraded:
+            logger.info(
+                "[RuntimeConfig] migrated %d plaintext credential "
+                "rows to encrypted storage", upgraded,
+            )
+        return upgraded
 
     async def seed_from_settings(self, settings) -> None:
         """Insert env var values for keys that don't exist in DB yet.
 
         Only runs on first boot (or after a DB wipe). Existing DB values
         are never overwritten — the DB always wins.
+
+        Credential rows are encrypted before hitting the DB; the cache
+        keeps the plaintext so the rest of the service is unchanged.
         """
         from trdex.storage.runtime_config_repo import RuntimeConfigRepository
         seeded = 0
@@ -113,7 +172,12 @@ class RuntimeConfigService:
                 value = str(getattr(settings, settings_attr, ""))
                 if not value and _type in (int, float):
                     value = str(getattr(settings, settings_attr, 0))
-                await repo.put(category, key, value)
+                stored = (
+                    credentials_crypto.encrypt(value)
+                    if category == "credentials" and value
+                    else value
+                )
+                await repo.put(category, key, stored)
                 self._cache.setdefault(category, {})[key] = value
                 seeded += 1
         if seeded:
@@ -143,18 +207,36 @@ class RuntimeConfigService:
     # ── writes (DB + cache + listeners) ──────────────────────────────────
 
     async def put(self, category: str, key: str, value: str) -> None:
+        """Persist a single config value and fire listeners.
+
+        Cache holds plaintext. DB holds ciphertext for credentials.
+        Listeners receive plaintext (they mirror user-facing values).
+        """
+        stored = (
+            credentials_crypto.encrypt(value)
+            if category == "credentials" and value
+            else value
+        )
         from trdex.storage.runtime_config_repo import RuntimeConfigRepository
         async with self._sf() as session:
             repo = RuntimeConfigRepository(session)
-            await repo.put(category, key, value)
+            await repo.put(category, key, stored)
         self._cache.setdefault(category, {})[key] = value
         self._fire_listeners(category, key, value)
 
     async def put_category(self, category: str, pairs: dict[str, str]) -> None:
+        """Bulk upsert. Same encryption rules as `put()`."""
+        if category == "credentials":
+            stored_pairs = {
+                k: (credentials_crypto.encrypt(v) if v else v)
+                for k, v in pairs.items()
+            }
+        else:
+            stored_pairs = pairs
         from trdex.storage.runtime_config_repo import RuntimeConfigRepository
         async with self._sf() as session:
             repo = RuntimeConfigRepository(session)
-            await repo.put_many(category, pairs)
+            await repo.put_many(category, stored_pairs)
         for key, value in pairs.items():
             self._cache.setdefault(category, {})[key] = value
             self._fire_listeners(category, key, value)
@@ -179,10 +261,30 @@ class RuntimeConfigService:
 
 
 async def init_config_service(session_factory, settings) -> RuntimeConfigService:
-    """Create, load, seed, and register the global singleton."""
+    """Create, load, seed, and register the global singleton.
+
+    Order matters:
+      1. init_cipher() — sets up Fernet if the env var is present.
+         Must run before load() so decrypt works on the first read.
+      2. load() — pulls raw rows from DB; credentials category is
+         decrypted via the cipher. Legacy plaintext rows survive
+         and will be reloaded after the migration step rewrites
+         them as ciphertext.
+      3. migrate_plaintext_credentials() — idempotent one-shot
+         upgrade of any plaintext rows left over from earlier
+         deployments. No-op when the cipher is disabled.
+      4. load() again — refresh the cache so the now-encrypted
+         rows are read back as plaintext through decrypt().
+      5. seed_from_settings() — env-var seed for keys still
+         missing after step 4.
+    """
     global _service
+    credentials_crypto.init_cipher()
     svc = RuntimeConfigService(session_factory)
     await svc.load()
+    upgraded = await svc.migrate_plaintext_credentials()
+    if upgraded:
+        await svc.load()
     await svc.seed_from_settings(settings)
     _service = svc
     return svc
