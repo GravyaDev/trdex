@@ -83,6 +83,13 @@ services:
       # Use `?` (not `:?`) so Compose fails only if the variable is unset
       # in production Coolify — but tolerates the empty dev-locale value.
       TRDEX_API_KEY: '${TRDEX_API_KEY?TRDEX_API_KEY must be defined (can be empty in dev; generate with openssl rand -hex 32 for prod)}'
+      # Credentials encryption master key (Fernet, 44-char urlsafe
+      # base64). When set, runtime_config.credentials rows are
+      # encrypted at rest via services/credentials_crypto. When
+      # empty the service runs in passthrough mode with a WARNING
+      # log. Generate a fresh key with:
+      #   python -m trdex.services.credentials_crypto
+      TRDEX_CONFIG_ENCRYPTION_KEY: '${TRDEX_CONFIG_ENCRYPTION_KEY:-}'
       TRDEX_CORS_ORIGINS: '${TRDEX_CORS_ORIGINS:-}'
       # Exchange (Binance) — optional in simulation mode
       BINANCE_API_KEY: '${BINANCE_API_KEY:-}'
