@@ -3,8 +3,8 @@
 ## Now
 
 - **trdex LIVE in production**: `https://trdex.gravya.it` (FastAPI) + `/dashboard/` (Streamlit, GitHub OAuth)
-- **Phase 2 observation**: 25 crypto symbols (aggressive tuning), Runtime Config DB-backed, scheduler 5 min
-- **Sessione 2026-04-10 chiusa**: Historical Market Episode RAG pipeline COMPLETE (8 step) + 2 merge forward da main. 344/344 test pass. Pushed.
+- **Phase 2 observation**: 25 crypto symbols (aggressive tuning), Runtime Config DB-backed + Fernet-encrypted credentials, scheduler 5 min
+- **Sessione 2026-04-11 chiusa**: Kloudify v1.1.2→v1.2.2 + merge forward main (9 commit: stale ticker, encrypted creds, Telegram Step 1, persistent stop_loss events) + security HIGH closed (verify_api_key fail-safe). 372/372 test pass.
 
 ## ⚠️ Branch LLM dev — `llm-agents`
 

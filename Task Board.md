@@ -62,9 +62,14 @@ Auth: GitHub OAuth via oauth2-proxy
 
 ## 🛡️ Security corrective tasks (da security scan 2026-04-10)
 
-- [ ] **[HIGH] Harden verify_api_key** — refuse startup se `settings.mode != SIMULATION` e `api_key` vuoto. Oggi l'API cade in dev-mode silenzioso con TUTTI gli endpoint esposti (incluso `/v1/debug/*`). Mirror del pattern default-DB-creds guard in `app.py:137-143`. **Effort**: ~30 min
-- [ ] **[MEDIUM] Sanitize memory snapshot text prima dell'iniezione LLM** — `memory_text` in `prompt_builder.py:111-113` e `state.memory_snapshots[agent]` vanno passati per `sanitize_rag_content()` per defense-in-depth. Oggi tutto il contenuto è interno, ma il pattern è un vettore di prompt-injection diretto nell'Analyst. **Effort**: ~20 min
-- [ ] **[LOW] CLI input validation** su `backfill_ohlcv.py` e `generate_episodes.py` — regex su `symbol` (`^[A-Z0-9]{2,10}/[A-Z0-9]{2,10}$`), cap `--days` a 3650, validate `window > 0` e `stride > 0`. **Effort**: ~15 min
+- [x] **[HIGH] Harden verify_api_key** — FIXED 2026-04-11 (commit `d4fff2b`).
+- [ ] **[MEDIUM] credentials_crypto fail-closed outside SIMULATION** — `init_cipher()` oggi fa passthrough silenzioso a plaintext se `TRDEX_CONFIG_ENCRYPTION_KEY` unset/invalid. In `live`/`paper` deve raise `RuntimeError` come il pattern `verify_api_key`. `services/credentials_crypto.py:94-136`. **Effort**: ~20 min
+- [ ] **[MEDIUM] Rate limiter X-Forwarded-For behind proxy** — SlowAPI usa `get_remote_address()` che dietro Coolify/Traefik ritorna il peer del proxy → tutti i client condividono un bucket (effectively 60/min globali). Fix: `key_func=lambda req: req.headers.get("x-forwarded-for", ...).split(",")[0].strip()`. `app.py:523`. **Effort**: ~5 min, HIGH impact
+- [ ] **[MEDIUM] Telegram evaluator NaN/inf sanitization** — `_parse_note()` accetta qualsiasi float da Telegram user content. NaN/inf fa si che SL/TP non triggerino mai. Observe-only oggi, critico quando passa a live. Fix: `math.isnan`/`isinf` + sanity bounds `0 < t < 1e9`. `telegram/evaluator.py:127-138`. **Effort**: ~15 min
+- [ ] **[MEDIUM] Sanitize memory snapshot text prima dell'iniezione LLM** — `memory_text` in `prompt_builder.py:111-113` e `state.memory_snapshots[agent]` vanno passati per `sanitize_rag_content()`. **Effort**: ~20 min
+- [ ] **[LOW] CLI input validation** su `backfill_ohlcv.py` e `generate_episodes.py`. **Effort**: ~15 min
+- [ ] **[LOW] Mode gate su `/v1/debug/*`** — aggiungere check `settings.mode == SIMULATION` così anche una leaked key in production non può dumpare balance ledger / entity graph. **Effort**: ~10 min
+- [ ] **[LOW] Lifespan boot-guard regression test** — nessun test oggi asserisce il `RuntimeError` nel `_lifespan` quando mode != SIMULATION e api_key vuoto. Aggiungere `test_lifespan_refuses_unset_key_outside_simulation`. **Effort**: ~15 min
 
 ---
 
@@ -85,13 +90,25 @@ Risolti via merge da main oggi:
 - [x] Forex weekend gap closure rule (`market/hours.py` + risk gate 4b)
 - [x] Circuit breaker IngestionScheduler per Qdrant failures
 
+Risolti via merge da main 2026-04-11:
+- [x] Persistent stop-loss event log (migration 013 + `StopLossEventRepository` + hydrate da DB)
+- [x] Runtime config credentials encrypted at rest (Fernet, migration `credentials_crypto.py`)
+- [x] Stale ticker detection (Binance feed raises `StaleTickerError` dopo 5 min)
+
 Aperti:
 - [ ] Alembic migration runner (sostituisce script custom)
-- [ ] Persistent stop-loss event log (oggi in-memory, perso al restart)
 - [ ] `fill_reconciliation` table per riconciliazione DB ↔ exchange (live mode)
 - [ ] Tier 3+4 features (kline WS stream, CoinGecko screener, hyperopt, Redis cache, Ollama LLM)
 
 ---
+
+## Done — 2026-04-11
+
+- [x] **Dep vuln patch**: cryptography 46.0.6→46.0.7, langchain-core 1.2.24→1.2.28, uv 0.11.3→0.11.6, orphan fastmcp removed
+- [x] **Kloudify upgrade v1.1.2→v1.2.2** (commit `fd659f1`): 11 infra files + install.sh replaced + new `check-quality-gate.sh` hook
+- [x] **Merge forward #3** from main (commit `c022062`): 9 commits — StaleTickerError, gate_min_days 30→25, Telegram Step 1 observe-only, encrypted credentials (Fernet), persistent stop_loss events, /v1/status extended, numeric chat_id, compose wiring
+- [x] **Security HIGH closed**: verify_api_key fail-open fixed (commit `d4fff2b`) — two-layer fix (lifespan guard + runtime 503), 6 regression tests
+- [x] 372/372 test pass (was 344)
 
 ## Done — 2026-04-10
 
