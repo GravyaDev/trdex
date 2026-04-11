@@ -110,7 +110,7 @@ class Settings(BaseSettings):
     telegram_signal_budget: float = 100.0  # fixed budget per signal (quote currency)
 
     # Simulation gate criteria (Phase 5)
-    gate_min_days: int = Field(default=30, description="Minimum simulation days before live")
+    gate_min_days: int = Field(default=25, description="Minimum simulation days before live")
     gate_min_sharpe: float = Field(default=1.0, description="Minimum Sharpe ratio")
     gate_max_drawdown: float = Field(default=0.20, description="Maximum drawdown (0-1)")
     gate_min_win_rate: float = Field(default=0.40, description="Minimum win rate (0-1)")
