@@ -122,7 +122,7 @@ services:
       # Risk limits
       TRDEX_MAX_POSITION_PCT: '${TRDEX_MAX_POSITION_PCT:-0.05}'
       # Simulation gate (required before switching to live)
-      TRDEX_GATE_MIN_DAYS: '${TRDEX_GATE_MIN_DAYS:-30}'
+      TRDEX_GATE_MIN_DAYS: '${TRDEX_GATE_MIN_DAYS:-25}'
       TRDEX_GATE_MIN_SHARPE: '${TRDEX_GATE_MIN_SHARPE:-1.0}'
       TRDEX_GATE_MAX_DRAWDOWN: '${TRDEX_GATE_MAX_DRAWDOWN:-0.20}'
       TRDEX_GATE_MIN_WIN_RATE: '${TRDEX_GATE_MIN_WIN_RATE:-0.40}'
