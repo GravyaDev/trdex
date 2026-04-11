@@ -1,12 +1,11 @@
 # Task Board
 
-## Production status (2026-04-09 mattina)
+## Production status (2026-04-10 sera)
 
 **trdex LIVE** su `https://trdex.gravya.it` + dashboard `/dashboard/`
-Scheduler: 9 symbols, 5 min interval, 1334 agent_runs in 24h
-Trade chiusi: 12 (6W/6L, net +$9.65, win rate 50%)
-Balance: $10,009.65 / peak $10,032.37
-Fix deployato oggi: SL adattivo a CV + per-symbol config + fee nel P&L
+Scheduler: 25 symbols (default), 5 min interval. Strategy: SMA 5/13, RSI 40/60, confidence 0.3
+Pending redeploy: aggressive strategy + 25 symbols + SL Binance-pinned fix + Runtime Config + tech debt
+Bug trovato e fixato: cross-feed price mismatch su MATIC/RNDR (phantom +40-50% gains)
 
 ---
 
@@ -52,6 +51,49 @@ Design approvato dal multi-agent brainstorm 2026-04-10. Decision log in
 - [ ] [idea] **Last Signals widget** — timestamp, symbol, direction, fill price, lot size, P&L corrente per segnali Telegram eseguiti
 - [ ] [idea] **Config Health checklist** — tab dashboard con stato credenziali (OANDA, Binance, Telegram, DB) in plain language
 
+### 🟣 Telegram Signal Integration (Zanni feasibility — 2026-04-11)
+
+Verificato empiricamente sui segnali di Matteo Zanni (18/20 confermati reali via yfinance, +$15.64 netto su 20 trade con $10 × leva 50). Decision: NON replicare il criterio come rule engine (scalping discrezionale non è automatizzabile), MA consumare i suoi segnali via Telegram monitor e piazzare ordini nel nostro sistema. Infrastruttura al 60% già presente.
+
+**Stato componenti**:
+- [x] Parser `telegram/parser.py` — legge formati Zanni (GBPUSD SELL, BUY XAUUSD, TP1/2/3, SL)
+- [x] Monitor `telegram/monitor.py` — Telethon wrapper async + backpressure queue
+- [x] Tracker `telegram/tracker.py` + DB `signal_outcomes`
+- [x] ForexFeed `market/feeds/forex.py` (EUR/USD, GBP/USD, XAU/USD)
+- [x] Market hours gate `market/hours.py:is_market_open()` (weekend Forex closure)
+- [x] Runtime Config per credenziali Telegram hot-reload
+
+**Step 1 — Observe-only** (1h, zero capitale a rischio)
+
+Attiva il monitor, parsea i segnali in arrivo, salva in `signal_outcomes` SENZA aprire posizioni. Dopo 1 settimana avremo il tasso di successo reale misurato sui NOSTRI prezzi (non sul broker di Zanni).
+
+- [ ] [telegram] **1.1 Credenziali Telegram** — creare API ID/Hash su https://my.telegram.org. Via dashboard Runtime Config → Settings → API Keys, inserire `telegram_api_id`, `telegram_api_hash`, `telegram_phone`, `telegram_channels` (CSV dei canali Zanni)
+- [ ] [telegram] **1.2 Login one-time** — da container app via `docker exec`: `/app/.venv/bin/python scripts/telegram_login.py`. Crea `trdex_telegram.session`. Volume mount necessario per persistenza restart (vedi docker-compose `volumes:` del container app)
+- [ ] [telegram] **1.3 Abilitare monitor in lifespan** — già pronto in `api/app.py:199-227`: instanzia `TelegramMonitor` se `telegram_api_id != 0`. Basta settare le credenziali al punto 1.1 + Coolify restart
+- [x] [telegram] **1.4 Observe-only handler** — done 2026-04-11 (commit `bd4fb70`). `_telegram_background()` persiste ogni signal con exit_price=NULL, budget=0, note=json(targets, stop_loss). Migration 011 rende exit_price nullable.
+- [x] [telegram] **1.5 Dashboard signals viewer** — done 2026-04-11 (commit `bd4fb70`). Expander 🟣 Telegram Signals con 4 metric + tabella per-source (win_rate, roi_pct) + tabella recent 50. `/v1/signals` arricchito con report + recent.
+- [x] [telegram] **1.6 Post-fatto TP/SL evaluation job** — done 2026-04-11 (commit `bd4fb70`). Nuovo `telegram/evaluator.py`: `score_signal()` puro (first-touch, ambiguous→SL), `evaluator_loop()` schedulato ogni 3600s, timeframe auto (5m/15m/1h). Signals >24h → stale.
+
+**Observation gate**: dopo 7 giorni di observe-only, se `signal_tracker.stats(source).win_rate >= 0.6` e `roi_pct >= 5%` su almeno 20 segnali, procedi con Step 2. Altrimenti blacklist il canale e ferma.
+
+**Step 2 — Auto-execute** (2-3h, dopo Step 1 confermato)
+
+Aggiungere esecuzione reale dei segnali validati, con budget fisso e risk gates.
+
+- [ ] [telegram] **2.1 Symbol router** — `execution/symbol_router.py` nuovo modulo: funzione `route_for_symbol(symbol: str) -> tuple[PriceFeed, ExecutionGateway]`. Logica: se `is_forex(symbol)` → ForexFeed + OandaExecutor (da implementare), altrimenti BinanceFeed + LiveExecutor/Simulator. Discriminatore usa `market/hours.py:is_forex()` già esistente
+- [ ] [telegram] **2.2 TelegramSignalExecutor** — nuovo modulo `execution/telegram_executor.py`. API: `async execute(signal: TelegramSignal, budget: Decimal) -> Position | None`. Flow: (a) route symbol → feed+gateway, (b) check market hours, (c) check risk gates (max open TG positions, reliability gate, kill switch), (d) fetch current price via feed, (e) calcola qty = budget / current_price, (f) place order via gateway con `source="telegram"`, (g) memorizza TP/SL dal signal in `position.note` JSON per stop_loss_monitor
+- [ ] [telegram] **2.3 TG risk gates** — in TelegramSignalExecutor, prima del place():
+  - Budget: usa `settings.telegram_signal_budget` ($100 default)
+  - Max open positions per asset class: query DB `positions WHERE status='open' AND source='telegram'` — blocca se > 3 per asset class
+  - Reliability gate: se `tracker.stats(signal.source).win_rate < 0.5 AND total_signals >= 20` → skip con log
+  - Kill switch (globale) check, market hours check già disponibili
+- [ ] [telegram] **2.4 Stop-loss adattato a TP/SL del segnale** — estendere `stop_loss.py` per leggere TP/SL dalla `position.note` JSON se `source=="telegram"`; invece della formula adaptive CV, usa i target del signal. Chiudi al tocco TP1 (o dynamic: TP2/TP3 con trailing). Su SL touch → close + record outcome negativo
+- [ ] [telegram] **2.5 Wire up in lifespan** — in `_telegram_background()` sostituire il record-only handler con: `await telegram_executor.execute(signal, budget=settings.telegram_signal_budget)` seguito dal tracking
+- [ ] [telegram] **2.6 Dashboard TG positions panel** — nuovo expander dashboard: positions dove `source='telegram'`, con entry/current/TP/SL/pnl%, pulsante "close now" per emergency exit
+- [ ] [telegram] **2.7 Test isolato simulation mode** — prima di live: settare `TRDEX_MODE=simulation` + `telegram_signal_budget=10` (dollaro simbolico) per verificare che il pipeline funzioni end-to-end senza capitale reale
+
+**Go-live gate**: Step 2 parte solo dopo: (1) Step 1 dati positivi, (2) OandaExecutor implementato (vedi Multi-asset expansion Fase 3), (3) review manuale dei primi 5 segnali eseguiti in simulation
+
 ### 🔵 Phase 3 (post-osservazione, quando hai 7-14+ giorni di dati)
 
 - [ ] **Iterazione strategia**: variazioni SMA cross (parametri diversi), RSI threshold, MACD divergence
@@ -66,7 +108,7 @@ Design approvato dal multi-agent brainstorm 2026-04-10. Decision log in
 - [x] Forex weekend gap closure rule (market/hours.py + risk gate 4b)
 - [x] Circuit breaker IngestionScheduler per Qdrant failures (exponential backoff)
 - [ ] Alembic migration runner (sostituisce lo script custom `apply_migrations.py`)
-- [ ] Persistent stop-loss event log (oggi in-memory, perso al restart)
+- [x] Persistent stop-loss event log — done 2026-04-11. Migration 013 crea `stop_loss_events`, ORM + repo nuovi, `StopLossMonitor._persist_event()` scrive best-effort, `_hydrate_events_from_db()` ricarica gli ultimi 50 + counter cumulativo all'avvio. `/v1/risk/status.events_fired` ora è persistente.
 - [ ] `fill_reconciliation` table per riconciliazione local DB ↔ exchange (live mode)
 - [ ] Tier 3+4 features (kline WS stream, CoinGecko screener, hyperopt, Redis cache, Ollama LLM, Alembic auto-migration)
 
@@ -85,6 +127,8 @@ Design approvato dal multi-agent brainstorm 2026-04-10. Decision log in
 - [x] Strategy aggressive tuning: SMA 5/13, RSI 40/60, confidence 0.3, position 5%, SL/TP 3%/5%
 - [x] Crypto expansion Fase 1: default symbols da 2 a 25 (majors, L1, DeFi, L2, AI, Gaming, Meme)
 - [x] Tech debt: /v1/status feeds+scheduler info, PositionSide enum, forex weekend gate, circuit breaker ingestion
+- [x] Bug fix: StopLoss price pinned to Binance — prevents cross-feed P&L distortion (MATIC +49%, RNDR +40% phantom gains)
+- [x] Telegram signals standalone extraction (telegram-signals/ — parser, monitor, tracker, DB, tests, README)
 
 ## Done — 2026-04-09
 
