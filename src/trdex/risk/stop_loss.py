@@ -202,7 +202,16 @@ class StopLossMonitor:
         self._max_dd_pct = max_drawdown_pct
         self._task: asyncio.Task[None] | None = None
         self._callbacks: list = []
+        # Rolling cache of the last 50 events — hydrated from the
+        # stop_loss_events table on start() and kept in sync by
+        # _persist_event(). Lets recent_events stay a sync property
+        # while the underlying log is persistent across restarts.
         self._events: list[StopLossEvent] = []
+        # Cumulative count since the table was created, read from DB
+        # at start and incremented on each successful _persist_event.
+        # Shown in /v1/risk/status.events_fired so the number survives
+        # a container cycle even though the cache is bounded.
+        self._events_fired_total: int = 0
         self._peak_equity: float | None = None  # loaded from DB on first check
         self._last_check: datetime | None = None
         self._trailing_highs: dict[int, float] = {}  # position_id → high-water mark price
@@ -212,12 +221,78 @@ class StopLossMonitor:
         self._callbacks.append(callback)
 
     async def start(self) -> None:
+        # Rehydrate the in-memory cache from the persistent event log
+        # so /v1/risk/events returns real history right after a restart
+        # instead of an empty list.
+        await self._hydrate_events_from_db()
         self._task = asyncio.create_task(self._loop(), name="stoploss-monitor")
         logger.info(
-            "[StopLoss] monitor started — interval=%.0fs sl=%.1f%% tp=%.1f%% trailing=%.1f%% daily_dd=%.1f%% max_dd=%.1f%%",
+            "[StopLoss] monitor started — interval=%.0fs sl=%.1f%% tp=%.1f%% trailing=%.1f%% daily_dd=%.1f%% max_dd=%.1f%% hydrated_events=%d total_fired=%d",
             self._interval, self._sl_pct * 100, self._tp_pct * 100,
             self._trailing_pct * 100, self._daily_dd_pct * 100, self._max_dd_pct * 100,
+            len(self._events), self._events_fired_total,
         )
+
+    async def _hydrate_events_from_db(self) -> None:
+        """Load the most recent events from the persistent log into
+        the in-memory cache. Swallows DB errors so a transient
+        database hiccup at startup does not crash the monitor —
+        the cache stays empty in that case.
+        """
+        try:
+            from trdex.storage.stop_loss_event_repo import StopLossEventRepository
+            async with self._session_factory() as session:
+                repo = StopLossEventRepository(session)
+                records = await repo.recent(limit=50)
+                total = await repo.count()
+        except Exception:
+            logger.exception("[StopLoss] failed to hydrate events from DB")
+            return
+
+        self._events_fired_total = total
+        # records come newest-first from repo.recent(); _events is
+        # kept oldest-first to match the historical slice semantics
+        # of `self._events[-50:]` in recent_events.
+        self._events = [
+            StopLossEvent(
+                reason=StopReason(r.reason),
+                symbol=r.symbol,
+                position_id=r.position_id,
+                trigger_price=float(r.trigger_price) if r.trigger_price is not None else None,
+                entry_price=float(r.entry_price) if r.entry_price is not None else None,
+                loss_pct=r.loss_pct,
+                fired_at=r.fired_at.replace(tzinfo=timezone.utc) if r.fired_at and r.fired_at.tzinfo is None else r.fired_at,
+                message=r.message or "",
+            )
+            for r in reversed(records)
+        ]
+
+    async def _persist_event(self, event: StopLossEvent) -> None:
+        """Write a single event to the persistent log. Best-effort:
+        failures are logged but do not interrupt the check cycle —
+        the risk monitor's primary job is to protect capital, and a
+        DB write failure must never block a stop-loss execution.
+        """
+        try:
+            from trdex.storage.stop_loss_event_repo import StopLossEventRepository
+            async with self._session_factory() as session:
+                repo = StopLossEventRepository(session)
+                await repo.save(
+                    reason=str(event.reason),
+                    symbol=event.symbol,
+                    position_id=event.position_id,
+                    trigger_price=event.trigger_price,
+                    entry_price=event.entry_price,
+                    loss_pct=event.loss_pct,
+                    message=event.message,
+                    fired_at=event.fired_at,
+                )
+            self._events_fired_total += 1
+        except Exception:
+            logger.exception(
+                "[StopLoss] failed to persist event reason=%s symbol=%s",
+                event.reason, event.symbol,
+            )
 
     async def stop(self) -> None:
         if self._task:
@@ -591,6 +666,16 @@ class StopLossMonitor:
         self._events.extend(new_events)
         self._last_check = datetime.now(tz=timezone.utc)
 
+        # Persist each event to the log — best-effort, per-event,
+        # so a single bad write cannot poison the whole batch.
+        for event in new_events:
+            await self._persist_event(event)
+
+        # Trim the in-memory cache to the same window recent_events
+        # exposes (last 50) to avoid unbounded growth on a busy day.
+        if len(self._events) > 200:
+            self._events = self._events[-100:]
+
         for event in new_events:
             for cb in self._callbacks:
                 try:
@@ -621,7 +706,7 @@ class StopLossMonitor:
             "running": self._task is not None and not self._task.done(),
             "kill_switch": _kill_switch.status,
             "last_check": self._last_check.isoformat() if self._last_check else None,
-            "events_fired": len(self._events),
+            "events_fired": self._events_fired_total,
             "thresholds": {
                 "position_sl_pct": self._sl_pct,
                 "position_tp_pct": self._tp_pct,

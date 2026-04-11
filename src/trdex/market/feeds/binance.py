@@ -19,6 +19,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class StaleTickerError(RuntimeError):
+    """Raised when a price feed returns a ticker older than the freshness threshold.
+
+    Typically indicates the symbol has been delisted and the exchange keeps
+    echoing the last-traded price indefinitely. Callers should skip the symbol.
+    """
+
+
 class BinanceFeed(PriceFeed):
     """Binance market data via CCXT async REST API.
 
@@ -52,15 +60,31 @@ class BinanceFeed(PriceFeed):
     def name(self) -> str:
         return "binance"
 
+    # Reject tickers older than this — protects against delisted symbols
+    # where Binance keeps returning the last known price indefinitely.
+    _MAX_TICKER_AGE_SECONDS = 300  # 5 minutes
+
     async def get_ticker(self, symbol: str) -> Ticker:
-        """Fetch current best-bid/ask midpoint price."""
+        """Fetch current best-bid/ask midpoint price.
+
+        Raises StaleTickerError if the exchange returns a ticker older
+        than _MAX_TICKER_AGE_SECONDS — typically a sign the symbol has
+        been delisted and we're seeing a frozen last-traded price.
+        """
         raw: dict[str, Any] = await self._exchange.fetch_ticker(symbol)
         price = raw.get("last") or raw.get("close") or 0.0
         ts = raw.get("timestamp")
+        now = datetime.now(tz=timezone.utc)
         timestamp = (
-            datetime.fromtimestamp(ts / 1000, tz=timezone.utc) if ts else datetime.now(tz=timezone.utc)
+            datetime.fromtimestamp(ts / 1000, tz=timezone.utc) if ts else now
         )
-        logger.debug("[Binance] ticker %s = %s", symbol, price)
+        age_s = (now - timestamp).total_seconds()
+        if age_s > self._MAX_TICKER_AGE_SECONDS:
+            raise StaleTickerError(
+                f"Binance ticker for {symbol} is {int(age_s)}s old "
+                f"(last update {timestamp.isoformat()}). Symbol likely delisted."
+            )
+        logger.debug("[Binance] ticker %s = %s (age %ds)", symbol, price, int(age_s))
         return Ticker(
             symbol=symbol,
             price=Decimal(str(price)),

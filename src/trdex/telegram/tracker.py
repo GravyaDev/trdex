@@ -12,20 +12,31 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SignalOutcome:
-    """Result of a single executed signal."""
+    """Result of a Telegram signal.
+
+    In observe-only mode (Step 1), `exit_price` and `closed_at` are None
+    until the post-hoc TP/SL evaluation job resolves the signal. P&L is
+    only meaningful once `exit_price` is set.
+    """
 
     source: str
     symbol: str
     direction: str
     entry_price: Decimal
-    exit_price: Decimal
-    budget: Decimal           # fixed budget allocated to this signal
+    exit_price: Decimal | None = None
+    budget: Decimal = Decimal("0")            # 0 in observe-only mode
     executed_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
     closed_at: datetime | None = None
 
     @property
+    def is_open(self) -> bool:
+        return self.exit_price is None
+
+    @property
     def pnl(self) -> Decimal:
-        """Absolute P&L in quote currency."""
+        """Absolute P&L in quote currency. Returns 0 for open signals."""
+        if self.exit_price is None or self.budget == 0 or self.entry_price == 0:
+            return Decimal("0")
         qty = self.budget / self.entry_price
         if self.direction == "BUY":
             return (self.exit_price - self.entry_price) * qty
@@ -33,18 +44,26 @@ class SignalOutcome:
 
     @property
     def pnl_pct(self) -> Decimal:
-        """P&L as percentage of budget."""
-        if self.entry_price == 0:
+        """P&L as percentage of budget. Returns 0 for open signals."""
+        if self.exit_price is None or self.budget == 0 or self.entry_price == 0:
             return Decimal("0")
         return self.pnl / self.budget * 100
 
 
 @dataclass
 class SourceStats:
-    """Aggregated performance statistics for a single signal source."""
+    """Aggregated performance statistics for a single signal source.
+
+    `total_signals` counts every signal recorded (open + closed).
+    `wins`/`losses`/`total_pnl`/`budget_allocated` are computed only
+    over closed signals (those with exit_price set). `win_rate` is
+    therefore the win rate among resolved signals.
+    """
 
     source: str
     total_signals: int = 0
+    open_signals: int = 0
+    closed_signals: int = 0
     wins: int = 0
     losses: int = 0
     total_pnl: Decimal = Decimal("0")
@@ -52,9 +71,9 @@ class SourceStats:
 
     @property
     def win_rate(self) -> float:
-        if self.total_signals == 0:
+        if self.closed_signals == 0:
             return 0.0
-        return self.wins / self.total_signals
+        return self.wins / self.closed_signals
 
     @property
     def roi_pct(self) -> Decimal:
@@ -119,7 +138,7 @@ class SignalTracker:
                     direction=r.direction,
                     entry_price=r.entry_price,
                     exit_price=r.exit_price,
-                    budget=r.budget,
+                    budget=r.budget or Decimal("0"),
                     executed_at=r.executed_at.replace(tzinfo=timezone.utc) if r.executed_at else datetime.now(tz=timezone.utc),
                     closed_at=r.closed_at.replace(tzinfo=timezone.utc) if r.closed_at else None,
                 )
@@ -130,11 +149,20 @@ class SignalTracker:
             logger.exception("[SignalTracker] failed to load from DB — starting with empty history")
 
     def stats(self, source: str) -> SourceStats:
-        """Compute stats for a specific signal source."""
+        """Compute stats for a specific signal source.
+
+        Open signals contribute to `total_signals` and `open_signals`
+        only. P&L aggregates and win_rate are computed from closed
+        signals only.
+        """
         relevant = [o for o in self._outcomes if o.source == source]
         s = SourceStats(source=source)
         for o in relevant:
             s.total_signals += 1
+            if o.is_open:
+                s.open_signals += 1
+                continue
+            s.closed_signals += 1
             s.budget_allocated += o.budget
             s.total_pnl += o.pnl
             if o.pnl >= 0:

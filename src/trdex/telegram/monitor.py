@@ -62,6 +62,27 @@ class TelegramMonitor:
     async def __aexit__(self, *_: object) -> None:
         await self.stop()
 
+    @staticmethod
+    def _normalize_channels(channels: list[str]) -> list:
+        """Coerce channel identifiers into the types Telethon expects.
+
+        Username strings (`@foo` or bare `foo`) stay strings. Numeric
+        chat ids (typically `-100...` for channels/supergroups) must
+        be passed as Python int — Telethon's NewMessage filter treats
+        any str as a username and fails to resolve negative numbers.
+        """
+        out: list = []
+        for ch in channels:
+            s = ch.strip()
+            if not s:
+                continue
+            # Accept plain int ("-1001234567890") or signed-int-like
+            if s.lstrip("-").isdigit():
+                out.append(int(s))
+            else:
+                out.append(s)
+        return out
+
     async def fetch_recent(
         self,
         channels: list[str],
@@ -77,14 +98,14 @@ class TelegramMonitor:
             List of parsed TelegramSignal (only messages that contain valid signals).
         """
         signals: list[TelegramSignal] = []
-        for channel in channels:
+        for channel in self._normalize_channels(channels):
             try:
                 entity = await self._client.get_entity(channel)
                 messages = await self._client.get_messages(entity, limit=limit)
                 for msg in messages:
                     if not msg.text:
                         continue
-                    sig = parse_signal(msg.text, source=channel)
+                    sig = parse_signal(msg.text, source=str(channel))
                     if sig:
                         signals.append(sig)
                         logger.info(
@@ -107,8 +128,9 @@ class TelegramMonitor:
         from telethon import events  # type: ignore[import-untyped]
 
         queue: asyncio.Queue[TelegramSignal] = asyncio.Queue()
+        normalized = self._normalize_channels(channels)
 
-        @self._client.on(events.NewMessage(chats=channels))
+        @self._client.on(events.NewMessage(chats=normalized))
         async def _handler(event) -> None:
             try:
                 if not event.message.text:

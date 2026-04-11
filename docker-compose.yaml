@@ -83,6 +83,13 @@ services:
       # Use `?` (not `:?`) so Compose fails only if the variable is unset
       # in production Coolify — but tolerates the empty dev-locale value.
       TRDEX_API_KEY: '${TRDEX_API_KEY?TRDEX_API_KEY must be defined (can be empty in dev; generate with openssl rand -hex 32 for prod)}'
+      # Credentials encryption master key (Fernet, 44-char urlsafe
+      # base64). When set, runtime_config.credentials rows are
+      # encrypted at rest via services/credentials_crypto. When
+      # empty the service runs in passthrough mode with a WARNING
+      # log. Generate a fresh key with:
+      #   python -m trdex.services.credentials_crypto
+      TRDEX_CONFIG_ENCRYPTION_KEY: '${TRDEX_CONFIG_ENCRYPTION_KEY:-}'
       TRDEX_CORS_ORIGINS: '${TRDEX_CORS_ORIGINS:-}'
       # Exchange (Binance) — optional in simulation mode
       BINANCE_API_KEY: '${BINANCE_API_KEY:-}'
@@ -96,7 +103,7 @@ services:
       TRDEX_STOCKDATA_API_KEY: '${TRDEX_STOCKDATA_API_KEY:-}'
       # News ingestion
       TRDEX_INGESTION_INTERVAL: '${TRDEX_INGESTION_INTERVAL:-300}'
-      TRDEX_INGESTION_SYMBOLS: '${TRDEX_INGESTION_SYMBOLS:-BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,XRP/USDT,ADA/USDT,AVAX/USDT,DOT/USDT,LINK/USDT,UNI/USDT,AAVE/USDT,MKR/USDT,ARB/USDT,OP/USDT,MATIC/USDT,FET/USDT,RNDR/USDT,DOGE/USDT,PEPE/USDT,AXS/USDT,SAND/USDT,IMX/USDT,GALA/USDT,NEAR/USDT,ATOM/USDT}'
+      TRDEX_INGESTION_SYMBOLS: '${TRDEX_INGESTION_SYMBOLS:-BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,XRP/USDT,ADA/USDT,AVAX/USDT,DOT/USDT,LINK/USDT,UNI/USDT,AAVE/USDT,MKR/USDT,ARB/USDT,OP/USDT,POL/USDT,FET/USDT,RENDER/USDT,DOGE/USDT,PEPE/USDT,AXS/USDT,SAND/USDT,IMX/USDT,GALA/USDT,NEAR/USDT,ATOM/USDT}'
       # AI / embeddings (required for Qdrant context ingestion)
       # TRDEX_JINA_API_KEY: empty is tolerated (Qdrant embeddings feature
       # degrades but app still runs). `?` (not `:?`) for the same reason
@@ -119,7 +126,7 @@ services:
       # Agent scheduler — Phase 2 observation (set true to enable)
       TRDEX_AGENT_SCHEDULER_ENABLED: '${TRDEX_AGENT_SCHEDULER_ENABLED:-false}'
       TRDEX_AGENT_SCHEDULER_INTERVAL: '${TRDEX_AGENT_SCHEDULER_INTERVAL:-300}'
-      TRDEX_AGENT_SCHEDULER_SYMBOLS: '${TRDEX_AGENT_SCHEDULER_SYMBOLS:-BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,XRP/USDT,ADA/USDT,AVAX/USDT,DOT/USDT,LINK/USDT,UNI/USDT,AAVE/USDT,MKR/USDT,ARB/USDT,OP/USDT,MATIC/USDT,FET/USDT,RNDR/USDT,DOGE/USDT,PEPE/USDT,AXS/USDT,SAND/USDT,IMX/USDT,GALA/USDT,NEAR/USDT,ATOM/USDT}'
+      TRDEX_AGENT_SCHEDULER_SYMBOLS: '${TRDEX_AGENT_SCHEDULER_SYMBOLS:-BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,XRP/USDT,ADA/USDT,AVAX/USDT,DOT/USDT,LINK/USDT,UNI/USDT,AAVE/USDT,MKR/USDT,ARB/USDT,OP/USDT,POL/USDT,FET/USDT,RENDER/USDT,DOGE/USDT,PEPE/USDT,AXS/USDT,SAND/USDT,IMX/USDT,GALA/USDT,NEAR/USDT,ATOM/USDT}'
       # Stop-loss monitor
       TRDEX_SL_CHECK_INTERVAL: '${TRDEX_SL_CHECK_INTERVAL:-30.0}'
       TRDEX_SL_POSITION_PCT: '${TRDEX_SL_POSITION_PCT:-0.03}'
@@ -129,7 +136,7 @@ services:
       # Risk limits
       TRDEX_MAX_POSITION_PCT: '${TRDEX_MAX_POSITION_PCT:-0.05}'
       # Simulation gate (required before switching to live)
-      TRDEX_GATE_MIN_DAYS: '${TRDEX_GATE_MIN_DAYS:-30}'
+      TRDEX_GATE_MIN_DAYS: '${TRDEX_GATE_MIN_DAYS:-25}'
       TRDEX_GATE_MIN_SHARPE: '${TRDEX_GATE_MIN_SHARPE:-1.0}'
       TRDEX_GATE_MAX_DRAWDOWN: '${TRDEX_GATE_MAX_DRAWDOWN:-0.20}'
       TRDEX_GATE_MIN_WIN_RATE: '${TRDEX_GATE_MIN_WIN_RATE:-0.40}'

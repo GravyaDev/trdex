@@ -598,6 +598,73 @@ with st.expander("📰 News Ingestion Status"):
                 "or TRDEX_STOCKDATA_API_KEY in the environment to enable."
             )
 
+# ── Telegram Signals (observe-only) ────────────────────────────────────────
+
+with st.expander("🟣 Telegram Signals (observe-only)"):
+    sig_data = get("/v1/signals")
+    if sig_data:
+        report_rows = sig_data.get("report", []) or []
+        recent_rows = sig_data.get("recent", []) or []
+
+        total_signals = sum(r.get("total_signals", 0) for r in report_rows)
+        total_open = sum(r.get("open_signals", 0) for r in report_rows)
+        total_closed = sum(r.get("closed_signals", 0) for r in report_rows)
+        total_pnl = sum(r.get("total_pnl", 0.0) for r in report_rows)
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Signals", total_signals)
+        c2.metric("Open", total_open)
+        c3.metric("Closed", total_closed)
+        c4.metric("Tracked P&L", f"${total_pnl:+.2f}")
+
+        if report_rows:
+            st.caption("Per-source reliability (closed signals only)")
+            table_rows = []
+            for row in report_rows:
+                table_rows.append({
+                    "source": row.get("source", ""),
+                    "total": row.get("total_signals", 0),
+                    "open": row.get("open_signals", 0),
+                    "closed": row.get("closed_signals", 0),
+                    "wins": row.get("wins", 0),
+                    "losses": row.get("losses", 0),
+                    "win_rate": f"{row.get('win_rate', 0.0) * 100:.1f}%",
+                    "roi_pct": f"{row.get('roi_pct', 0.0):+.2f}%",
+                    "pnl": f"${row.get('total_pnl', 0.0):+.2f}",
+                })
+            st.dataframe(table_rows, hide_index=True, use_container_width=True)
+        else:
+            st.info(
+                "No signals tracked yet. Configure Telegram API credentials "
+                "in the API Keys section below, then restart the app."
+            )
+
+        if recent_rows:
+            st.caption(f"Last {len(recent_rows)} signals")
+            recent_table = []
+            for row in recent_rows:
+                entry = row.get("entry_price", 0.0)
+                exit_p = row.get("exit_price")
+                exit_str = f"{exit_p:.5g}" if exit_p is not None else "—"
+                recent_table.append({
+                    "when": (row.get("executed_at") or "")[:19].replace("T", " "),
+                    "source": row.get("source", ""),
+                    "symbol": row.get("symbol", ""),
+                    "dir": row.get("direction", ""),
+                    "entry": f"{entry:.5g}",
+                    "exit": exit_str,
+                    "status": row.get("status", "open"),
+                })
+            st.dataframe(recent_table, hide_index=True, use_container_width=True)
+
+        st.caption(
+            "Observe-only mode: signals are recorded with no capital at risk. "
+            "Post-hoc TP/SL evaluation runs hourly and updates status to "
+            "`tp` / `sl` / `stale` once the window resolves."
+        )
+    else:
+        st.info("Signals endpoint unavailable.")
+
 # ── Scheduler Symbol Watchlist ──────────────────────────────────────────────
 
 with st.expander("📋 Scheduler Symbols"):

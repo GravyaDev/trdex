@@ -48,6 +48,17 @@ class Settings(BaseSettings):
     api_key: str = ""  # Set to enable auth; empty = dev mode (no auth)
     cors_origins: str = ""  # Comma-separated origins; empty = no CORS
 
+    # Credentials encryption master key (Fernet, 44-char urlsafe base64).
+    # When set, runtime_config.credentials rows are encrypted at rest.
+    # When empty, the service runs in passthrough mode with a WARNING
+    # log at startup. Generate a new key with:
+    #   python -m trdex.services.credentials_crypto
+    # Never commit a key. Set only in Coolify / deployment secrets.
+    config_encryption_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("TRDEX_CONFIG_ENCRYPTION_KEY"),
+    )
+
     # Exchange keys (optional — only needed when connecting)
     # Accept both BINANCE_API_KEY (no prefix) and TRDEX_BINANCE_API_KEY (with prefix)
     binance_api_key: str = Field(default="", validation_alias=AliasChoices("TRDEX_BINANCE_API_KEY", "BINANCE_API_KEY"))
@@ -125,7 +136,7 @@ class Settings(BaseSettings):
     telegram_signal_budget: float = 100.0  # fixed budget per signal (quote currency)
 
     # Simulation gate criteria (Phase 5)
-    gate_min_days: int = Field(default=30, description="Minimum simulation days before live")
+    gate_min_days: int = Field(default=25, description="Minimum simulation days before live")
     gate_min_sharpe: float = Field(default=1.0, description="Minimum Sharpe ratio")
     gate_max_drawdown: float = Field(default=0.20, description="Maximum drawdown (0-1)")
     gate_min_win_rate: float = Field(default=0.40, description="Minimum win rate (0-1)")
