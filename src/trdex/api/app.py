@@ -200,8 +200,16 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     # --- Security checks ---
     if not settings.api_key:
+        if settings.mode != TrdexMode.SIMULATION:
+            logger.critical(
+                "[security] REFUSING TO START in %s mode with TRDEX_API_KEY unset. "
+                "Dev-mode fallback exposes every /v1/* endpoint without authentication, "
+                "including /v1/debug/*. Set TRDEX_API_KEY in .env / Coolify before boot.",
+                settings.mode.value,
+            )
+            raise RuntimeError("TRDEX_API_KEY is required outside simulation mode")
         logger.warning(
-            "[security] TRDEX_API_KEY is not set — API is unauthenticated. "
+            "[security] TRDEX_API_KEY is not set — API is unauthenticated (simulation mode only). "
             "Set TRDEX_API_KEY before deploying to production."
         )
     if settings.mode != TrdexMode.SIMULATION and settings._uses_default_db_creds:
@@ -471,12 +479,26 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 async def verify_api_key(api_key: str | None = Security(API_KEY_HEADER)) -> str:
     """Verify API key for authenticated endpoints.
 
-    If TRDEX_API_KEY is not set, authentication is disabled (dev mode).
-    WARNING: running without an API key exposes all endpoints to unauthenticated access.
+    Outside SIMULATION mode, an unset ``TRDEX_API_KEY`` is a fatal
+    configuration error — the lifespan guard refuses startup, but this
+    function also raises 503 as defense-in-depth in case the guard is
+    ever bypassed (e.g. ASGI reuse across modes at runtime). In
+    SIMULATION mode an unset key is tolerated for dev convenience but
+    logged on every call.
     """
     if not settings.api_key:
+        if settings.mode != TrdexMode.SIMULATION:
+            # Defense-in-depth: the lifespan guard should have prevented
+            # boot, but we must never fail-open on a production endpoint.
+            logger.critical(
+                "[security] TRDEX_API_KEY unset outside simulation mode — rejecting request"
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Service misconfigured: authentication not initialised",
+            )
         logger.warning(
-            "[security] TRDEX_API_KEY is not set — all endpoints are unauthenticated (dev mode). "
+            "[security] TRDEX_API_KEY is not set — all endpoints are unauthenticated (simulation mode). "
             "Set TRDEX_API_KEY in production."
         )
         return "dev-mode"
