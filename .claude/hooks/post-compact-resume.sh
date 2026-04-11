@@ -38,6 +38,8 @@ fi
 # blocks rm -f on non-whitelisted paths. .claude/logs/ IS in the guard
 # whitelist, so this is the legitimate allowed case.
 rm -f "$LOG_DIR/.tool-call-count" "$LOG_DIR/.quality-gate-active" 2>/dev/null
+find "$LOG_DIR" -name ".session-blocks-*" -delete 2>/dev/null
+find "$LOG_DIR" -name ".clean-streak-*" -delete 2>/dev/null
 
 # Read compaction timestamp from marker
 COMPACT_TIME=$(cat "$MARKER" 2>/dev/null || echo "unknown time")

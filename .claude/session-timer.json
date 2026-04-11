@@ -1,9 +1,5 @@
 {
-  "started_at": "2026-04-10T20:16:22Z",
-  "started_epoch": 1775852182,
-  "stopped_at": "2026-04-10T22:01:12Z",
-  "stopped_epoch": 1775858472,
-  "elapsed_seconds": 6290,
-  "elapsed_formatted": "1h 44m",
-  "status": "stopped"
+  "started_at": "2026-04-11T18:04:37Z",
+  "started_epoch": 1775930677,
+  "status": "running"
 }

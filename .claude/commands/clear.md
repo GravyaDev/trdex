@@ -28,7 +28,7 @@ Skip Step 1 reads. Distill from in-context memory only. Go directly to Step 3.
 ### Step 0: Reset gate files + get date
 
 ```bash
-date +"%Y-%m-%d %H:%M" && rm -f ".claude/logs/.quality-gate-active" ".claude/logs/.session-blocks-$(date +"%Y-%m-%d-%H")" ".claude/logs/.tool-call-count" ".claude/logs/.compaction-occurred"
+date +"%Y-%m-%d %H:%M" && rm -f ".claude/logs/.quality-gate-active" ".claude/logs/.session-blocks-$(date +"%Y-%m-%d-%H")" ".claude/logs/.clean-streak-$(date +"%Y-%m-%d-%H")" ".claude/logs/.tool-call-count" ".claude/logs/.compaction-occurred"
 ```
 
 ### Step 1: Read state (parallel, SKIP in emergency mode)

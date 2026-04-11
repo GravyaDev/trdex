@@ -152,10 +152,21 @@ Type "yes" to update, or "skip" to continue without updating.
 
 **5e. If the user says yes**, execute the upgrade:
 
-1. Run `bash <kloudify-source>/install.sh <project-dir> --upgrade`
-   (the source path is NOT in the version marker — the agent must
-   ask the user where the Kloudify repo is cloned, or check if it
-   is a known path from memory.md or the user's environment).
+1. Run the upgrade using `--from-remote` so the installer fetches the
+   latest tagged release directly from GitHub instead of relying on a
+   local clone that may be stale:
+
+   ```bash
+   curl -sL https://raw.githubusercontent.com/GravyaDev/Kloudify/main/install.sh -o /tmp/kloudify-install.sh
+   bash /tmp/kloudify-install.sh "$CLAUDE_PROJECT_DIR" --upgrade --from-remote
+   rm -f /tmp/kloudify-install.sh
+   ```
+
+   The installer will shallow-clone Kloudify, checkout the latest tag,
+   and apply the upgrade. No local clone is needed in the target
+   project. If the user has a local clone they prefer to upgrade from
+   (for testing unreleased work), they can say so and the agent should
+   instead run `bash <local-clone>/install.sh "$CLAUDE_PROJECT_DIR" --upgrade`.
 
 2. After install.sh finishes, perform **knowledge-base migration**:
    - Read `.claude/universal-rules.md` (the new version just installed)

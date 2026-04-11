@@ -157,7 +157,7 @@ fi
 if echo "$COMMAND" | grep -qE 'rm\s+(-[a-zA-Z]*[rf][a-zA-Z]*\s+)'; then
   # Allow rm on .claude/backups (rotation), .claude/logs temp files,
   # and the __NEEDS_ONBOARD sentinel (deleted at end of /onboard-init).
-  if echo "$COMMAND" | grep -qE '\.claude/(backups|logs/\.(quality-gate-active|session-blocks|tool-call-count|compaction-occurred))|__NEEDS_ONBOARD'; then
+  if echo "$COMMAND" | grep -qE '\.claude/(backups|logs/\.(quality-gate-active|session-blocks|clean-streak|tool-call-count|compaction-occurred))|__NEEDS_ONBOARD'; then
     exit 0
   fi
   log_incident "MEDIUM" "SOFT BLOCKED: recursive/force rm → $COMMAND"

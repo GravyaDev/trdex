@@ -15,8 +15,9 @@ rm -f "$LOG_DIR/.quality-gate-active" \
       "$LOG_DIR/.tool-call-count" \
       "$LOG_DIR/.compaction-occurred" 2>/dev/null
 
-# Clean up stale session-blocks files (older than current hour)
+# Clean up stale session-blocks and clean-streak files (older than current hour)
 find "$LOG_DIR" -name ".session-blocks-*" -mmin +120 -delete 2>/dev/null
+find "$LOG_DIR" -name ".clean-streak-*" -mmin +120 -delete 2>/dev/null
 
 # ═══════════════════════════════════════════════════════
 # 2. Validate hook scripts are executable
