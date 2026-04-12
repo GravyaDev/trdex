@@ -55,6 +55,7 @@ class AgentRunSummary(BaseModel):
     signal: str
     confidence: float
     risk_approved: bool
+    risk_reason: str
     order_status: str
 
 
@@ -123,6 +124,7 @@ async def agent_history(
             signal=r.signal,
             confidence=float(r.confidence),
             risk_approved=r.risk_approved,
+            risk_reason=r.risk_reason or "",
             order_status=r.order_status,
         )
         for r in records
