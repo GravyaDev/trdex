@@ -107,9 +107,28 @@ async def _telegram_background(
     This dual flow means every channel contributes either signals OR
     context — nothing is wasted.
     """
+    from collections import OrderedDict
     from decimal import Decimal
     from trdex.telegram.parser import parse_signal
     from trdex.telegram.tracker import SignalOutcome
+
+    # Dedup: skip signals with the same (source, symbol, direction)
+    # within a 60-second window. Prevents a spammy channel from
+    # flooding signal_outcomes with duplicate records.
+    _recent_signals: OrderedDict[str, float] = OrderedDict()
+    DEDUP_WINDOW_S = 60.0
+
+    def _is_duplicate(sig) -> bool:
+        import time
+        key = f"{sig.source}:{sig.symbol}:{sig.direction}"
+        now = time.monotonic()
+        # Prune old entries
+        while _recent_signals and next(iter(_recent_signals.values())) < now - DEDUP_WINDOW_S:
+            _recent_signals.popitem(last=False)
+        if key in _recent_signals:
+            return True
+        _recent_signals[key] = now
+        return False
 
     try:
         async for msg in monitor.stream_raw(channels):
@@ -117,6 +136,14 @@ async def _telegram_background(
             signal = parse_signal(msg.text, source=msg.chat_id)
 
             if signal is not None:
+                # Dedup: skip if same source+symbol+direction in last 60s
+                if _is_duplicate(signal):
+                    logger.debug(
+                        "[telegram] dedup: skipping %s %s from %s",
+                        signal.direction, signal.symbol, signal.source,
+                    )
+                    continue
+
                 # It's a trading signal — observe-only record
                 logger.info(
                     "[telegram] %s %s from %s entry=%s",

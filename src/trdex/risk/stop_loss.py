@@ -212,6 +212,7 @@ class StopLossMonitor:
         # Shown in /v1/risk/status.events_fired so the number survives
         # a container cycle even though the cache is bounded.
         self._events_fired_total: int = 0
+        self._persist_failures: int = 0  # consecutive DB write failures
         self._peak_equity: float | None = None  # loaded from DB on first check
         self._last_check: datetime | None = None
         self._trailing_highs: dict[int, float] = {}  # position_id → high-water mark price
@@ -288,11 +289,21 @@ class StopLossMonitor:
                     fired_at=event.fired_at,
                 )
             self._events_fired_total += 1
+            self._persist_failures = 0  # reset on success
         except Exception:
+            self._persist_failures += 1
             logger.exception(
-                "[StopLoss] failed to persist event reason=%s symbol=%s",
-                event.reason, event.symbol,
+                "[StopLoss] failed to persist event reason=%s symbol=%s "
+                "(consecutive failures: %d)",
+                event.reason, event.symbol, self._persist_failures,
             )
+            if self._persist_failures >= 3:
+                logger.critical(
+                    "[StopLoss] AUDIT TRAIL AT RISK: %d consecutive "
+                    "persist failures — DB may be down. Stop-loss events "
+                    "are firing but NOT being recorded. Check DB connectivity.",
+                    self._persist_failures,
+                )
 
     async def stop(self) -> None:
         if self._task:
