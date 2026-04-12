@@ -787,6 +787,8 @@ def create_app() -> FastAPI:
         _key: str = Depends(verify_api_key),
     ) -> dict[str, object]:
         """Return the raw balance ledger (deposits, fills, fees)."""
+        if settings.mode != TrdexMode.SIMULATION:
+            raise HTTPException(status_code=403, detail="Debug endpoints disabled outside simulation mode")
         from trdex.storage.balance_repo import BalanceRepository
         from trdex.storage.db import get_session_factory
 
@@ -818,6 +820,8 @@ def create_app() -> FastAPI:
         _key: str = Depends(verify_api_key),
     ) -> dict[str, object]:
         """Query active facts from the entity graph."""
+        if settings.mode != TrdexMode.SIMULATION:
+            raise HTTPException(status_code=403, detail="Debug endpoints disabled outside simulation mode")
         from trdex.storage.entity_graph_repo import EntityGraphRepository
         from trdex.storage.db import get_session_factory
 

@@ -65,6 +65,7 @@ class RiskDecision:
     stop_loss_pct: float = 0.02       # default 2%
     take_profit_pct: float = 0.04     # default 4%
     annotation: str | None = None     # LLM risk commentary (observability-only, Task 7)
+    drawdown_warning: bool = False    # True when approved above 10% dd (sim mode override)
 
 
 @dataclass

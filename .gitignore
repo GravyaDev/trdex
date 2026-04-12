@@ -66,6 +66,7 @@ venv/
 .env
 *.pem
 *.key
+*.session
 
 # ═══════════════════════════════════════════════════════
 # IDE
@@ -99,3 +100,9 @@ dashboard-*.png
 # for its own JS environment — it does not belong to trdex.
 package.json
 package-lock.json
+
+# Telegram operational data (dumps, channel lists)
+telegram_*_dump.json
+telegram_channel_dump.json
+channels_to_join.txt
+channels_failed_lookup.md

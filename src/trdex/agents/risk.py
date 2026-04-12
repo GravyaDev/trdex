@@ -40,7 +40,8 @@ async def _write_last_signal(state: AgentState, approved: bool, reason: str) -> 
 # Hard limits — never bypassed by the AI signal
 MIN_CONFIDENCE = 0.3          # Analyst must be at least 30% confident
 MAX_POSITION_FRACTION = 0.05  # Never more than 5% of portfolio per trade
-MAX_DRAWDOWN_BLOCK = 0.10     # Block new trades if drawdown exceeds 10%
+MAX_DRAWDOWN_BLOCK_LIVE = 0.10   # Block new trades in live mode at 10%
+MAX_DRAWDOWN_BLOCK_SIM = 0.20    # More permissive in simulation (20%) to collect more data
 
 
 async def risk_node(state: AgentState) -> AgentState:
@@ -87,9 +88,19 @@ async def risk_node(state: AgentState) -> AgentState:
     # Gate 3: Portfolio drawdown gate — block if already in significant loss.
     # Applies only to OPEN intents: if we're already drawn down, closing an
     # existing position is exactly what we want to allow, not block.
+    # Threshold is configurable via Runtime Config and mode-dependent:
+    # simulation uses a higher default (20%) to accumulate more trade data,
+    # live uses a tighter default (10%) to protect real capital.
     portfolio = state.portfolio
-    if intent.is_open and portfolio.drawdown_pct >= MAX_DRAWDOWN_BLOCK:
-        reason = f"Portfolio drawdown {portfolio.drawdown_pct:.1%} exceeds limit {MAX_DRAWDOWN_BLOCK:.1%}."
+    from trdex.services.runtime_config import get_config_service
+    _cfg = get_config_service()
+    _dd_default = MAX_DRAWDOWN_BLOCK_SIM if settings.mode.value == "simulation" else MAX_DRAWDOWN_BLOCK_LIVE
+    max_dd_block = (
+        _cfg.get_typed("thresholds", "max_drawdown_block", _dd_default)
+        if _cfg else _dd_default
+    )
+    if intent.is_open and portfolio.drawdown_pct >= max_dd_block:
+        reason = f"Portfolio drawdown {portfolio.drawdown_pct:.1%} exceeds limit {max_dd_block:.1%}."
         state.risk = RiskDecision(approved=False, reason=reason)
         logger.warning("[Risk] BLOCKED — drawdown %.1f%%", portfolio.drawdown_pct * 100)
         await _write_last_signal(state, approved=False, reason=reason)
@@ -155,15 +166,21 @@ async def risk_node(state: AgentState) -> AgentState:
         logger.info("[Risk] equity=%.2f position_size=%.3f → trade_value≈%.2f",
                     portfolio.equity, position_size, trade_value)
 
+    # Flag trades approved above the live-mode drawdown threshold (10%).
+    # These would have been blocked in live mode — useful for analysis.
+    dd_warning = portfolio.drawdown_pct >= MAX_DRAWDOWN_BLOCK_LIVE
     approved_reason = "All risk gates passed."
+    if dd_warning:
+        approved_reason += f" (drawdown {portfolio.drawdown_pct:.1%} — would be blocked in live mode at {MAX_DRAWDOWN_BLOCK_LIVE:.0%})"
     state.risk = RiskDecision(
         approved=True,
         reason=approved_reason,
         position_size=position_size,
         stop_loss_pct=0.03,
         take_profit_pct=0.05,
+        drawdown_warning=dd_warning,
     )
-    logger.info("[Risk] APPROVED — position_size=%.3f", position_size)
+    logger.info("[Risk] APPROVED — position_size=%.3f dd_warning=%s", position_size, dd_warning)
     await _write_last_signal(state, approved=True, reason=approved_reason)
 
     # Optional LLM risk annotation (observability-only, never changes the decision)
