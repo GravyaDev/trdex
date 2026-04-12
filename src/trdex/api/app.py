@@ -69,85 +69,114 @@ async def _ingest_signal_to_qdrant(signal) -> None:
         logger.exception("[telegram] Qdrant ingestion failed for signal %s", getattr(signal, "symbol", "?"))
 
 
+async def _ingest_news_to_qdrant(chat_id: str, text: str, timestamp) -> None:
+    """Ingest a non-signal Telegram message as news context into Qdrant."""
+    try:
+        from trdex.context.ingestion import ContextIngestionPipeline
+        from trdex.context.vector_store import ContextDocument
+
+        doc = ContextDocument(
+            text=text,
+            source=f"telegram_news:{chat_id}",
+            symbol="",  # news is not symbol-specific
+            sentiment=0.0,
+            published_at=timestamp,
+        )
+        pipeline = ContextIngestionPipeline()
+        await pipeline.setup()
+        await pipeline.ingest([doc])
+        logger.debug("[telegram] ingested news from %s into Qdrant", chat_id)
+    except Exception:
+        logger.exception("[telegram] Qdrant news ingestion failed for chat %s", chat_id)
+
+
 async def _telegram_background(
     monitor: TelegramMonitor,
     channels: list[str],
     session_factory,
 ) -> None:
-    """Background task: stream signals from Telegram, record them
-    observe-only, ingest into Qdrant.
+    """Background task: stream ALL messages from Telegram channels.
 
-    Observe-only mode (Step 1 of Telegram Signal Integration): each
-    parsed signal is persisted to `signal_outcomes` with exit_price
-    NULL and budget 0. No position is opened, no capital at risk.
-    The post-hoc TP/SL evaluation job (see
-    `telegram.evaluator.evaluate_open_signals`) resolves outcomes
-    later by fetching historical OHLCV and scoring against the
-    signal's targets/stop.
+    For each message:
+    1. Try parse_signal(). If it succeeds AND is not a report → record
+       as observe-only signal in signal_outcomes + ingest to Qdrant.
+    2. If parse_signal() returns None (not a trading signal) → ingest
+       the raw text as news context into Qdrant so Scout/Analyst agents
+       can read market commentary, breaking news, and macro analysis.
+
+    This dual flow means every channel contributes either signals OR
+    context — nothing is wasted.
     """
     from decimal import Decimal
+    from trdex.telegram.parser import parse_signal
     from trdex.telegram.tracker import SignalOutcome
 
     try:
-        async for signal in monitor.stream(channels):
-            logger.info(
-                "[telegram] %s %s from %s entry=%s",
-                signal.direction, signal.symbol, signal.source, signal.entry,
-            )
+        async for msg in monitor.stream_raw(channels):
+            # Try to parse as a trading signal
+            signal = parse_signal(msg.text, source=msg.chat_id)
 
-            # Skip signals without a concrete entry price — we cannot
-            # score them post-hoc without a reference point.
-            if signal.entry is None:
-                logger.debug(
-                    "[telegram] skipping record for %s %s: no entry price",
-                    signal.direction, signal.symbol,
+            if signal is not None:
+                # It's a trading signal — observe-only record
+                logger.info(
+                    "[telegram] %s %s from %s entry=%s",
+                    signal.direction, signal.symbol, signal.source, signal.entry,
                 )
-            else:
-                # Serialize targets/stop into the `note` JSON so the
-                # post-hoc evaluator can read them without a schema change.
-                import json
-                note_payload = json.dumps({
-                    "targets": signal.targets,
-                    "stop_loss": signal.stop_loss,
-                })
-                outcome = SignalOutcome(
-                    source=signal.source,
-                    symbol=signal.symbol,
-                    direction=signal.direction,
-                    entry_price=Decimal(str(signal.entry)),
-                    exit_price=None,
-                    budget=Decimal("0"),
-                    executed_at=signal.parsed_at,
-                )
-                try:
-                    # record_and_persist() does not accept `note`; pass
-                    # through the repo directly so we can store it.
-                    from trdex.storage.signal_outcome_repo import (
-                        SignalOutcomeRepository,
+
+                if signal.entry is None:
+                    logger.debug(
+                        "[telegram] skipping record for %s %s: no entry price",
+                        signal.direction, signal.symbol,
                     )
-                    async with session_factory() as session:
-                        repo = SignalOutcomeRepository(session)
-                        await repo.save(
-                            source=outcome.source,
-                            symbol=outcome.symbol,
-                            direction=outcome.direction,
-                            entry_price=outcome.entry_price,
-                            exit_price=None,
-                            budget=Decimal("0"),
-                            executed_at=outcome.executed_at,
-                            closed_at=None,
-                            note=note_payload,
+                else:
+                    import json
+                    note_payload = json.dumps({
+                        "targets": signal.targets,
+                        "stop_loss": signal.stop_loss,
+                    })
+                    outcome = SignalOutcome(
+                        source=signal.source,
+                        symbol=signal.symbol,
+                        direction=signal.direction,
+                        entry_price=Decimal(str(signal.entry)),
+                        exit_price=None,
+                        budget=Decimal("0"),
+                        executed_at=signal.parsed_at,
+                    )
+                    try:
+                        from trdex.storage.signal_outcome_repo import (
+                            SignalOutcomeRepository,
                         )
-                    _tracker.record(outcome)
-                except Exception:
-                    logger.exception(
-                        "[telegram] failed to record observe-only signal "
-                        "%s %s from %s",
-                        signal.direction, signal.symbol, signal.source,
-                    )
+                        async with session_factory() as session:
+                            repo = SignalOutcomeRepository(session)
+                            await repo.save(
+                                source=outcome.source,
+                                symbol=outcome.symbol,
+                                direction=outcome.direction,
+                                entry_price=outcome.entry_price,
+                                exit_price=None,
+                                budget=Decimal("0"),
+                                executed_at=outcome.executed_at,
+                                closed_at=None,
+                                note=note_payload,
+                            )
+                        _tracker.record(outcome)
+                    except Exception:
+                        logger.exception(
+                            "[telegram] failed to record observe-only signal "
+                            "%s %s from %s",
+                            signal.direction, signal.symbol, signal.source,
+                        )
 
-            # Ingest signal into Qdrant so Scout agent can read it as context
-            await _ingest_signal_to_qdrant(signal)
+                # Also ingest the signal as context
+                await _ingest_signal_to_qdrant(signal)
+            else:
+                # Not a signal → ingest as news context
+                # Skip very short messages (emoji-only, "👍", etc.)
+                if len(msg.text.strip()) > 20:
+                    await _ingest_news_to_qdrant(
+                        msg.chat_id, msg.text, msg.timestamp,
+                    )
     except asyncio.CancelledError:
         pass
     except Exception:

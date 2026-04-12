@@ -1,10 +1,18 @@
-"""TelegramMonitor: reads messages from public groups and emits parsed signals."""
+"""TelegramMonitor: reads messages from Telegram channels.
+
+Provides two streaming modes:
+- stream(): yields TelegramSignal (parsed signals only, backward compat)
+- stream_raw(): yields TelegramMessage (ALL text messages, for the
+  background task to classify as signal vs news)
+"""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from trdex.telegram.parser import TelegramSignal, parse_signal
@@ -13,6 +21,15 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TelegramMessage:
+    """A raw message from a Telegram channel, before parsing."""
+
+    chat_id: str
+    text: str
+    timestamp: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
 
 
 class TelegramMonitor:
@@ -148,6 +165,46 @@ class TelegramMonitor:
             try:
                 sig = await asyncio.wait_for(queue.get(), timeout=1.0)
                 yield sig
+                queue.task_done()
+            except asyncio.TimeoutError:
+                continue
+
+    async def stream_raw(
+        self,
+        channels: list[str],
+    ) -> AsyncIterator[TelegramMessage]:
+        """Stream ALL text messages from channels as raw TelegramMessage.
+
+        Unlike stream() which pre-filters through parse_signal, this
+        yields every text message. The caller decides what to do:
+        parse_signal for trading signals, or ingest as news context.
+        """
+        from telethon import events  # type: ignore[import-untyped]
+
+        queue: asyncio.Queue[TelegramMessage] = asyncio.Queue()
+        normalized = self._normalize_channels(channels)
+
+        @self._client.on(events.NewMessage(chats=normalized))
+        async def _handler(event) -> None:
+            try:
+                if not event.message.text:
+                    return
+                dt = event.message.date
+                if dt and dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                msg = TelegramMessage(
+                    chat_id=str(event.chat_id),
+                    text=event.message.text,
+                    timestamp=dt or datetime.now(tz=timezone.utc),
+                )
+                await queue.put(msg)
+            except Exception:
+                logger.exception("[TelegramMonitor] error in raw handler")
+
+        while self._running:
+            try:
+                msg = await asyncio.wait_for(queue.get(), timeout=1.0)
+                yield msg
                 queue.task_done()
             except asyncio.TimeoutError:
                 continue
