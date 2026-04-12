@@ -28,6 +28,9 @@ COPY src/ src/
 # crashes on a fresh DB with "relation \"positions\" does not exist".
 COPY migrations/ migrations/
 
+# Copy utility scripts (telegram login, channel discovery, dump, etc.)
+COPY scripts/ scripts/
+
 # Expose FastAPI port
 EXPOSE 8000
 
