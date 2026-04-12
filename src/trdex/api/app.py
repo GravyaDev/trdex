@@ -301,7 +301,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # an SMS code on stdin and raise EOFError) degrades the Telegram
     # feature without crashing the whole app. Same soft-fail pattern
     # used for Qdrant above — Telegram is optional in Phase 2.
-    channels = settings.telegram_channels_list
+    # Read channels from RuntimeConfig (DB, dashboard-editable) with
+    # fallback to the env var for backward compatibility.
+    _tg_channels_csv = config_svc.get("telegram", "telegram_channels") or settings.telegram_channels
+    channels = [c.strip() for c in _tg_channels_csv.split(",") if c.strip()] if _tg_channels_csv else []
     monitor = None
     if channels and settings.telegram_api_id:
         try:
@@ -416,9 +419,21 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             set_selected_feeds(feed_list or [])
             logger.info("[hot-reload] selected feeds → %s", feed_list or "ALL")
 
+    def _on_telegram_change(key: str, value: str) -> None:
+        if key == "telegram_channels" and monitor:
+            ch_list = [c.strip() for c in value.split(",") if c.strip()]
+            import asyncio as _aio
+            try:
+                loop = _aio.get_running_loop()
+                loop.create_task(monitor.update_channels(ch_list))
+                logger.info("[hot-reload] telegram channels → %d channels", len(ch_list))
+            except RuntimeError:
+                logger.warning("[hot-reload] no running loop for telegram update")
+
     config_svc.register_listener("thresholds", _on_thresholds_change)
     config_svc.register_listener("symbols", _on_symbols_change)
     config_svc.register_listener("feeds", _on_feeds_change)
+    config_svc.register_listener("telegram", _on_telegram_change)
 
     # --- Agent scheduler ---
     _sched_syms_csv = config_svc.get("symbols", "agent_scheduler_symbols")
@@ -447,6 +462,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Expose lifespan-scoped objects to endpoints via app.state
     _app.state.feed_manager = feed_manager
     _app.state.agent_symbols = agent_symbols if _sched_enabled else []
+    _app.state.telegram_channels = channels
 
     yield  # app runs here
 
@@ -574,7 +590,7 @@ def create_app() -> FastAPI:
             },
             "telegram": {
                 "streaming": _telegram_task is not None and not _telegram_task.done(),
-                "channels": settings.telegram_channels_list,
+                "channels": getattr(request.app.state, "telegram_channels", []),
                 "signals_tracked": len(_tracker._outcomes),
                 "evaluator_running": (
                     _telegram_eval_task is not None

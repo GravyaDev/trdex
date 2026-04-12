@@ -532,6 +532,68 @@ with st.expander("🟣 Telegram Signals (observe-only)"):
     else:
         st.info("Signals endpoint unavailable.")
 
+# ── Telegram Channel Management ────────────────────────────────────────────
+
+with st.expander("📡 Telegram Channels"):
+    tg_settings = get("/v1/settings/telegram")
+    tg_channels_csv = ""
+    if tg_settings:
+        tg_channels_csv = tg_settings.get("values", {}).get("telegram_channels", "")
+    tg_channels = [c.strip() for c in tg_channels_csv.split(",") if c.strip()] if tg_channels_csv else []
+
+    st.caption(f"{len(tg_channels)} channels monitored (signals + news auto-classified)")
+
+    if tg_channels:
+        cols = st.columns(min(len(tg_channels), 4))
+        for i, ch in enumerate(tg_channels):
+            with cols[i % len(cols)]:
+                if st.button(f"X {ch}", key=f"rm_tg_{ch}"):
+                    new_list = [c for c in tg_channels if c != ch]
+                    import httpx as _httpx
+                    headers = {"X-API-Key": api_key} if api_key else {}
+                    try:
+                        _httpx.put(
+                            f"{base_url}/v1/settings/telegram",
+                            json={"values": {"telegram_channels": ",".join(new_list)}},
+                            headers=headers,
+                            timeout=10,
+                        )
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(str(e))
+
+    col_add, col_btn = st.columns([3, 1])
+    with col_add:
+        new_channel = st.text_input(
+            "Add channel (chat_id or @username)",
+            key="add_tg_channel",
+            value="",
+        )
+    with col_btn:
+        st.write("")
+        if st.button("+ Add", key="add_tg_btn") and new_channel:
+            new_list = tg_channels + [new_channel.strip()]
+            import httpx as _httpx
+            headers = {"X-API-Key": api_key} if api_key else {}
+            try:
+                _httpx.put(
+                    f"{base_url}/v1/settings/telegram",
+                    json={"values": {"telegram_channels": ",".join(new_list)}},
+                    headers=headers,
+                    timeout=10,
+                )
+                st.success(f"Added {new_channel}")
+                st.cache_data.clear()
+                st.rerun()
+            except Exception as e:
+                st.error(str(e))
+
+    st.caption(
+        "Changes apply immediately via hot-reload (no redeploy needed). "
+        "The parser auto-classifies each channel as signal source or news context."
+    )
+
 # ── Scheduler Symbol Watchlist ──────────────────────────────────────────────
 
 with st.expander("📋 Scheduler Symbols"):

@@ -59,6 +59,8 @@ class TelegramMonitor:
         self._client = TelegramClient(session_name, api_id, api_hash)
         self._phone = phone
         self._running = False
+        self._raw_handler = None  # active stream_raw event handler
+        self._raw_queue: asyncio.Queue[TelegramMessage] | None = None
 
     async def start(self) -> None:
         """Connect and authenticate."""
@@ -169,22 +171,8 @@ class TelegramMonitor:
             except asyncio.TimeoutError:
                 continue
 
-    async def stream_raw(
-        self,
-        channels: list[str],
-    ) -> AsyncIterator[TelegramMessage]:
-        """Stream ALL text messages from channels as raw TelegramMessage.
-
-        Unlike stream() which pre-filters through parse_signal, this
-        yields every text message. The caller decides what to do:
-        parse_signal for trading signals, or ingest as news context.
-        """
-        from telethon import events  # type: ignore[import-untyped]
-
-        queue: asyncio.Queue[TelegramMessage] = asyncio.Queue()
-        normalized = self._normalize_channels(channels)
-
-        @self._client.on(events.NewMessage(chats=normalized))
+    def _make_raw_handler(self, queue: asyncio.Queue[TelegramMessage]):
+        """Build a Telethon event callback that pushes to the queue."""
         async def _handler(event) -> None:
             try:
                 if not event.message.text:
@@ -200,11 +188,67 @@ class TelegramMonitor:
                 await queue.put(msg)
             except Exception:
                 logger.exception("[TelegramMonitor] error in raw handler")
+        return _handler
+
+    async def stream_raw(
+        self,
+        channels: list[str],
+    ) -> AsyncIterator[TelegramMessage]:
+        """Stream ALL text messages from channels as raw TelegramMessage.
+
+        Unlike stream() which pre-filters through parse_signal, this
+        yields every text message. The caller decides what to do:
+        parse_signal for trading signals, or ingest as news context.
+
+        The handler is stored on the instance so update_channels() can
+        swap it at runtime for hot-reload.
+        """
+        from telethon import events  # type: ignore[import-untyped]
+
+        self._raw_queue = asyncio.Queue()
+        normalized = self._normalize_channels(channels)
+
+        self._raw_handler = self._make_raw_handler(self._raw_queue)
+        self._client.add_event_handler(
+            self._raw_handler,
+            events.NewMessage(chats=normalized),
+        )
+        logger.info(
+            "[TelegramMonitor] stream_raw started — %d channels", len(normalized),
+        )
 
         while self._running:
             try:
-                msg = await asyncio.wait_for(queue.get(), timeout=1.0)
+                msg = await asyncio.wait_for(self._raw_queue.get(), timeout=1.0)
                 yield msg
-                queue.task_done()
+                self._raw_queue.task_done()
             except asyncio.TimeoutError:
                 continue
+
+    async def update_channels(self, channels: list[str]) -> None:
+        """Hot-swap the channel list without restarting the monitor.
+
+        Removes the current raw handler and registers a new one with
+        the updated channel filter. The queue is preserved so the
+        background task's async-for loop keeps working seamlessly.
+        """
+        from telethon import events  # type: ignore[import-untyped]
+
+        if self._raw_handler is None or self._raw_queue is None:
+            logger.warning("[TelegramMonitor] update_channels called but no active stream")
+            return
+
+        # Remove old handler
+        self._client.remove_event_handler(self._raw_handler)
+
+        # Register new handler with updated channels
+        normalized = self._normalize_channels(channels)
+        self._raw_handler = self._make_raw_handler(self._raw_queue)
+        self._client.add_event_handler(
+            self._raw_handler,
+            events.NewMessage(chats=normalized),
+        )
+        logger.info(
+            "[TelegramMonitor] channels hot-reloaded — now %d channels",
+            len(normalized),
+        )
