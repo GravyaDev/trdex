@@ -69,85 +69,141 @@ async def _ingest_signal_to_qdrant(signal) -> None:
         logger.exception("[telegram] Qdrant ingestion failed for signal %s", getattr(signal, "symbol", "?"))
 
 
+async def _ingest_news_to_qdrant(chat_id: str, text: str, timestamp) -> None:
+    """Ingest a non-signal Telegram message as news context into Qdrant."""
+    try:
+        from trdex.context.ingestion import ContextIngestionPipeline
+        from trdex.context.vector_store import ContextDocument
+
+        doc = ContextDocument(
+            text=text,
+            source=f"telegram_news:{chat_id}",
+            symbol="",  # news is not symbol-specific
+            sentiment=0.0,
+            published_at=timestamp,
+        )
+        pipeline = ContextIngestionPipeline()
+        await pipeline.setup()
+        await pipeline.ingest([doc])
+        logger.debug("[telegram] ingested news from %s into Qdrant", chat_id)
+    except Exception:
+        logger.exception("[telegram] Qdrant news ingestion failed for chat %s", chat_id)
+
+
 async def _telegram_background(
     monitor: TelegramMonitor,
     channels: list[str],
     session_factory,
 ) -> None:
-    """Background task: stream signals from Telegram, record them
-    observe-only, ingest into Qdrant.
+    """Background task: stream ALL messages from Telegram channels.
 
-    Observe-only mode (Step 1 of Telegram Signal Integration): each
-    parsed signal is persisted to `signal_outcomes` with exit_price
-    NULL and budget 0. No position is opened, no capital at risk.
-    The post-hoc TP/SL evaluation job (see
-    `telegram.evaluator.evaluate_open_signals`) resolves outcomes
-    later by fetching historical OHLCV and scoring against the
-    signal's targets/stop.
+    For each message:
+    1. Try parse_signal(). If it succeeds AND is not a report → record
+       as observe-only signal in signal_outcomes + ingest to Qdrant.
+    2. If parse_signal() returns None (not a trading signal) → ingest
+       the raw text as news context into Qdrant so Scout/Analyst agents
+       can read market commentary, breaking news, and macro analysis.
+
+    This dual flow means every channel contributes either signals OR
+    context — nothing is wasted.
     """
+    from collections import OrderedDict
     from decimal import Decimal
+    from trdex.telegram.parser import parse_signal
     from trdex.telegram.tracker import SignalOutcome
 
-    try:
-        async for signal in monitor.stream(channels):
-            logger.info(
-                "[telegram] %s %s from %s entry=%s",
-                signal.direction, signal.symbol, signal.source, signal.entry,
-            )
+    # Dedup: skip signals with the same (source, symbol, direction)
+    # within a 60-second window. Prevents a spammy channel from
+    # flooding signal_outcomes with duplicate records.
+    _recent_signals: OrderedDict[str, float] = OrderedDict()
+    DEDUP_WINDOW_S = 60.0
 
-            # Skip signals without a concrete entry price — we cannot
-            # score them post-hoc without a reference point.
-            if signal.entry is None:
-                logger.debug(
-                    "[telegram] skipping record for %s %s: no entry price",
-                    signal.direction, signal.symbol,
-                )
-            else:
-                # Serialize targets/stop into the `note` JSON so the
-                # post-hoc evaluator can read them without a schema change.
-                import json
-                note_payload = json.dumps({
-                    "targets": signal.targets,
-                    "stop_loss": signal.stop_loss,
-                })
-                outcome = SignalOutcome(
-                    source=signal.source,
-                    symbol=signal.symbol,
-                    direction=signal.direction,
-                    entry_price=Decimal(str(signal.entry)),
-                    exit_price=None,
-                    budget=Decimal("0"),
-                    executed_at=signal.parsed_at,
-                )
-                try:
-                    # record_and_persist() does not accept `note`; pass
-                    # through the repo directly so we can store it.
-                    from trdex.storage.signal_outcome_repo import (
-                        SignalOutcomeRepository,
-                    )
-                    async with session_factory() as session:
-                        repo = SignalOutcomeRepository(session)
-                        await repo.save(
-                            source=outcome.source,
-                            symbol=outcome.symbol,
-                            direction=outcome.direction,
-                            entry_price=outcome.entry_price,
-                            exit_price=None,
-                            budget=Decimal("0"),
-                            executed_at=outcome.executed_at,
-                            closed_at=None,
-                            note=note_payload,
-                        )
-                    _tracker.record(outcome)
-                except Exception:
-                    logger.exception(
-                        "[telegram] failed to record observe-only signal "
-                        "%s %s from %s",
+    def _is_duplicate(sig) -> bool:
+        import time
+        key = f"{sig.source}:{sig.symbol}:{sig.direction}"
+        now = time.monotonic()
+        # Prune old entries
+        while _recent_signals and next(iter(_recent_signals.values())) < now - DEDUP_WINDOW_S:
+            _recent_signals.popitem(last=False)
+        if key in _recent_signals:
+            return True
+        _recent_signals[key] = now
+        return False
+
+    try:
+        async for msg in monitor.stream_raw(channels):
+            # Try to parse as a trading signal
+            signal = parse_signal(msg.text, source=msg.chat_id)
+
+            if signal is not None:
+                # Dedup: skip if same source+symbol+direction in last 60s
+                if _is_duplicate(signal):
+                    logger.debug(
+                        "[telegram] dedup: skipping %s %s from %s",
                         signal.direction, signal.symbol, signal.source,
                     )
+                    continue
 
-            # Ingest signal into Qdrant so Scout agent can read it as context
-            await _ingest_signal_to_qdrant(signal)
+                # It's a trading signal — observe-only record
+                logger.info(
+                    "[telegram] %s %s from %s entry=%s",
+                    signal.direction, signal.symbol, signal.source, signal.entry,
+                )
+
+                if signal.entry is None:
+                    logger.debug(
+                        "[telegram] skipping record for %s %s: no entry price",
+                        signal.direction, signal.symbol,
+                    )
+                else:
+                    import json
+                    note_payload = json.dumps({
+                        "targets": signal.targets,
+                        "stop_loss": signal.stop_loss,
+                    })
+                    outcome = SignalOutcome(
+                        source=signal.source,
+                        symbol=signal.symbol,
+                        direction=signal.direction,
+                        entry_price=Decimal(str(signal.entry)),
+                        exit_price=None,
+                        budget=Decimal("0"),
+                        executed_at=signal.parsed_at,
+                    )
+                    try:
+                        from trdex.storage.signal_outcome_repo import (
+                            SignalOutcomeRepository,
+                        )
+                        async with session_factory() as session:
+                            repo = SignalOutcomeRepository(session)
+                            await repo.save(
+                                source=outcome.source,
+                                symbol=outcome.symbol,
+                                direction=outcome.direction,
+                                entry_price=outcome.entry_price,
+                                exit_price=None,
+                                budget=Decimal("0"),
+                                executed_at=outcome.executed_at,
+                                closed_at=None,
+                                note=note_payload,
+                            )
+                        _tracker.record(outcome)
+                    except Exception:
+                        logger.exception(
+                            "[telegram] failed to record observe-only signal "
+                            "%s %s from %s",
+                            signal.direction, signal.symbol, signal.source,
+                        )
+
+                # Also ingest the signal as context
+                await _ingest_signal_to_qdrant(signal)
+            else:
+                # Not a signal → ingest as news context
+                # Skip very short messages (emoji-only, "👍", etc.)
+                if len(msg.text.strip()) > 20:
+                    await _ingest_news_to_qdrant(
+                        msg.chat_id, msg.text, msg.timestamp,
+                    )
     except asyncio.CancelledError:
         pass
     except Exception:
@@ -280,7 +336,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # an SMS code on stdin and raise EOFError) degrades the Telegram
     # feature without crashing the whole app. Same soft-fail pattern
     # used for Qdrant above — Telegram is optional in Phase 2.
-    channels = settings.telegram_channels_list
+    # Read channels from RuntimeConfig (DB, dashboard-editable) with
+    # fallback to the env var for backward compatibility.
+    _tg_channels_csv = config_svc.get("telegram", "telegram_channels") or settings.telegram_channels
+    channels = [c.strip() for c in _tg_channels_csv.split(",") if c.strip()] if _tg_channels_csv else []
     monitor = None
     if channels and settings.telegram_api_id:
         try:
@@ -395,9 +454,21 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             set_selected_feeds(feed_list or [])
             logger.info("[hot-reload] selected feeds → %s", feed_list or "ALL")
 
+    def _on_telegram_change(key: str, value: str) -> None:
+        if key == "telegram_channels" and monitor:
+            ch_list = [c.strip() for c in value.split(",") if c.strip()]
+            import asyncio as _aio
+            try:
+                loop = _aio.get_running_loop()
+                loop.create_task(monitor.update_channels(ch_list))
+                logger.info("[hot-reload] telegram channels → %d channels", len(ch_list))
+            except RuntimeError:
+                logger.warning("[hot-reload] no running loop for telegram update")
+
     config_svc.register_listener("thresholds", _on_thresholds_change)
     config_svc.register_listener("symbols", _on_symbols_change)
     config_svc.register_listener("feeds", _on_feeds_change)
+    config_svc.register_listener("telegram", _on_telegram_change)
 
     # --- Memory context loader (7-tier stack for agent prompts) ---
     from pathlib import Path
@@ -456,6 +527,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Expose lifespan-scoped objects to endpoints via app.state
     _app.state.feed_manager = feed_manager
     _app.state.agent_symbols = agent_symbols if _sched_enabled else []
+    _app.state.telegram_channels = channels
 
     yield  # app runs here
 
@@ -597,7 +669,7 @@ def create_app() -> FastAPI:
             },
             "telegram": {
                 "streaming": _telegram_task is not None and not _telegram_task.done(),
-                "channels": settings.telegram_channels_list,
+                "channels": getattr(request.app.state, "telegram_channels", []),
                 "signals_tracked": len(_tracker._outcomes),
                 "evaluator_running": (
                     _telegram_eval_task is not None

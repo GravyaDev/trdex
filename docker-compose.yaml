@@ -89,6 +89,12 @@ services:
       # empty the service runs in passthrough mode with a WARNING
       # log. Generate a fresh key with:
       #   python -m trdex.services.credentials_crypto
+      # THREAT MODEL: the key lives in the same container that reads
+      # the DB, so compromise of the app process = full plaintext.
+      # Encryption-at-rest protects against: DB backup leaks, SQL
+      # tooling access, debug endpoint exposure. It does NOT protect
+      # against a full container compromise. For that, use a secrets
+      # manager (Vault, AWS Secrets Manager) — out of scope for v1.
       TRDEX_CONFIG_ENCRYPTION_KEY: '${TRDEX_CONFIG_ENCRYPTION_KEY:-}'
       TRDEX_CORS_ORIGINS: '${TRDEX_CORS_ORIGINS:-}'
       # Exchange (Binance) — optional in simulation mode
@@ -140,6 +146,11 @@ services:
       TRDEX_GATE_MIN_SHARPE: '${TRDEX_GATE_MIN_SHARPE:-1.0}'
       TRDEX_GATE_MAX_DRAWDOWN: '${TRDEX_GATE_MAX_DRAWDOWN:-0.20}'
       TRDEX_GATE_MIN_WIN_RATE: '${TRDEX_GATE_MIN_WIN_RATE:-0.40}'
+    volumes:
+      # Persist Telethon session file across container rebuilds so the
+      # one-time SMS login survives redeploys. Without this, every
+      # Coolify rebuild requires a new interactive telegram_login.py.
+      - telegram_session:/app/session
     depends_on:
       db:
         condition: service_healthy
@@ -245,3 +256,4 @@ volumes:
   pgdata:
   redis:
   qdrant:
+  telegram_session:

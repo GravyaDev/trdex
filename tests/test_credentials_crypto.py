@@ -146,27 +146,28 @@ def test_empty_values_pass_through_even_when_enabled(monkeypatch) -> None:
     assert credentials_crypto.decrypt("") == ""
 
 
-def test_malformed_key_falls_back_to_passthrough(monkeypatch) -> None:
+def test_malformed_key_raises_runtime_error(monkeypatch) -> None:
     monkeypatch.setenv("TRDEX_CONFIG_ENCRYPTION_KEY", "not-a-valid-fernet-key")
-    credentials_crypto.init_cipher()
-    assert credentials_crypto.is_enabled() is False
-    # Encryption becomes a no-op when the key is invalid
-    assert credentials_crypto.encrypt("x") == "x"
+    # A non-empty but malformed key must hard-fail — silent passthrough
+    # would make production look encrypted while actually running plain.
+    with pytest.raises(RuntimeError, match="Invalid TRDEX_CONFIG_ENCRYPTION_KEY"):
+        credentials_crypto.init_cipher()
 
 
-def test_decrypt_with_wrong_key_returns_ciphertext(monkeypatch) -> None:
+def test_decrypt_with_wrong_key_raises(monkeypatch) -> None:
     key_a = credentials_crypto.generate_key()
     monkeypatch.setenv("TRDEX_CONFIG_ENCRYPTION_KEY", key_a)
     credentials_crypto.init_cipher()
     ct = credentials_crypto.encrypt("shared-secret")
 
     # Rotate to a different key — decrypt with the wrong key must
-    # NOT return a bogus plaintext; it returns the ciphertext so
-    # the caller can detect the failure and leave the row intact.
+    # RAISE DecryptionError, not silently return ciphertext (which
+    # would be passed to Binance API as if it were a valid key).
     key_b = credentials_crypto.generate_key()
     monkeypatch.setenv("TRDEX_CONFIG_ENCRYPTION_KEY", key_b)
     credentials_crypto.init_cipher()
-    assert credentials_crypto.decrypt(ct) == ct
+    with pytest.raises(credentials_crypto.DecryptionError):
+        credentials_crypto.decrypt(ct)
 
 
 # ── Service integration ─────────────────────────────────────────────────────

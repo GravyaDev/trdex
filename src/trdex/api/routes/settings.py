@@ -14,7 +14,7 @@ from trdex.services.runtime_config import (
 
 router = APIRouter(prefix="/v1/settings", tags=["settings"])
 
-VALID_CATEGORIES = {"credentials", "symbols", "thresholds", "scheduler", "feeds"}
+VALID_CATEGORIES = {"credentials", "symbols", "thresholds", "scheduler", "feeds", "telegram"}
 
 
 class ConfigCategoryResponse(BaseModel):

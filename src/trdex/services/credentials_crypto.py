@@ -36,6 +36,15 @@ import os
 logger = logging.getLogger(__name__)
 
 
+class DecryptionError(Exception):
+    """Raised when Fernet decrypt fails due to wrong key or corrupted token.
+
+    This is intentionally loud — silently returning ciphertext as if it
+    were plaintext would send garbage to Binance/news APIs and leak
+    encrypted blobs into logs.
+    """
+
+
 # Fernet tokens always begin with this marker — version byte 0x80
 # (128) encoded in the base64 alphabet produces "gAAAAA" as the
 # prefix of every Fernet ciphertext. See:
@@ -83,11 +92,17 @@ class _FernetCipher:
         try:
             plaintext = self._fernet.decrypt(ciphertext.encode("ascii"))
         except InvalidToken:
-            logger.error(
-                "[credentials_crypto] decrypt failed: token invalid or "
-                "signed with a different key. Row left unchanged."
+            logger.critical(
+                "[credentials_crypto] DECRYPT FAILED: token invalid or "
+                "signed with a different key. This means the "
+                "TRDEX_CONFIG_ENCRYPTION_KEY has changed or is wrong. "
+                "Credentials cannot be read. Raising to prevent silent "
+                "corruption (e.g. passing ciphertext to Binance API)."
             )
-            return ciphertext
+            raise DecryptionError(
+                "Fernet decrypt failed — wrong key or corrupted token. "
+                "Check TRDEX_CONFIG_ENCRYPTION_KEY."
+            ) from None
         return plaintext.decode("utf-8")
 
 
@@ -125,14 +140,23 @@ def init_cipher(env_var: str = "TRDEX_CONFIG_ENCRYPTION_KEY") -> None:
         logger.info(
             "[credentials_crypto] at-rest encryption enabled (Fernet)"
         )
-    except Exception:
-        logger.exception(
-            "[credentials_crypto] invalid %s — falling back to "
-            "passthrough. Credentials will be stored in plaintext.",
-            env_var,
+    except Exception as exc:
+        # The key is SET but INVALID — this is a configuration error,
+        # not a "missing optional feature". In production this means
+        # someone pasted a broken key in Coolify and the app would
+        # silently run unencrypted while looking encrypted in code
+        # review. Hard-fail to prevent that.
+        logger.critical(
+            "[credentials_crypto] TRDEX_CONFIG_ENCRYPTION_KEY is set "
+            "but INVALID (%s). Refusing to start in passthrough mode "
+            "with a non-empty key — fix the key or remove it entirely "
+            "to run without encryption.",
+            exc,
         )
-        _cipher = _Passthrough()
-        _enabled = False
+        raise RuntimeError(
+            f"Invalid TRDEX_CONFIG_ENCRYPTION_KEY: {exc}. "
+            f"Generate a valid key with: python -m trdex.services.credentials_crypto"
+        ) from exc
 
 
 def is_enabled() -> bool:

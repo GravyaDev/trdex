@@ -1,10 +1,18 @@
-"""TelegramMonitor: reads messages from public groups and emits parsed signals."""
+"""TelegramMonitor: reads messages from Telegram channels.
+
+Provides two streaming modes:
+- stream(): yields TelegramSignal (parsed signals only, backward compat)
+- stream_raw(): yields TelegramMessage (ALL text messages, for the
+  background task to classify as signal vs news)
+"""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from trdex.telegram.parser import TelegramSignal, parse_signal
@@ -13,6 +21,15 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TelegramMessage:
+    """A raw message from a Telegram channel, before parsing."""
+
+    chat_id: str
+    text: str
+    timestamp: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
 
 
 class TelegramMonitor:
@@ -34,7 +51,7 @@ class TelegramMonitor:
         api_id: int,
         api_hash: str,
         phone: str,
-        session_name: str = "trdex_telegram",
+        session_name: str = "session/trdex_telegram",
     ) -> None:
         # Lazy import — telethon is optional, only needed when monitor is used
         from telethon import TelegramClient  # type: ignore[import-untyped]
@@ -42,6 +59,8 @@ class TelegramMonitor:
         self._client = TelegramClient(session_name, api_id, api_hash)
         self._phone = phone
         self._running = False
+        self._raw_handler = None  # active stream_raw event handler
+        self._raw_queue: asyncio.Queue[TelegramMessage] | None = None
 
     async def start(self) -> None:
         """Connect and authenticate."""
@@ -151,3 +170,85 @@ class TelegramMonitor:
                 queue.task_done()
             except asyncio.TimeoutError:
                 continue
+
+    def _make_raw_handler(self, queue: asyncio.Queue[TelegramMessage]):
+        """Build a Telethon event callback that pushes to the queue."""
+        async def _handler(event) -> None:
+            try:
+                if not event.message.text:
+                    return
+                dt = event.message.date
+                if dt and dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                msg = TelegramMessage(
+                    chat_id=str(event.chat_id),
+                    text=event.message.text,
+                    timestamp=dt or datetime.now(tz=timezone.utc),
+                )
+                await queue.put(msg)
+            except Exception:
+                logger.exception("[TelegramMonitor] error in raw handler")
+        return _handler
+
+    async def stream_raw(
+        self,
+        channels: list[str],
+    ) -> AsyncIterator[TelegramMessage]:
+        """Stream ALL text messages from channels as raw TelegramMessage.
+
+        Unlike stream() which pre-filters through parse_signal, this
+        yields every text message. The caller decides what to do:
+        parse_signal for trading signals, or ingest as news context.
+
+        The handler is stored on the instance so update_channels() can
+        swap it at runtime for hot-reload.
+        """
+        from telethon import events  # type: ignore[import-untyped]
+
+        self._raw_queue = asyncio.Queue()
+        normalized = self._normalize_channels(channels)
+
+        self._raw_handler = self._make_raw_handler(self._raw_queue)
+        self._client.add_event_handler(
+            self._raw_handler,
+            events.NewMessage(chats=normalized),
+        )
+        logger.info(
+            "[TelegramMonitor] stream_raw started — %d channels", len(normalized),
+        )
+
+        while self._running:
+            try:
+                msg = await asyncio.wait_for(self._raw_queue.get(), timeout=1.0)
+                yield msg
+                self._raw_queue.task_done()
+            except asyncio.TimeoutError:
+                continue
+
+    async def update_channels(self, channels: list[str]) -> None:
+        """Hot-swap the channel list without restarting the monitor.
+
+        Removes the current raw handler and registers a new one with
+        the updated channel filter. The queue is preserved so the
+        background task's async-for loop keeps working seamlessly.
+        """
+        from telethon import events  # type: ignore[import-untyped]
+
+        if self._raw_handler is None or self._raw_queue is None:
+            logger.warning("[TelegramMonitor] update_channels called but no active stream")
+            return
+
+        # Remove old handler
+        self._client.remove_event_handler(self._raw_handler)
+
+        # Register new handler with updated channels
+        normalized = self._normalize_channels(channels)
+        self._raw_handler = self._make_raw_handler(self._raw_queue)
+        self._client.add_event_handler(
+            self._raw_handler,
+            events.NewMessage(chats=normalized),
+        )
+        logger.info(
+            "[TelegramMonitor] channels hot-reloaded — now %d channels",
+            len(normalized),
+        )

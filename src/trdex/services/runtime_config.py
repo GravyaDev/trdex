@@ -34,6 +34,7 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str, type]] = {
     ("credentials", "binance_api_secret"): ("binance_api_secret", str),
     ("credentials", "telegram_api_id"): ("telegram_api_id", int),
     ("credentials", "telegram_api_hash"): ("telegram_api_hash", str),
+    ("credentials", "telegram_phone"): ("telegram_phone", str),
     # Symbols
     ("symbols", "agent_scheduler_symbols"): ("agent_scheduler_symbols", str),
     ("symbols", "ingestion_symbols"): ("ingestion_symbols", str),
@@ -51,6 +52,9 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str, type]] = {
     ("scheduler", "sl_check_interval"): ("sl_check_interval", float),
     ("scheduler", "ingestion_interval"): ("ingestion_interval", int),
     ("scheduler", "telegram_eval_interval"): (None, int),
+    # Telegram
+    ("telegram", "telegram_channels"): ("telegram_channels", str),
+    ("telegram", "telegram_enabled"): (None, bool),
     # Feeds
     ("feeds", "selected_feeds"): (None, str),  # No env var equivalent
 }

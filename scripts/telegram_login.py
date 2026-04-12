@@ -18,7 +18,7 @@ async def main() -> None:
 
     s = get_settings()
     print(f"Logging in as {s.telegram_phone} ...")
-    client = TelegramClient("trdex_telegram", s.telegram_api_id, s.telegram_api_hash)
+    client = TelegramClient("session/trdex_telegram", s.telegram_api_id, s.telegram_api_hash)
     await client.start(phone=s.telegram_phone)
     me = await client.get_me()
     print(f"Logged in as: {me.first_name} (@{me.username})")

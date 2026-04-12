@@ -69,17 +69,31 @@ def score_signal(
     if entry_price <= 0:
         return Resolution(status="open", exit_price=None, closed_at=None)
 
+    # Sanity: reject wildly unreasonable targets/stop that could come
+    # from a poisoned Telegram signal. A target more than 10x the entry
+    # price (or less than 1/10) is almost certainly garbage.
+    import math
+    sane_targets = [
+        t for t in targets
+        if math.isfinite(t) and t > 0
+        and 0.1 * float(entry_price) < t < 10 * float(entry_price)
+    ]
+    sane_stop: float | None = None
+    if stop_loss is not None and math.isfinite(stop_loss) and stop_loss > 0:
+        if 0.1 * float(entry_price) < stop_loss < 10 * float(entry_price):
+            sane_stop = stop_loss
+
     sorted_candles = sorted(candles, key=lambda c: c.timestamp)
     sorted_candles = [c for c in sorted_candles if c.timestamp >= executed_at]
 
     # BUY: TPs are above entry, SL is below. SELL: inverted.
     if direction == "BUY":
-        relevant_targets = sorted([t for t in targets if t > float(entry_price)])
-        sl_hit = lambda c: stop_loss is not None and float(c.low) <= stop_loss
+        relevant_targets = sorted([t for t in sane_targets if t > float(entry_price)])
+        sl_hit = lambda c: sane_stop is not None and float(c.low) <= sane_stop
         tp_hit = lambda c, t: float(c.high) >= t
     else:
-        relevant_targets = sorted([t for t in targets if t < float(entry_price)], reverse=True)
-        sl_hit = lambda c: stop_loss is not None and float(c.high) >= stop_loss
+        relevant_targets = sorted([t for t in sane_targets if t < float(entry_price)], reverse=True)
+        sl_hit = lambda c: sane_stop is not None and float(c.high) >= sane_stop
         tp_hit = lambda c, t: float(c.low) <= t
 
     for candle in sorted_candles:
@@ -94,13 +108,13 @@ def score_signal(
             # Ambiguous bar — resolve to SL conservatively.
             return Resolution(
                 status="sl",
-                exit_price=Decimal(str(stop_loss)) if stop_loss is not None else candle.close,
+                exit_price=Decimal(str(sane_stop)) if sane_stop is not None else candle.close,
                 closed_at=candle.timestamp,
             )
         if sl_touched:
             return Resolution(
                 status="sl",
-                exit_price=Decimal(str(stop_loss)) if stop_loss is not None else candle.close,
+                exit_price=Decimal(str(sane_stop)) if sane_stop is not None else candle.close,
                 closed_at=candle.timestamp,
             )
         if tp_touched_idx is not None:
@@ -124,16 +138,32 @@ def score_signal(
     return Resolution(status="open", exit_price=None, closed_at=None)
 
 
+def _is_finite_positive(v: float) -> bool:
+    """Reject NaN, inf, negative, and zero values."""
+    import math
+    return math.isfinite(v) and v > 0
+
+
 def _parse_note(note: str | None) -> tuple[list[float], float | None]:
+    """Extract targets and stop_loss from the JSON note field.
+
+    Validates that all parsed values are finite positive numbers —
+    a poisoned Telegram signal with `stop_loss: 1e308` or negative
+    floats could corrupt the scoring logic or cause Decimal overflow.
+    """
     if not note:
         return [], None
     try:
         payload = json.loads(note)
-        targets = [float(t) for t in payload.get("targets", [])]
+        raw_targets = payload.get("targets", [])
+        targets = [float(t) for t in raw_targets if _is_finite_positive(float(t))]
         stop_raw = payload.get("stop_loss")
-        stop = float(stop_raw) if stop_raw is not None else None
+        stop: float | None = None
+        if stop_raw is not None:
+            sv = float(stop_raw)
+            stop = sv if _is_finite_positive(sv) else None
         return targets, stop
-    except (json.JSONDecodeError, TypeError, ValueError):
+    except (json.JSONDecodeError, TypeError, ValueError, OverflowError):
         return [], None
 
 
