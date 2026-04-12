@@ -65,7 +65,7 @@ services:
   app:
     build: .
     ports:
-      - "${TRDEX_APP_HOST_PORT:-8500}:8000"
+      - "${TRDEX_APP_HOST_PORT:-8502}:8000"
     environment:
       # App mode
       TRDEX_MODE: '${TRDEX_MODE:-simulation}'
@@ -151,7 +151,7 @@ services:
       # Bind mount to a fixed path on the VPS — put the .session file
       # there once and it survives any redeploy without docker volumes.
       # In Coolify: add this path as a persistent storage mount.
-      - ${TRDEX_SESSION_PATH:-/opt/trdex/session}:/app/session
+      - ${TRDEX_SESSION_PATH:-/opt/trdex-llm/session}:/app/session
     depends_on:
       db:
         condition: service_healthy
@@ -198,7 +198,7 @@ services:
       OAUTH2_PROXY_CLIENT_SECRET: '${OAUTH2_PROXY_CLIENT_SECRET}'
       OAUTH2_PROXY_COOKIE_SECRET: '${OAUTH2_PROXY_COOKIE_SECRET}'
       OAUTH2_PROXY_COOKIE_SECURE: 'true'
-      OAUTH2_PROXY_COOKIE_DOMAIN: 'trdex.gravya.it'
+      OAUTH2_PROXY_COOKIE_DOMAIN: '${TRDEX_DOMAIN:-trdex-llm.gravya.it}'
       OAUTH2_PROXY_COOKIE_PATH: '/'
       OAUTH2_PROXY_COOKIE_SAMESITE: 'lax'
       # Restrict access by email domain and/or GitHub username.
@@ -212,7 +212,7 @@ services:
       OAUTH2_PROXY_UPSTREAMS: 'http://dashboard:8501'
       OAUTH2_PROXY_REVERSE_PROXY: 'true'
       OAUTH2_PROXY_PROXY_PREFIX: '/oauth2'
-      OAUTH2_PROXY_REDIRECT_URL: 'https://trdex.gravya.it/oauth2/callback'
+      OAUTH2_PROXY_REDIRECT_URL: 'https://${TRDEX_DOMAIN:-trdex-llm.gravya.it}/oauth2/callback'
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: 'true'
     restart: unless-stopped
     logging: *default-logging
@@ -221,12 +221,12 @@ services:
       # Route ALL /dashboard and /oauth2 traffic to oauth2-proxy.
       # oauth2-proxy handles auth check, login redirect, and proxying
       # to the dashboard container internally.
-      - "traefik.http.routers.trdex-dashboard.rule=Host(`trdex.gravya.it`) && (PathPrefix(`/dashboard`) || PathPrefix(`/oauth2`))"
-      - "traefik.http.routers.trdex-dashboard.entrypoints=https"
-      - "traefik.http.routers.trdex-dashboard.tls=true"
-      - "traefik.http.routers.trdex-dashboard.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.trdex-dashboard.service=trdex-oauth2-svc"
-      - "traefik.http.services.trdex-oauth2-svc.loadbalancer.server.port=4180"
+      - "traefik.http.routers.trdex-llm-dashboard.rule=Host(`trdex-llm.gravya.it`) && (PathPrefix(`/dashboard`) || PathPrefix(`/oauth2`))"
+      - "traefik.http.routers.trdex-llm-dashboard.entrypoints=https"
+      - "traefik.http.routers.trdex-llm-dashboard.tls=true"
+      - "traefik.http.routers.trdex-llm-dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.trdex-llm-dashboard.service=trdex-llm-oauth2-svc"
+      - "traefik.http.services.trdex-llm-oauth2-svc.loadbalancer.server.port=4180"
 
   # Streamlit dashboard — no direct Traefik route (proxied via oauth2-proxy).
   dashboard:
