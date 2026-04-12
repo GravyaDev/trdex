@@ -4,21 +4,22 @@
 
 - **trdex LIVE in production**: `https://trdex.gravya.it` (FastAPI) + `/dashboard/` (Streamlit, GitHub OAuth)
 - **Phase 2 observation**: 25 crypto symbols (aggressive tuning), Runtime Config DB-backed + Fernet-encrypted credentials, scheduler 5 min
-- **Sessione 2026-04-11 chiusa**: Kloudify v1.1.2→v1.2.2 + merge forward main (9 commit: stale ticker, encrypted creds, Telegram Step 1, persistent stop_loss events) + security HIGH closed (verify_api_key fail-safe). 372/372 test pass.
+- **Sessione 2026-04-12 chiusa**: 3 merge forward da main (14 commit totali: Telegram multi-channel, parser rewrite, evaluator, encrypted creds, debug gate, drawdown gate, rate limiter X-Forwarded-For). Security 7/7 CLOSED. Memory snapshot sanitization + CLI validation fixati localmente. 400/400 test pass.
 
 ## ⚠️ Branch LLM dev — `llm-agents`
 
 - **Branch**: `llm-agents` (worktree `trdex-llm/`, pushato su origin)
-- **Stato**: Task 1-7 LLM agents DONE (commits `d294159`, `a4d2dcb`, `4af323a`). RAG Tier 4b DONE (`0431781`). Merge forward da main x2 (`0121bc6`).
+- **Stato**: Task 1-7 LLM agents DONE. RAG Tier 4b DONE. Telegram pipeline COMPLETE (30+ channels, dual-path signal+news, evaluator, dashboard). Security 7/7 CLOSED. 400/400 test. Merge forward x5 totali.
 - **Design doc**: `.claude/reports/llm-agents-design-2026-04-08.md` (Rev 1, 23 objections)
 - **Deploy guide**: `docs/deploy-llm-instance.md` — parallel Coolify app `trdex-llm.gravya.it` (DNS created)
 - **Workflow**: bug di prod su main → merge forward nel branch. MAI il contrario.
 
 ## Prossima sessione
 
-1. **Deploy trdex-llm su Coolify** — ANTHROPIC_API_KEY, OAuth callback, attivare Analyst LLM da dashboard
+1. **Deploy trdex-llm su Coolify** — ANTHROPIC_API_KEY, OAuth callback, TRDEX_CONFIG_ENCRYPTION_KEY, attivare Analyst LLM da dashboard
 2. **Attivare RAG Tier 4b in prod** — `backfill_ohlcv.py --days 365` per symbol + `generate_episodes.py --all`
-3. **Task 8 LLM Evaluation framework** — quando hai dati live (50 golden scenarios, LLM vs rule A/B)
+3. **TelegramSignalExecutor** — Step 2 del Telegram integration (va approvato su main prima, poi merge forward). Gate: 7 giorni dati, win_rate >= 0.6, >= 20 segnali resolved
+4. **Task 8 LLM Evaluation framework** — quando hai dati live (50 golden scenarios, LLM vs rule A/B)
 
 ## Project: trdex
 
@@ -28,7 +29,7 @@
 - **Architecture**: Clean Arch + DDD + Multi-Agent System (Scout → Analyst → Risk → Executor), LangGraph state machine
 - **Memory**: 7-tier (KB / agent_memory / nominations / trade_narratives / market_episodes / entity_graph / agent_runs)
 - **Owner**: Daniele (daniele@gravya.it), app privata (no MiFID)
-- **Tests**: 344/344 passing
+- **Tests**: 400/400 passing
 - **Commit identity**: `Author: GravyaDev <dev@gravya.it>`, trailer `Co-Authored-By: Kloud <kloud@gravya.it>`. MAI Claude.
 
 ## Production state
