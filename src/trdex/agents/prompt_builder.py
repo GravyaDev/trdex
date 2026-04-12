@@ -108,7 +108,9 @@ def build_analyst_messages(
     sections.append(sent_section)
 
     # 3. Memory snapshot (may be large — truncated if over budget)
-    memory_text = state.memory_snapshots.get("analyst", "")
+    # Sanitized: memory snapshot aggregates KB blocks, entity facts, trade
+    # narratives, and market episodes — some sourced from external data.
+    memory_text = sanitize_rag_content(state.memory_snapshots.get("analyst", ""))
     if memory_text:
         sections.append(f"\n## Reflection Memory\n{memory_text}")
 
@@ -178,8 +180,8 @@ def build_scout_messages(
     else:
         sections.append("No documents retrieved.")
 
-    # 2. Memory snapshot (if available)
-    memory_text = state.memory_snapshots.get("scout", "")
+    # 2. Memory snapshot (if available, sanitized for defense-in-depth)
+    memory_text = sanitize_rag_content(state.memory_snapshots.get("scout", ""))
     if memory_text:
         sections.append(f"\n## Memory context\n{memory_text}")
 

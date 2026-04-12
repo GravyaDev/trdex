@@ -67,6 +67,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args(argv)
 
+    # Validate symbol format (e.g. BTC/USDT, ETH/BTC)
+    import re
+    if not re.match(r"^[A-Z0-9]{2,10}/[A-Z0-9]{2,10}$", args.symbol):
+        parser.error(f"Invalid symbol format: {args.symbol!r} — expected e.g. BTC/USDT")
+
+    if args.days is not None and args.days > 3650:
+        parser.error(f"--days {args.days} exceeds maximum (3650)")
+
     if args.days is None and args.start is None:
         args.days = 90  # default: 90 days
 

@@ -54,6 +54,18 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     if args.symbol is None and not args.all:
         parser.error("Provide a symbol or use --all")
 
+    # Validate symbol format
+    import re
+    if args.symbol and not re.match(r"^[A-Z0-9]{2,10}/[A-Z0-9]{2,10}$", args.symbol):
+        parser.error(f"Invalid symbol format: {args.symbol!r} — expected e.g. BTC/USDT")
+
+    if args.window <= 0:
+        parser.error(f"--window must be positive, got {args.window}")
+    if args.stride <= 0:
+        parser.error(f"--stride must be positive, got {args.stride}")
+    if args.days is not None and args.days > 3650:
+        parser.error(f"--days {args.days} exceeds maximum (3650)")
+
     return args
 
 
