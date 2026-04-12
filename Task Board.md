@@ -63,13 +63,13 @@ Auth: GitHub OAuth via oauth2-proxy
 ## 🛡️ Security corrective tasks (da security scan 2026-04-10)
 
 - [x] **[HIGH] Harden verify_api_key** — FIXED 2026-04-11 (commit `d4fff2b`).
-- [ ] **[MEDIUM] credentials_crypto fail-closed outside SIMULATION** — `init_cipher()` oggi fa passthrough silenzioso a plaintext se `TRDEX_CONFIG_ENCRYPTION_KEY` unset/invalid. In `live`/`paper` deve raise `RuntimeError` come il pattern `verify_api_key`. `services/credentials_crypto.py:94-136`. **Effort**: ~20 min
-- [ ] **[MEDIUM] Rate limiter X-Forwarded-For behind proxy** — SlowAPI usa `get_remote_address()` che dietro Coolify/Traefik ritorna il peer del proxy → tutti i client condividono un bucket (effectively 60/min globali). Fix: `key_func=lambda req: req.headers.get("x-forwarded-for", ...).split(",")[0].strip()`. `app.py:523`. **Effort**: ~5 min, HIGH impact
-- [ ] **[MEDIUM] Telegram evaluator NaN/inf sanitization** — `_parse_note()` accetta qualsiasi float da Telegram user content. NaN/inf fa si che SL/TP non triggerino mai. Observe-only oggi, critico quando passa a live. Fix: `math.isnan`/`isinf` + sanity bounds `0 < t < 1e9`. `telegram/evaluator.py:127-138`. **Effort**: ~15 min
-- [ ] **[MEDIUM] Sanitize memory snapshot text prima dell'iniezione LLM** — `memory_text` in `prompt_builder.py:111-113` e `state.memory_snapshots[agent]` vanno passati per `sanitize_rag_content()`. **Effort**: ~20 min
-- [ ] **[LOW] CLI input validation** su `backfill_ohlcv.py` e `generate_episodes.py`. **Effort**: ~15 min
-- [ ] **[LOW] Mode gate su `/v1/debug/*`** — aggiungere check `settings.mode == SIMULATION` così anche una leaked key in production non può dumpare balance ledger / entity graph. **Effort**: ~10 min
-- [ ] **[LOW] Lifespan boot-guard regression test** — nessun test oggi asserisce il `RuntimeError` nel `_lifespan` quando mode != SIMULATION e api_key vuoto. Aggiungere `test_lifespan_refuses_unset_key_outside_simulation`. **Effort**: ~15 min
+- [x] **[MEDIUM] credentials_crypto fail-closed** — FIXED via merge da main (`38b2906`). `init_cipher()` raise `RuntimeError` su key invalid, `decrypt()` raise `DecryptionError` su wrong-key.
+- [x] **[MEDIUM] Rate limiter X-Forwarded-For** — FIXED via merge da main (`220d81a`). `_real_client_ip()` legge `X-Forwarded-For`, fallback a `get_remote_address`.
+- [x] **[MEDIUM] Telegram evaluator NaN/inf** — FIXED via merge da main (`38b2906`). `_parse_note()` rifiuta NaN/inf/negativi/zero.
+- [x] **[MEDIUM] Sanitize memory snapshot text** — FIXED 2026-04-12 (commit `edb796b`). `sanitize_rag_content()` wrappa `memory_text` in entrambi `build_analyst_messages` e `build_scout_messages`.
+- [x] **[LOW] CLI input validation** — FIXED 2026-04-12 (commit `edb796b`). Symbol regex, --days cap 3650, window/stride > 0.
+- [x] **[LOW] Mode gate su `/v1/debug/*`** — FIXED via merge da main (`d737386`). Debug endpoints return 403 outside simulation.
+- [x] **[LOW] Lifespan boot-guard regression test** — FIXED 2026-04-12 (commit `edb796b`). 3 test condizionali guard logic.
 
 ---
 
