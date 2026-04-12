@@ -535,12 +535,23 @@ def create_app() -> FastAPI:
         lifespan=_lifespan,
     )
 
-    # --- API rate limiting (per client IP) ---
+    # --- API rate limiting (per real client IP) ---
     from slowapi import Limiter, _rate_limit_exceeded_handler
     from slowapi.util import get_remote_address
     from slowapi.errors import RateLimitExceeded
 
-    limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+    def _real_client_ip(request) -> str:
+        """Read the real client IP from X-Forwarded-For (set by Traefik).
+
+        Behind a reverse proxy, get_remote_address returns the proxy IP
+        so all clients share one bucket — effectively no rate limiting.
+        """
+        xff = request.headers.get("x-forwarded-for")
+        if xff:
+            return xff.split(",")[0].strip()
+        return get_remote_address(request)
+
+    limiter = Limiter(key_func=_real_client_ip, default_limits=["60/minute"])
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
