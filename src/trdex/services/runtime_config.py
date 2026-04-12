@@ -34,6 +34,7 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str, type]] = {
     ("credentials", "binance_api_secret"): ("binance_api_secret", str),
     ("credentials", "telegram_api_id"): ("telegram_api_id", int),
     ("credentials", "telegram_api_hash"): ("telegram_api_hash", str),
+    ("credentials", "telegram_phone"): ("telegram_phone", str),
     # Symbols
     ("symbols", "agent_scheduler_symbols"): ("agent_scheduler_symbols", str),
     ("symbols", "ingestion_symbols"): ("ingestion_symbols", str),
