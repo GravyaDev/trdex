@@ -59,6 +59,7 @@ class RiskDecision:
     position_size: float = 0.0        # fraction of portfolio (0.0 – 1.0)
     stop_loss_pct: float = 0.02       # default 2%
     take_profit_pct: float = 0.04     # default 4%
+    drawdown_warning: bool = False    # True when approved above 10% dd (sim mode override)
 
 
 @dataclass

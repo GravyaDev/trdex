@@ -45,6 +45,7 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str, type]] = {
     ("thresholds", "sl_daily_drawdown_pct"): ("sl_daily_drawdown_pct", float),
     ("thresholds", "gate_max_drawdown"): ("gate_max_drawdown", float),
     ("thresholds", "max_position_pct"): ("max_position_pct", float),
+    ("thresholds", "max_drawdown_block"): (None, float),
     # Scheduler
     ("scheduler", "agent_scheduler_enabled"): ("agent_scheduler_enabled", bool),
     ("scheduler", "agent_scheduler_interval"): ("agent_scheduler_interval", int),
