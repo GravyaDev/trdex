@@ -501,10 +501,24 @@ with st.expander("🟣 Telegram Signals (observe-only)"):
                 })
             st.dataframe(table_rows, hide_index=True, use_container_width=True)
         else:
-            st.info(
-                "No signals tracked yet. Configure Telegram API credentials "
-                "in the API Keys section below, then restart the app."
+            # Check if the monitor is actually streaming
+            status_data = get("/v1/status")
+            tg_streaming = (
+                status_data.get("telegram", {}).get("streaming", False)
+                if status_data else False
             )
+            if tg_streaming:
+                st.info(
+                    "Monitor is active and listening. No signals parsed yet "
+                    "— waiting for channels to publish new trading signals."
+                )
+            else:
+                st.info(
+                    "Telegram monitor is not streaming. Check that API "
+                    "credentials (api_id, api_hash, phone) are set in "
+                    "API Keys below, channels are configured, and the "
+                    "session file exists on the server."
+                )
 
         if recent_rows:
             st.caption(f"Last {len(recent_rows)} signals")
