@@ -34,7 +34,7 @@ class TelegramMonitor:
         api_id: int,
         api_hash: str,
         phone: str,
-        session_name: str = "trdex_telegram",
+        session_name: str = "session/trdex_telegram",
     ) -> None:
         # Lazy import — telethon is optional, only needed when monitor is used
         from telethon import TelegramClient  # type: ignore[import-untyped]

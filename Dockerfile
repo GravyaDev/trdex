@@ -31,6 +31,10 @@ COPY migrations/ migrations/
 # Copy utility scripts (telegram login, channel discovery, dump, etc.)
 COPY scripts/ scripts/
 
+# Telethon session directory — mounted as a named volume in compose
+# so the one-time SMS login survives container rebuilds.
+RUN mkdir -p session
+
 # Expose FastAPI port
 EXPOSE 8000
 

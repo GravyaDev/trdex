@@ -40,7 +40,7 @@ async def main() -> None:
 
     s = get_settings()
     client = TelegramClient(
-        "trdex_telegram", s.telegram_api_id, s.telegram_api_hash,
+        "session/trdex_telegram", s.telegram_api_id, s.telegram_api_hash,
     )
     await client.start(phone=s.telegram_phone)
     me = await client.get_me()
