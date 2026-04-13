@@ -32,13 +32,34 @@ logger = logging.getLogger(__name__)
 # Updated manually; the LLMCaller uses this for cost estimation.
 _PRICING: dict[str, tuple[float, float]] = {
     # (input $/1M, output $/1M)
+    # Anthropic
     "claude-haiku-4-5-20251001": (0.80, 4.00),
     "claude-sonnet-4-6-20250514": (3.00, 15.00),
     "claude-opus-4-6-20250514": (15.00, 75.00),
+    # OpenAI
     "gpt-4o": (2.50, 10.00),
     "gpt-4o-mini": (0.15, 0.60),
+    # Google
     "gemini-2.0-flash": (0.10, 0.40),
     "gemini-2.0-pro": (1.25, 10.00),
+    # Groq (hosted Llama/Mixtral — pricing as of 2025-05)
+    "llama-3.3-70b-versatile": (0.59, 0.79),
+    "llama-3.1-8b-instant": (0.05, 0.08),
+    "mixtral-8x7b-32768": (0.24, 0.24),
+    # Together
+    "meta-llama/Llama-3.3-70B-Instruct-Turbo": (0.88, 0.88),
+    # DeepSeek
+    "deepseek-chat": (0.14, 0.28),
+    "deepseek-reasoner": (0.55, 2.19),
+    # xAI
+    "grok-3-mini": (0.30, 0.50),
+    # Mistral
+    "mistral-small-latest": (0.10, 0.30),
+    "mistral-large-latest": (2.00, 6.00),
+    # Ollama (local — zero cost)
+    "llama3.2": (0.0, 0.0),
+    "qwen2.5": (0.0, 0.0),
+    "mistral": (0.0, 0.0),
 }
 
 _DEFAULT_COST = (1.00, 5.00)  # fallback for unknown models
@@ -119,6 +140,7 @@ class LLMCaller:
             return None
 
         api_key = self.api_keys.get(config.provider, "")
+        base_url = getattr(config, "base_url", "") or ""
         try:
             chain = get_structured_chain(
                 provider=config.provider,
@@ -128,6 +150,7 @@ class LLMCaller:
                 max_tokens=config.max_tokens,
                 top_p=config.top_p,
                 api_key=api_key,
+                base_url=base_url,
             )
         except Exception as exc:
             logger.exception("[LLMCaller] failed to build chain for %s: %s", agent_name, exc)

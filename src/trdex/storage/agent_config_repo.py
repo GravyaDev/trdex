@@ -51,6 +51,7 @@ class AgentConfigRepository:
         top_p: float | None = None,
         system_prompt: str | None = None,
         llm_enabled: bool | None = None,
+        base_url: str | None = None,
     ) -> AgentConfigRecord | None:
         """Update specific fields for an agent's config. Returns updated record."""
         values: dict = {"updated_at": _utcnow()}
@@ -68,6 +69,8 @@ class AgentConfigRepository:
             values["system_prompt"] = system_prompt
         if llm_enabled is not None:
             values["llm_enabled"] = llm_enabled
+        if base_url is not None:
+            values["base_url"] = base_url
 
         stmt = (
             update(AgentConfigRecord)

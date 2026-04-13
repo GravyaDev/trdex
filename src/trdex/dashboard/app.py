@@ -351,7 +351,10 @@ if all_configs:
                     key=f"llm_en_{agent}",
                 )
             with col_provider:
-                providers = ["anthropic", "openai", "google"]
+                providers = [
+                    "anthropic", "openai", "google",
+                    "groq", "together", "deepseek", "xai", "mistral", "ollama",
+                ]
                 new_provider = st.selectbox(
                     "Provider",
                     providers,
@@ -363,6 +366,12 @@ if all_configs:
                     "anthropic": ["claude-haiku-4-5-20251001", "claude-sonnet-4-6-20250514", "claude-opus-4-6-20250514"],
                     "openai": ["gpt-4o-mini", "gpt-4o"],
                     "google": ["gemini-2.0-flash", "gemini-2.0-pro"],
+                    "groq": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
+                    "together": ["meta-llama/Llama-3.3-70B-Instruct-Turbo"],
+                    "deepseek": ["deepseek-chat", "deepseek-reasoner"],
+                    "xai": ["grok-3-mini"],
+                    "mistral": ["mistral-small-latest", "mistral-large-latest"],
+                    "ollama": ["llama3.2", "qwen2.5", "mistral"],
                 }
                 model_options = models_by_provider.get(new_provider, [cfg["model_id"]])
                 current_idx = model_options.index(cfg["model_id"]) if cfg["model_id"] in model_options else 0
@@ -375,6 +384,15 @@ if all_configs:
                 new_maxtok = st.number_input("Max tokens", 64, 8192, cfg["max_tokens"], key=f"maxtok_{agent}")
             with col_topp:
                 new_topp = st.slider("Top P", 0.0, 1.0, float(cfg["top_p"]), 0.05, key=f"topp_{agent}")
+
+            # Custom base URL for OpenAI-compatible providers
+            _needs_base_url = new_provider not in ("anthropic", "openai", "google")
+            new_base_url = st.text_input(
+                "Base URL (custom endpoint, leave empty for default)",
+                value=cfg.get("base_url", ""),
+                key=f"baseurl_{agent}",
+                disabled=not _needs_base_url,
+            ) if _needs_base_url else cfg.get("base_url", "")
 
             # System prompt editor
             new_prompt = st.text_area(
@@ -397,6 +415,7 @@ if all_configs:
                         "max_tokens": new_maxtok,
                         "top_p": new_topp,
                         "system_prompt": new_prompt,
+                        "base_url": new_base_url if isinstance(new_base_url, str) else "",
                     }
                     try:
                         r = _httpx.put(

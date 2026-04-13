@@ -233,6 +233,7 @@ class AgentConfigResponse(BaseModel):
     top_p: float
     system_prompt: str
     llm_enabled: bool
+    base_url: str = ""
 
 
 class AgentConfigUpdateBody(BaseModel):
@@ -243,6 +244,7 @@ class AgentConfigUpdateBody(BaseModel):
     top_p: float | None = None
     system_prompt: str | None = None
     llm_enabled: bool | None = None
+    base_url: str | None = None
 
 
 @router.get("/config")
@@ -269,6 +271,7 @@ async def get_all_agent_configs(
             top_p=float(r.top_p),
             system_prompt=r.system_prompt,
             llm_enabled=r.llm_enabled,
+            base_url=r.base_url or "",
         )
         for r in rows
     ]
@@ -334,6 +337,7 @@ async def update_agent_config(
             top_p=body.top_p,
             system_prompt=body.system_prompt,
             llm_enabled=body.llm_enabled,
+            base_url=body.base_url,
         )
     if r is None:
         raise HTTPException(status_code=404, detail=f"No config for agent '{agent_name}'")

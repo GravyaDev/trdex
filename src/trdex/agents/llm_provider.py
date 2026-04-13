@@ -48,6 +48,20 @@ def sanitize_rag_content(text: str) -> str:
     return text
 
 
+# OpenAI-compatible providers: use ChatOpenAI with a custom base_url.
+# Most alternative providers (Groq, Together, DeepSeek, xAI/Grok, Mistral,
+# Ollama) expose an OpenAI-compatible /v1/chat/completions endpoint.
+# This avoids adding a langchain adapter dependency for each one.
+_OPENAI_COMPATIBLE_BASE_URLS: dict[str, str] = {
+    "groq": "https://api.groq.com/openai/v1",
+    "together": "https://api.together.xyz/v1",
+    "deepseek": "https://api.deepseek.com/v1",
+    "xai": "https://api.x.ai/v1",
+    "mistral": "https://api.mistral.ai/v1",
+    "ollama": "http://localhost:11434/v1",
+}
+
+
 def get_chat_model(
     provider: str,
     model_id: str,
@@ -56,10 +70,19 @@ def get_chat_model(
     max_tokens: int = 1024,
     top_p: float = 1.0,
     api_key: str = "",
+    base_url: str = "",
 ) -> BaseChatModel:
     """Return a configured ``BaseChatModel`` for the given provider.
 
-    Raises ``ValueError`` for unknown providers.
+    Supports three native providers (anthropic, openai, google) and any
+    OpenAI-compatible provider (groq, together, deepseek, xai, mistral,
+    ollama) via ``ChatOpenAI`` with a custom ``base_url``.
+
+    For OpenAI-compatible providers the base URL is looked up from
+    ``_OPENAI_COMPATIBLE_BASE_URLS`` unless ``base_url`` is passed
+    explicitly (useful for self-hosted endpoints).
+
+    Raises ``ValueError`` for unknown providers without a base URL.
     """
     match provider:
         case "anthropic":
@@ -86,6 +109,8 @@ def get_chat_model(
             }
             if api_key:
                 kwargs["api_key"] = api_key
+            if base_url:
+                kwargs["base_url"] = base_url
             return ChatOpenAI(**kwargs)
 
         case "google":
@@ -102,10 +127,31 @@ def get_chat_model(
             return ChatGoogleGenerativeAI(**kwargs)
 
         case _:
-            raise ValueError(
-                f"Unknown LLM provider {provider!r}. "
-                "Supported: 'anthropic', 'openai', 'google'."
-            )
+            # OpenAI-compatible providers
+            resolved_url = base_url or _OPENAI_COMPATIBLE_BASE_URLS.get(provider, "")
+            if not resolved_url:
+                raise ValueError(
+                    f"Unknown LLM provider {provider!r}. "
+                    f"Supported: 'anthropic', 'openai', 'google', "
+                    f"{', '.join(repr(k) for k in sorted(_OPENAI_COMPATIBLE_BASE_URLS))}. "
+                    f"Or pass base_url for a custom OpenAI-compatible endpoint."
+                )
+            from langchain_openai import ChatOpenAI
+
+            kwargs = {
+                "model": model_id,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "top_p": top_p,
+                "base_url": resolved_url,
+            }
+            if api_key:
+                kwargs["api_key"] = api_key
+            elif provider == "ollama":
+                # Ollama doesn't need an API key; ChatOpenAI requires
+                # a non-empty string, so we pass a dummy value.
+                kwargs["api_key"] = "ollama"
+            return ChatOpenAI(**kwargs)
 
 
 def get_structured_chain(
@@ -117,6 +163,7 @@ def get_structured_chain(
     max_tokens: int = 1024,
     top_p: float = 1.0,
     api_key: str = "",
+    base_url: str = "",
 ) -> Runnable:
     """Return a chain that produces structured output (Pydantic model).
 
@@ -124,6 +171,7 @@ def get_structured_chain(
     - Anthropic/OpenAI: ``llm.with_structured_output(schema)``
     - Google GenAI: ``llm.with_structured_output(schema)`` (langchain-google-genai >=2.0
       supports this natively; falls back to bind + JSON parse if needed)
+    - OpenAI-compatible (Groq, Together, etc.): same as OpenAI
 
     Agent nodes should call this, never ``with_structured_output()`` directly.
     """
@@ -134,6 +182,7 @@ def get_structured_chain(
         max_tokens=max_tokens,
         top_p=top_p,
         api_key=api_key,
+        base_url=base_url,
     )
     # langchain-google-genai >=2.0 supports with_structured_output natively.
     # If a future version breaks this, add a Google-specific path here.

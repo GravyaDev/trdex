@@ -34,6 +34,9 @@ class AgentConfigRecord(Base):
     # Prompt
     system_prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
+    # Custom endpoint for OpenAI-compatible providers (Groq, Together, etc.)
+    base_url: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
     # Feature flags
     llm_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
