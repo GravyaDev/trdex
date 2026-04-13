@@ -73,6 +73,15 @@ if [ "$TOP_COUNT" -ge 3 ]; then
 
     echo "- \`$TIMESTAMP\` | STUCK | HIGH | Repeated $TOP_CATEGORY failures detected ($TOP_COUNT in last 30 events) — tools: $SAMPLE_TOOLS — consider /unstick or step back" >> "$INCIDENT_LOG"
 
+    # Activate quality gate — real tool failures are a stronger signal
+    # than an LLM verdict. The gate is enforced by check-quality-gate.sh
+    # (PreToolUse hook) which hard-blocks dangerous operations.
+    GATE_FILE="$LOG_DIR/.quality-gate-active"
+    if [ ! -f "$GATE_FILE" ]; then
+      touch "$GATE_FILE"
+      echo "- \`$TIMESTAMP\` | STUCK | WARN | Quality gate activated — $TOP_COUNT $TOP_CATEGORY failures" >> "$INCIDENT_LOG"
+    fi
+
     # Touch marker so we don't re-alert for 10 minutes
     cat > "$STUCK_MARKER" <<EOF
 $TIMESTAMP

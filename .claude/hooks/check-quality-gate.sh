@@ -1,21 +1,38 @@
 #!/bin/bash
 # PreToolUse hook — enforces quality gate.
 #
-# When .quality-gate-active exists, the stop-hook judge has flagged
-# this session as low-quality (2+ blocks). This hook intercepts tool
-# calls to:
+# When .quality-gate-active exists, stuck-detector.sh has flagged
+# this session as having repeated tool failures (3+ of the same
+# category). This hook intercepts tool calls to:
 #   - HARD BLOCK dangerous/irreversible actions
 #   - SOFT WARN on everything else via additionalContext
 #
-# The gate clears automatically after 3 consecutive "allow" verdicts
-# (handled in log-stop-verdict.sh), or manually via /clear | /resume.
+# Auto-recovery: if the stuck marker (.stuck-detected) is older than
+# 30 minutes, the session has recovered and the gate clears itself.
+# Manual clear: /clear | /resume | session-reset.
 
 LOG_DIR="$CLAUDE_PROJECT_DIR/.claude/logs"
 GATE_FILE="$LOG_DIR/.quality-gate-active"
+STUCK_MARKER="$LOG_DIR/.stuck-detected"
 INCIDENT_LOG="$LOG_DIR/incident-log.md"
 
 # Fast path: gate not active → exit silently
 [ ! -f "$GATE_FILE" ] && exit 0
+
+# Auto-recovery: if stuck marker is >30 min old (or absent), clear gate
+if [ ! -f "$STUCK_MARKER" ]; then
+  rm -f "$GATE_FILE"
+  TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+  echo "- \`$TIMESTAMP\` | QGATE | INFO | Quality gate auto-cleared (stuck marker absent)" >> "$INCIDENT_LOG"
+  exit 0
+fi
+MARKER_AGE_SEC=$(( $(date +%s) - $(stat -c %Y "$STUCK_MARKER" 2>/dev/null || stat -f %m "$STUCK_MARKER" 2>/dev/null || echo 0) ))
+if [ "$MARKER_AGE_SEC" -gt 1800 ]; then
+  rm -f "$GATE_FILE"
+  TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+  echo "- \`$TIMESTAMP\` | QGATE | INFO | Quality gate auto-cleared after 30min without new failures" >> "$INCIDENT_LOG"
+  exit 0
+fi
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty')
@@ -68,6 +85,12 @@ GATE_WARNING="QUALITY GATE ACTIVE: The session judge has flagged recent turns as
 case "$TOOL_NAME" in
   Bash)
     COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
+
+    # Escape hatch: always allow removing gate state files themselves,
+    # otherwise the gate becomes unrecoverable without restarting the session.
+    if echo "$COMMAND" | grep -qE '\.(quality-gate-active|stuck-detected)'; then
+      exit 0
+    fi
 
     # Irreversible / shared-state git operations
     if echo "$COMMAND" | grep -qE '\bgit\s+(push|commit|reset|merge|rebase|cherry-pick|revert|tag)\b'; then
