@@ -253,6 +253,8 @@ class AgentRunner:
             fee=fee,
             source="agent",
             signal_id=state.run_id,
+            stop_loss_pct=state.risk.stop_loss_pct,
+            take_profit_pct=state.risk.take_profit_pct,
         )
 
     async def _record_close_long(self, state: AgentState) -> None:

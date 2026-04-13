@@ -109,6 +109,8 @@ class PortfolioService:
         fee: Decimal = Decimal("0"),
         source: str = "agent",
         signal_id: str | None = None,
+        stop_loss_pct: float | None = None,
+        take_profit_pct: float | None = None,
     ) -> PositionRecord | None:
         """Persist an open position after a successful fill.
 
@@ -144,8 +146,10 @@ class PortfolioService:
             source=source,
             signal_id=signal_id,
         )
-        # Persist opening fee for full round-trip P&L accounting
+        # Persist opening fee and per-position SL/TP for full round-trip accounting
         record.fee_open = float(fee)
+        record.stop_loss_pct = stop_loss_pct
+        record.take_profit_pct = take_profit_pct
         session = self._repo._session
         await session.commit()
         await session.refresh(record)

@@ -529,12 +529,25 @@ class StopLossMonitor:
             total_unrealized += unrealized
             total_cost += cost
 
-            # Compute effective thresholds for this symbol.
-            # Priority: per-symbol DB override > adaptive CV > global base.
+            # Compute effective thresholds for this position.
+            # Priority: per-position (set by Risk gate at open) > per-symbol
+            # DB override > adaptive CV > global base.
             cv = symbol_cv.get(pos.symbol, 0.0)
             override = symbol_overrides.get(pos.symbol)
-            eff_sl = override.sl_pct if (override and override.sl_pct is not None) else max(self._sl_pct, _SL_CV_MULT * cv)
-            eff_tp = override.tp_pct if (override and override.tp_pct is not None) else max(self._tp_pct, _TP_CV_MULT * cv)
+            pos_sl = getattr(pos, "stop_loss_pct", None)
+            pos_tp = getattr(pos, "take_profit_pct", None)
+            if pos_sl is not None:
+                eff_sl = pos_sl
+            elif override and override.sl_pct is not None:
+                eff_sl = override.sl_pct
+            else:
+                eff_sl = max(self._sl_pct, _SL_CV_MULT * cv)
+            if pos_tp is not None:
+                eff_tp = pos_tp
+            elif override and override.tp_pct is not None:
+                eff_tp = override.tp_pct
+            else:
+                eff_tp = max(self._tp_pct, _TP_CV_MULT * cv)
             eff_trail = override.trailing_pct if (override and override.trailing_pct is not None) else max(self._trailing_pct, _TRAIL_CV_MULT * cv)
 
             # Update trailing stop high-water mark

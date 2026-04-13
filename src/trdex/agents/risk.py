@@ -166,6 +166,23 @@ async def risk_node(state: AgentState) -> AgentState:
         logger.info("[Risk] equity=%.2f position_size=%.3f → trade_value≈%.2f",
                     portfolio.equity, position_size, trade_value)
 
+    # SL/TP: use analyst LLM suggestions when available, clipped to safe range.
+    # Fallback to defaults when LLM didn't run or didn't suggest.
+    _SL_MIN, _SL_MAX, _SL_DEFAULT = 0.01, 0.10, 0.03
+    _TP_MIN, _TP_MAX, _TP_DEFAULT = 0.02, 0.20, 0.05
+    sl_suggestion = state.analysis.suggested_stop_loss
+    tp_suggestion = state.analysis.suggested_take_profit
+    if sl_suggestion is not None:
+        final_sl = max(_SL_MIN, min(_SL_MAX, sl_suggestion))
+        logger.info("[Risk] SL from LLM: %.2f%% → clipped to %.2f%%", sl_suggestion * 100, final_sl * 100)
+    else:
+        final_sl = _SL_DEFAULT
+    if tp_suggestion is not None:
+        final_tp = max(_TP_MIN, min(_TP_MAX, tp_suggestion))
+        logger.info("[Risk] TP from LLM: %.2f%% → clipped to %.2f%%", tp_suggestion * 100, final_tp * 100)
+    else:
+        final_tp = _TP_DEFAULT
+
     # Flag trades approved above the live-mode drawdown threshold (10%).
     # These would have been blocked in live mode — useful for analysis.
     dd_warning = portfolio.drawdown_pct >= MAX_DRAWDOWN_BLOCK_LIVE
@@ -176,8 +193,8 @@ async def risk_node(state: AgentState) -> AgentState:
         approved=True,
         reason=approved_reason,
         position_size=position_size,
-        stop_loss_pct=0.03,
-        take_profit_pct=0.05,
+        stop_loss_pct=final_sl,
+        take_profit_pct=final_tp,
         drawdown_warning=dd_warning,
     )
     logger.info("[Risk] APPROVED — position_size=%.3f dd_warning=%s", position_size, dd_warning)
