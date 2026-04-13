@@ -110,6 +110,11 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""     # sk-ant-... — required for Claude models
     openai_api_key: str = ""        # sk-... — required for GPT models
     google_api_key: str = ""        # AIza... — required for Gemini models
+    groq_api_key: str = ""          # gsk_... — required for Groq (Llama/Mixtral)
+    together_api_key: str = ""      # required for Together.ai
+    deepseek_api_key: str = ""      # required for DeepSeek
+    xai_api_key: str = ""           # required for xAI (Grok)
+    mistral_api_key: str = ""       # required for Mistral
 
     # LLM cost guardrails
     llm_daily_budget: float = Field(default=20.0, description="Hard cap $/day for LLM calls")

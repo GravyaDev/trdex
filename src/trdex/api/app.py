@@ -499,6 +499,49 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         market_episode_service=episode_svc,
     )
 
+    # --- Build LLMCaller from DB configs + env var API keys ---
+    from trdex.agents.llm_caller import LLMCaller
+    from trdex.storage.agent_config_repo import AgentConfigRepository
+
+    llm_caller = None
+    try:
+        async with session_factory() as _cfg_session:
+            _cfg_repo = AgentConfigRepository(_cfg_session)
+            _agent_configs = await _cfg_repo.get_all_as_dict()
+        if _agent_configs:
+            _api_keys = {}
+            if settings.anthropic_api_key:
+                _api_keys["anthropic"] = settings.anthropic_api_key
+            if settings.openai_api_key:
+                _api_keys["openai"] = settings.openai_api_key
+            if settings.google_api_key:
+                _api_keys["google"] = settings.google_api_key
+            # OpenAI-compatible providers
+            for _prov, _key in [
+                ("groq", settings.groq_api_key),
+                ("together", settings.together_api_key),
+                ("deepseek", settings.deepseek_api_key),
+                ("xai", settings.xai_api_key),
+                ("mistral", settings.mistral_api_key),
+            ]:
+                if _key:
+                    _api_keys[_prov] = _key
+            llm_caller = LLMCaller(
+                configs=_agent_configs,
+                run_id="lifespan",
+                api_keys=_api_keys,
+                daily_budget=settings.llm_daily_budget,
+                timeout_seconds=30.0,
+            )
+            _enabled = [n for n, c in _agent_configs.items() if c.llm_enabled]
+            logger.info("[LLMCaller] built — %d configs, %d enabled (%s), %d API keys",
+                        len(_agent_configs), len(_enabled), ", ".join(_enabled) or "none",
+                        len(_api_keys))
+        else:
+            logger.info("[LLMCaller] no agent configs in DB — LLM disabled")
+    except Exception:
+        logger.exception("[LLMCaller] failed to build — agents will use deterministic fallback")
+
     # --- Agent scheduler ---
     _sched_syms_csv = config_svc.get("symbols", "agent_scheduler_symbols")
     agent_symbols = [s.strip() for s in _sched_syms_csv.split(",") if s.strip()] if _sched_syms_csv else settings.agent_scheduler_symbols_list
@@ -516,6 +559,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 _sched_interval,
                 gateway=gateway,
                 memory_loader=memory_loader,
+                llm_caller=llm_caller,
                 active_hours=_sched_hours,
             ),
             name="agent-scheduler",
