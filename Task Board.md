@@ -1,11 +1,17 @@
 # Task Board
 
-## Production status (2026-04-10 sera)
+## Production status (2026-04-12)
 
 **trdex LIVE** su `https://trdex.gravya.it` + dashboard `/dashboard/`
-Scheduler: 25 symbols (default), 5 min interval. Strategy: SMA 5/13, RSI 40/60, confidence 0.3
-Pending redeploy: aggressive strategy + 25 symbols + SL Binance-pinned fix + Runtime Config + tech debt
-Bug trovato e fixato: cross-feed price mismatch su MATIC/RNDR (phantom +40-50% gains)
+Scheduler: 25 symbols, 5 min interval. Strategy: SMA 5/13, RSI 40/60. Tests: 359/359.
+Telegram monitor: 30 canali attivi (18 signal + 12 news), streaming=true, evaluator ogni ora.
+Credentials encrypted at rest (Fernet). Kloudify v1.2.2.
+
+## Next Session
+
+- Monitorare dashboard "🟣 Telegram Signals" — confermare segnali e news dai 30 canali
+- Cercare i 58 canali mancanti (`channels_failed_lookup.md`) e aggiungerli dal dashboard
+- Manual open/close positions (backlog 🟡)
 
 ---
 
@@ -13,6 +19,12 @@ Bug trovato e fixato: cross-feed price mismatch su MATIC/RNDR (phantom +40-50% g
 
 ### 🔴 Blockers per live mode (da fare PRIMA di soldi veri)
 
+- [x] **[SEC HIGH] credentials_crypto wrong-key silent fallback** — done 2026-04-12. decrypt() now raises DecryptionError. Prevents passing ciphertext to APIs.
+- [x] **[SEC HIGH] credentials_crypto passthrough su env var malformata** — done 2026-04-12. init_cipher() raises RuntimeError when key is set but invalid.
+- [x] **[SEC MEDIUM] evaluator input validation** — done 2026-04-12. _parse_note + score_signal reject NaN/inf/negative/wildly-out-of-range targets/stops.
+- [x] **[SEC MEDIUM] rate limiter X-Forwarded-For** — done 2026-04-12. Real client IP from XFF header behind Traefik.
+- [x] **[SEC LOW] signal dedup** — done 2026-04-12. 60s window dedup in _telegram_background.
+- [x] **[SEC LOW] _persist_event failure alerting** — done 2026-04-12. CRITICAL log after 3+ consecutive DB write failures.
 - [x] **Lot size compliance** — GIA' IMPLEMENTATO: `market/specs.py` con `truncate_qty()` chiamato da Simulator + LiveExecutor, caricato al lifespan via CCXT `load_markets()`
 
 - [x] **Open-side fee tracking** — GIA' IMPLEMENTATO: `fee_open` column (migration 010), salvato in `record_open_fill()`, sottratto in `record_close_fill()` P&L
@@ -23,7 +35,7 @@ Bug trovato e fixato: cross-feed price mismatch su MATIC/RNDR (phantom +40-50% g
 
 ### 🟡 Miglioramenti Phase 2 (da fare con sistema che gira)
 
-(nessun task aperto — symbols watchlist, thresholds edit, active hours tutti implementati da Runtime Config)
+- [ ] **Manual open/close positions** — `POST /v1/portfolio/open` (symbol, side, amount) + `POST /v1/portfolio/close/{position_id}` + dashboard "Close" button per posizione. Permette intervento manuale senza aspettare l'agent loop o lo SL monitor.
 
 ### 🟠 Multi-asset expansion (Forex + crypto broadening)
 
@@ -35,7 +47,7 @@ Design approvato dal multi-agent brainstorm 2026-04-10. Decision log in
 
 **Fase 2 — Fondamenta multi-asset**
 - [ ] [idea] **AssetClassRegistry + symbol normalizer** — classify() con normalizzazione (XAUUSD→XAU/USD), config-based precedence per symbol ambigui, enum AssetClass(CRYPTO, FOREX)
-- [ ] [idea] **Migration 011: asset_class + leverage su positions** — default 'crypto'/1.0 su righe esistenti. Nessun NULL.
+- [ ] [idea] **Migration 014: asset_class + leverage su positions** — default 'crypto'/1.0 su righe esistenti. Nessun NULL. (Was numbered 011 but that slot is taken by signal_outcomes_nullable_exit.sql)
 - [ ] [idea] **RiskProfile per asset class** — dataclass con max_position_fraction, max_leverage, max_notional, max_positions. Equity separata per sizing, unificata per drawdown/kill switch.
 - [ ] [idea] **Kill switch unrealised per Forex** — estendere drawdown check per includere MTM unrealised su posizioni leveraged.
 
@@ -111,8 +123,25 @@ Aggiungere esecuzione reale dei segnali validati, con budget fisso e risk gates.
 - [x] Persistent stop-loss event log — done 2026-04-11. Migration 013 crea `stop_loss_events`, ORM + repo nuovi, `StopLossMonitor._persist_event()` scrive best-effort, `_hydrate_events_from_db()` ricarica gli ultimi 50 + counter cumulativo all'avvio. `/v1/risk/status.events_fired` ora è persistente.
 - [ ] `fill_reconciliation` table per riconciliazione local DB ↔ exchange (live mode)
 - [ ] Tier 3+4 features (kline WS stream, CoinGecko screener, hyperopt, Redis cache, Ollama LLM, Alembic auto-migration)
+- [ ] **Binance Square signals feed** — `https://www.binance.com/en/square/hashtag/signals` come terza fonte di segnali (accanto a Telegram + news API). Richiede API pubblica o RSS/Atom feed (scraping è contro ToS). Segnali da trader verificati con track record. Valutare quando disponibile.
+- [ ] **TwelveDataFeed** — feed forex/commodity OHLCV via Twelve Data API (800 req/day free, più veloce e affidabile di yfinance). API key già nel Runtime Config (`twelve_data_api_key`). Implementare come feed prioritario con yfinance come fallback.
 
 ---
+
+## Done — 2026-04-11
+
+- [x] **StaleTickerError + delisted symbol swap** (commit `bd3e8bf`) — `BinanceFeed.get_ticker()` rigetta tickers > 5 min di età, fix phantom gain +$1721 da RNDR/MATIC delisted. Symbol defaults: RNDR→RENDER, MATIC→POL.
+- [x] **Gate readiness 30→25 days** (commits `496b4d1` config.py + `9fe0b63` compose) — accorciare Phase 2 sim time dopo nuclear DB reset.
+- [x] **Nuclear DB reset produzione** — TRUNCATE positions/balance/agent_runs/signal_outcomes + re-seed balance $10k (19 righe corrotte pulite).
+- [x] **Zanni signals historical verification** — 18/20 confermati via yfinance, +$15.64 P&L simulato $10×50 leverage, win rate 94.7%. Decision: consumare segnali via Telegram monitor, NON ricostruire rule engine.
+- [x] **Telegram Step 1 observe-only** (commit `bd4fb70`) — sub-task 1.4 (observe handler + migration 011 exit_price nullable), 1.5 (dashboard expander + `/v1/signals` arricchito), 1.6 (evaluator.py score_signal + evaluator_loop schedulato ogni 3600s). 315→328 test.
+- [x] **`/v1/status` extended telegram visibility** (commit `47c0531`) — aggiunge `signals_tracked` + `evaluator_running` per verifica post-deploy.
+- [x] **Telegram numeric chat_id + discovery scripts** (commit `fbcc9e6`) — `_normalize_channels()` coerces digit strings to int per supporto canali privati. Nuovi `scripts/telegram_list_channels.py` + `scripts/telegram_join_channel.py`.
+- [x] **Security HIGH: credentials_crypto Fernet encryption** (commits `efefabb` + `d5372f9`) — runtime_config.credentials cifrati at-rest con Fernet, key da `TRDEX_CONFIG_ENCRYPTION_KEY` env var, migrate_plaintext_credentials() idempotente, compose wiring completo, 13 nuovi test.
+- [x] **Persistent stop-loss event log** (commit `ada5930`) — migration 013, ORM `StopLossEventRecord`, repository, `_hydrate_events_from_db()` + `_persist_event()` best-effort, `status.events_fired` è ora counter cumulativo persistente. 5 nuovi test. 328→334 test.
+- [x] **Kloudify upgrade v1.1.2 → v1.2.0** — install.sh upgrade, 2 nuovi hook `check-quality-gate.sh` applicati, 6 conflict file risolti (settings.json sovrascritto integralmente), backup `.claude.pre-upgrade-20260411-183957/`.
+- [x] **llm-agents merge-forward handoff** (`docs/handoff-main-to-llm-agents-2026-04-11.md`) — documenta 9 commit con aree di conflitto e step di merge per il worktree sister `trdex-llm/`.
+- [x] **`.claude/reports/` cleanup** — 6 file obsoleti rimossi (2 deep-audit ormai chiusi, brainstorm-intent-enum completato, 2 changeset runtime-config/multi-asset coordination superati, session-handoff-04-08-deploy-wip risolto), 2 mantenuti (brainstorm-multi-asset design decisions, guida-ssh runbook).
 
 ## Done — 2026-04-10
 
