@@ -150,6 +150,17 @@ _TP_RE = re.compile(
 
 
 def _parse_number(s: str) -> float:
+    """Parse a number from signal text.
+
+    Handles both comma-as-decimal (European: "1,38350" → 1.38350)
+    and comma-as-thousands (English: "4,707" → 4707).
+    Heuristic: if the comma is followed by exactly 3 digits at the
+    end, it's a thousands separator; otherwise it's a decimal point.
+    """
+    import re as _re
+    # Thousands separator: "4,707" or "48,200" — comma + exactly 3 digits
+    if _re.search(r",\d{3}$", s) or _re.search(r",\d{3},", s):
+        return float(s.replace(",", ""))
     return float(s.replace(",", "."))
 
 

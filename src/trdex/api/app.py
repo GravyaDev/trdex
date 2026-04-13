@@ -287,6 +287,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         feed_manager.register(CryptoCompareFeed(api_key=settings.cryptocompare_api_key))
     if settings.alphavantage_api_key:
         feed_manager.register(AlphaVantageFeed(api_key=settings.alphavantage_api_key))
+    # YFinance: free fallback for forex, commodities, and indices
+    # (XAU/USD, GBP/NZD, NAS100, etc.) that no other feed supports.
+    from trdex.market.feeds.yfinance import YFinanceFeed
+    feed_manager.register(YFinanceFeed())
     feed_manager.register(FreeCryptoAPIFeed(api_key=settings.freecryptoapi_key))
     ws_feed = BinanceWSFeed()
     feed_manager.register(ws_feed)
