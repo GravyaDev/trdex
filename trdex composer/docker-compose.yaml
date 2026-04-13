@@ -65,7 +65,7 @@ services:
   app:
     build: .
     ports:
-      - "${TRDEX_APP_HOST_PORT:-8500}:8000"
+      - "8502:8000"
     environment:
       # App mode
       TRDEX_MODE: '${TRDEX_MODE:-simulation}'
