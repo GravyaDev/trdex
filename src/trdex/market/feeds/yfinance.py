@@ -99,7 +99,13 @@ class YFinanceFeed(PriceFeed):
             price = t.fast_info.get("lastPrice") or t.fast_info.get("last_price", 0)
             return float(price)
 
-        price = await asyncio.get_running_loop().run_in_executor(None, _fetch)
+        try:
+            price = await asyncio.wait_for(
+                asyncio.get_running_loop().run_in_executor(None, _fetch),
+                timeout=15.0,
+            )
+        except asyncio.TimeoutError:
+            raise ValueError(f"yfinance ticker timeout for {symbol} ({ticker_id})")
         if not price or price <= 0:
             raise ValueError(f"yfinance returned no price for {symbol} ({ticker_id})")
 
@@ -127,6 +133,7 @@ class YFinanceFeed(PriceFeed):
 
         ticker_id = _to_yf_ticker(symbol)
         interval = _TIMEFRAME_MAP.get(timeframe, "5m")
+        logger.info("[yfinance] fetching OHLCV %s → %s interval=%s", symbol, ticker_id, interval)
 
         # yfinance uses 'period' (e.g. "5d") or 'start'/'end'.
         # For the evaluator we need recent data. Map limit to a
@@ -146,7 +153,16 @@ class YFinanceFeed(PriceFeed):
             return df
 
         try:
-            df = await asyncio.get_running_loop().run_in_executor(None, _fetch)
+            df = await asyncio.wait_for(
+                asyncio.get_running_loop().run_in_executor(None, _fetch),
+                timeout=30.0,  # yfinance can hang on first call in containers
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "[yfinance] TIMEOUT fetching OHLCV for %s (%s) — 30s exceeded",
+                symbol, ticker_id,
+            )
+            raise ValueError(f"yfinance timeout for {symbol} ({ticker_id})")
         except Exception as exc:
             logger.warning(
                 "[yfinance] failed to fetch OHLCV for %s (%s): %s",
