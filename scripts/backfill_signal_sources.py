@@ -34,7 +34,8 @@ async def main() -> None:
     from telethon import TelegramClient  # type: ignore[import-untyped]
 
     from trdex.config import get_settings
-    from trdex.storage.db import async_session_factory
+    from trdex.storage.db import get_session_factory
+    async_session_factory = get_session_factory()
     from trdex.storage.signal_outcome_models import SignalOutcomeRecord
     from sqlalchemy import select, update
 
