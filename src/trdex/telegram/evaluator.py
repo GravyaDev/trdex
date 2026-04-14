@@ -222,11 +222,37 @@ async def evaluate_open_signals(
                     since=since_ms,
                 )
             except Exception as exc:
-                logger.warning(
-                    "[tg-eval] feed error for %s: %s — leaving open",
-                    record.symbol, exc,
-                )
-                counters["errors"] += 1
+                age = now - executed_at
+                if age > STALE_AFTER:
+                    # Feed unavailable and signal is old enough — mark stale
+                    # with entry_price as exit (P&L zero) so the open set
+                    # doesn't accumulate indefinitely.
+                    reason_note = json.dumps({
+                        "targets": [],
+                        "stop_loss": None,
+                        "resolution": "stale",
+                        "touched_target": None,
+                        "feed_error": str(exc),
+                    })
+                    async with session_factory() as session:
+                        repo = SignalOutcomeRepository(session)
+                        await repo.close_outcome(
+                            outcome_id=record.id,
+                            exit_price=record.entry_price,
+                            closed_at=now,
+                            note=reason_note,
+                        )
+                    counters["stale"] += 1
+                    logger.warning(
+                        "[tg-eval] feed error for %s: %s — signal >24h, marked stale",
+                        record.symbol, exc,
+                    )
+                else:
+                    logger.warning(
+                        "[tg-eval] feed error for %s: %s — leaving open",
+                        record.symbol, exc,
+                    )
+                    counters["errors"] += 1
                 continue
 
             resolution = score_signal(

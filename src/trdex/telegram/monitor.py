@@ -154,7 +154,9 @@ class TelegramMonitor:
             try:
                 if not event.message.text:
                     return
-                sig = parse_signal(event.message.text, source=str(event.chat_id))
+                chat = await event.get_chat()
+                source = getattr(chat, "title", None) or getattr(chat, "username", None) or str(event.chat_id)
+                sig = parse_signal(event.message.text, source=source)
                 if sig:
                     await queue.put(sig)
                     logger.info(
@@ -180,8 +182,10 @@ class TelegramMonitor:
                 dt = event.message.date
                 if dt and dt.tzinfo is None:
                     dt = dt.replace(tzinfo=timezone.utc)
+                chat = await event.get_chat()
+                chat_name = getattr(chat, "title", None) or getattr(chat, "username", None) or str(event.chat_id)
                 msg = TelegramMessage(
-                    chat_id=str(event.chat_id),
+                    chat_id=chat_name,
                     text=event.message.text,
                     timestamp=dt or datetime.now(tz=timezone.utc),
                 )

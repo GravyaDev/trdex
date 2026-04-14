@@ -167,7 +167,7 @@ if positions_data and positions_data.get("positions"):
         if col in df.columns:
             df[col] = df[col].map(lambda x: f"{x:.8g}" if x is not None else "")
     if "amount" in df.columns:
-        df["amount"] = df["amount"].map(lambda x: f"{x:.4f}" if x is not None else "")
+        df["amount"] = df["amount"].map(lambda x: f"{x:,.2f}" if x is not None else "")
     if "unrealized_pnl" in df.columns:
         df["unrealized_pnl"] = df["unrealized_pnl"].map(lambda x: f"${x:+,.4f}" if x is not None else "")
     if "unrealized_pnl_pct" in df.columns:
