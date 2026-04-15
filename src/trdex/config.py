@@ -141,7 +141,7 @@ class Settings(BaseSettings):
     telegram_signal_budget: float = 100.0  # fixed budget per signal (quote currency)
 
     # Simulation gate criteria (Phase 5)
-    gate_min_days: int = Field(default=25, description="Minimum simulation days before live")
+    gate_min_days: int = Field(default=20, description="Minimum simulation days before live")
     gate_min_sharpe: float = Field(default=1.0, description="Minimum Sharpe ratio")
     gate_max_drawdown: float = Field(default=0.20, description="Maximum drawdown (0-1)")
     gate_min_win_rate: float = Field(default=0.40, description="Minimum win rate (0-1)")
@@ -151,9 +151,9 @@ class Settings(BaseSettings):
 
     # Stop-loss monitor (external, independent of AI agents)
     sl_check_interval: float = Field(default=30.0, description="Seconds between stop-loss checks")
-    sl_position_pct: float = Field(default=0.03, description="Per-position stop-loss (3% = close at -3%)")
-    sl_take_profit_pct: float = Field(default=0.05, description="Per-position take-profit (5%)")
-    sl_trailing_stop_pct: float = Field(default=0.02, description="Trailing stop: close if price retraces 2% from peak")
+    sl_position_pct: float = Field(default=0.02, description="Per-position stop-loss (2% = close at -2%)")
+    sl_take_profit_pct: float = Field(default=0.04, description="Per-position take-profit (4%)")
+    sl_trailing_stop_pct: float = Field(default=0.015, description="Trailing stop: close if price retraces 1.5% from peak")
     sl_daily_drawdown_pct: float = Field(default=0.10, description="Daily portfolio drawdown → kill switch")
 
     # Agent scheduler

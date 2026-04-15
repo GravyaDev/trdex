@@ -8,12 +8,14 @@ Workflow: fix su main → merge forward nel branch. Mai il contrario.
 
 ---
 
-## Production status (2026-04-10)
+## Production status (2026-04-15)
 
 **trdex LIVE** su `https://trdex.gravya.it` + dashboard `/dashboard/`
-Scheduler: 25 symbols (aggressive tuning mergiato oggi), 5 min interval
-Runtime Config: DB-backed, editable da dashboard (migration 012)
-Auth: GitHub OAuth via oauth2-proxy
+Scheduler: 10 symbols liquidi (post-tuning 2026-04-15), 5 min interval
+Strategy: SMA 9/21, RSI direzionale (>50 BUY / <50 SELL, filtri 30/70). SL 2% / TP 4% / trailing 1.5%.
+Runtime Config: DB-backed, editable da dashboard. `gate_min_days=20`.
+Telegram monitor: 30 canali (18 signal + 12 news), evaluator ogni ora.
+Auth: GitHub OAuth via oauth2-proxy.
 
 ---
 
@@ -47,6 +49,36 @@ Auth: GitHub OAuth via oauth2-proxy
   - 50 golden scenarios, LLM vs rule engine A/B, directional consistency tests
 
 - [x] **Active hours mode** — già implementato (scheduler.py `_parse_active_hours` + `_is_active_now`, config via RuntimeConfig)
+
+- [x] **Manual open/close positions** — mergiato da main 2026-04-15. `POST /v1/portfolio/open` + `POST /v1/portfolio/close/{id}` + dashboard button.
+
+### 🟣 Telegram Signal Step 2 — Auto-execute (mergiato da main, pending implementazione)
+
+- [ ] [telegram] **2.1 Symbol router** — `execution/symbol_router.py` → `(PriceFeed, ExecutionGateway)` in base a `is_forex(symbol)`.
+- [ ] [telegram] **2.2 TelegramSignalExecutor** — `execution/telegram_executor.py`: flow route → market hours → risk gates → fetch price → qty = budget/price → place order con `source="telegram"` → memorizza TP/SL in `position.note`.
+- [ ] [telegram] **2.3 TG risk gates** — budget `settings.telegram_signal_budget`, max 3 open per asset class, reliability gate (win_rate < 0.5 dopo 20 signal → skip).
+- [ ] [telegram] **2.4 SL adattato a TP/SL del segnale** — `stop_loss.py` legge TP/SL da `position.note` se `source=="telegram"`.
+- [ ] [telegram] **2.5 Wire up in lifespan** — `_telegram_background` → `telegram_executor.execute(signal, budget)`.
+- [ ] [telegram] **2.6 Dashboard TG positions panel** — positions `source='telegram'` con entry/current/TP/SL/pnl% + "close now".
+- [ ] [telegram] **2.7 Test simulation mode** — `TRDEX_MODE=simulation` + budget simbolico $10 prima di live.
+
+Go-live gate: Step 1 positivo + OandaExecutor + review manuale primi 5 segnali.
+
+### 🟠 Multi-asset (Forex + crypto) — mergiato da main, design approvato
+
+- [ ] AssetClassRegistry + symbol normalizer (XAUUSD→XAU/USD)
+- [ ] Migration 014: asset_class + leverage su `positions`
+- [ ] RiskProfile per asset class (sizing separato, drawdown unificato)
+- [ ] Kill switch unrealised per Forex leveraged
+- [ ] OandaFeed + OandaExecutor (pricing stream + market orders + SL nativo)
+- [ ] Gateway routing per asset class (Binance vs OANDA)
+- [ ] Dashboard split crypto/forex + landing unificata + Last Signals widget
+
+### ⚪ Nuovi feed (mergiati da main 2026-04-15)
+
+- [x] **YFinanceFeed** — forex/commodity/index OHLCV + price parity (commit `ffb22a7`).
+- [ ] **TwelveDataFeed** — feed forex prioritario (800 req/day free) con yfinance come fallback. API key già nel Runtime Config.
+- [ ] **Binance Square signals feed** — terza fonte segnali (dopo Telegram + news API).
 
 ---
 

@@ -79,11 +79,17 @@ def get(path: str) -> dict | None:
     return fetch(path, base_url, api_key)
 
 
-def post(path: str, *, params: dict | None = None, timeout: int = 60) -> dict | None:
+def post(path: str, *, params: dict | None = None, json_body: dict | None = None, timeout: int = 60) -> dict | None:
     """POST to the configured API base URL with the current API key."""
     headers = {"X-API-Key": api_key} if api_key else {}
     try:
-        r = httpx.post(f"{base_url}{path}", params=params, headers=headers, timeout=timeout)
+        r = httpx.post(
+            f"{base_url}{path}",
+            params=params,
+            json=json_body,
+            headers=headers,
+            timeout=timeout,
+        )
         r.raise_for_status()
         return r.json()
     except Exception as e:
@@ -158,7 +164,8 @@ st.subheader("Open Positions")
 positions_data = get("/v1/portfolio/positions")
 if positions_data and positions_data.get("positions"):
     import pandas as pd
-    df = pd.DataFrame(positions_data["positions"])
+    rows = positions_data["positions"]
+    df = pd.DataFrame(rows)
     for col in ["entry_price", "current_price", "amount", "unrealized_pnl", "unrealized_pnl_pct"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -167,14 +174,57 @@ if positions_data and positions_data.get("positions"):
         if col in df.columns:
             df[col] = df[col].map(lambda x: f"{x:.8g}" if x is not None else "")
     if "amount" in df.columns:
-        df["amount"] = df["amount"].map(lambda x: f"{x:.4f}" if x is not None else "")
+        df["amount"] = df["amount"].map(lambda x: f"{x:,.2f}" if x is not None else "")
     if "unrealized_pnl" in df.columns:
         df["unrealized_pnl"] = df["unrealized_pnl"].map(lambda x: f"${x:+,.4f}" if x is not None else "")
     if "unrealized_pnl_pct" in df.columns:
         df["unrealized_pnl_pct"] = df["unrealized_pnl_pct"].map(lambda x: f"{x:.2%}" if x is not None else "")
     st.dataframe(df, use_container_width=True)
+
+    # Per-position manual close button
+    st.caption("Manual close")
+    for row in rows:
+        pos_id = row.get("id")
+        if pos_id is None:
+            continue
+        cols = st.columns([3, 2, 2, 2])
+        cols[0].write(f"**{row['symbol']}** — {row['side']} (id={pos_id})")
+        cols[1].write(f"entry ${row['entry_price']}")
+        cols[2].write(f"pnl {row.get('unrealized_pnl_pct', '')}")
+        if cols[3].button("Close", key=f"close_{pos_id}"):
+            result = post(f"/v1/portfolio/close/{pos_id}")
+            if result:
+                st.success(
+                    f"Closed position {pos_id}: pnl={result.get('pnl')} new_balance={result.get('new_balance')}"
+                )
+                st.cache_data.clear()
+                st.rerun()
 else:
     st.info("No open positions.")
+
+with st.expander("Manual Open Position"):
+    with st.form("manual_open_form", clear_on_submit=True):
+        mo_symbol = st.text_input("Symbol (e.g. BTC/USDT)", key="mo_symbol")
+        mo_side = st.selectbox("Side", options=["BUY", "SELL"], key="mo_side")
+        mo_amount = st.text_input("Amount (USDT quote — e.g. 500)", key="mo_amount", value="500")
+        if st.form_submit_button("Open Position"):
+            try:
+                amt = float(mo_amount)
+            except ValueError:
+                st.error("Amount must be a number.")
+                amt = None
+            if amt is not None and mo_symbol:
+                result = post(
+                    "/v1/portfolio/open",
+                    json_body={"symbol": mo_symbol.upper(), "side": mo_side, "amount": str(amt)},
+                )
+                if result:
+                    st.success(
+                        f"Opened position {result.get('position_id')}: "
+                        f"{result.get('amount')} {result.get('symbol')} @ {result.get('entry_price')}"
+                    )
+                    st.cache_data.clear()
+                    st.rerun()
 
 # ── P&L history chart ─────────────────────────────────────────────────────────
 
@@ -1011,6 +1061,7 @@ with st.expander("Risk Thresholds"):
             ("sl_daily_drawdown_pct", "Daily Drawdown Limit %", "0.10"),
             ("gate_max_drawdown", "Max Drawdown Limit %", "0.20"),
             ("max_position_pct", "Max Position Size %", "0.02"),
+            ("gate_min_days", "Gate Min Simulation Days", "20"),
         ]:
             _thr_inputs[thr_key] = st.text_input(
                 label,
