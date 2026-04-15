@@ -203,9 +203,19 @@ async def evaluate_readiness(session: AsyncSession, settings) -> ReadinessReport
     kill_switch_events = 0
 
     # ---- 5. Evaluate against gate criteria ------------------------------
-    if sim_days < settings.gate_min_days:
+    # Read gate_min_days from Runtime Config if available, else fall back
+    # to the static settings value. This allows editing the gate from the
+    # dashboard without a redeploy.
+    from trdex.services.runtime_config import get_config_service
+    _cfg = get_config_service()
+    effective_min_days = (
+        _cfg.get_typed("thresholds", "gate_min_days", settings.gate_min_days)
+        if _cfg is not None else settings.gate_min_days
+    )
+
+    if sim_days < effective_min_days:
         failures.append(
-            f"Simulation days: {sim_days} < {settings.gate_min_days} required"
+            f"Simulation days: {sim_days} < {effective_min_days} required"
         )
 
     if total_trades < MIN_TRADES_FOR_EVALUATION:
@@ -245,14 +255,14 @@ async def evaluate_readiness(session: AsyncSession, settings) -> ReadinessReport
         sharpe=sharpe,
         max_drawdown_pct=max_drawdown_pct,
         kill_switch_events=kill_switch_events,
-        criteria=_criteria_dict(settings),
+        criteria=_criteria_dict(settings, effective_min_days),
         failures=failures,
     )
 
 
-def _criteria_dict(settings) -> dict:
+def _criteria_dict(settings, effective_min_days: int | None = None) -> dict:
     return {
-        "min_days": settings.gate_min_days,
+        "min_days": effective_min_days if effective_min_days is not None else settings.gate_min_days,
         "min_sharpe": settings.gate_min_sharpe,
         "max_drawdown": settings.gate_max_drawdown,
         "min_win_rate": settings.gate_min_win_rate,

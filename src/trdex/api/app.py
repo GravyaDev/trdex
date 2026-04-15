@@ -314,7 +314,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     from trdex.api.routes import portfolio as portfolio_routes
     from trdex.api.routes import agent as agent_routes
-    portfolio_routes.set_service_factory(session_factory, feed_manager)
+    portfolio_routes.set_service_factory(session_factory, feed_manager, gateway=gateway)
     agent_routes.set_agent_factory(session_factory, feed_manager, gateway=gateway)
 
     # Subscribe WS feed for existing open positions
