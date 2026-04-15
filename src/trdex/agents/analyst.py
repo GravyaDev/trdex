@@ -67,30 +67,40 @@ def _rule_based_signal(
     price: float,
     sentiment_avg: float | None,
 ) -> tuple[str, float, str]:
-    """Simple rule engine. Returns (signal, confidence, reasoning)."""
+    """Simple rule engine. Returns (signal, confidence, reasoning).
+
+    RSI logic: >50 = bullish momentum (BUY bias), <50 = bearish momentum (SELL bias).
+    Extremes (>70 / <30) act as overextension filters — skip entry in those zones.
+    SMA crossover: 9/21 on 1h candles (less noise than 5/13 on 5m).
+    """
     signals: list[tuple[str, float]] = []
     notes: list[str] = []
 
-    # RSI rule
+    # RSI rule — momentum direction, not neutral-zone gating
     if rsi is not None:
-        if rsi < 40:
-            signals.append(("BUY", 0.7))
-            notes.append(f"RSI={rsi:.1f} oversold")
-        elif rsi > 60:
-            signals.append(("SELL", 0.7))
-            notes.append(f"RSI={rsi:.1f} overbought")
+        if rsi > 70:
+            # Overextended long — skip BUY, mild SELL bias
+            signals.append(("SELL", 0.4))
+            notes.append(f"RSI={rsi:.1f} overbought/overextended")
+        elif rsi < 30:
+            # Overextended short — skip SELL, mild BUY bias
+            signals.append(("BUY", 0.4))
+            notes.append(f"RSI={rsi:.1f} oversold/overextended")
+        elif rsi >= 50:
+            signals.append(("BUY", 0.6))
+            notes.append(f"RSI={rsi:.1f} bullish momentum")
         else:
-            signals.append(("HOLD", 0.3))
-            notes.append(f"RSI={rsi:.1f} neutral")
+            signals.append(("SELL", 0.6))
+            notes.append(f"RSI={rsi:.1f} bearish momentum")
 
-    # SMA crossover rule
+    # SMA crossover rule (9/21)
     if sma_short is not None and sma_long is not None:
         if sma_short > sma_long:
             signals.append(("BUY", 0.5))
-            notes.append(f"SMA5={sma_short:.2f} > SMA13={sma_long:.2f} bullish")
+            notes.append(f"SMA9={sma_short:.2f} > SMA21={sma_long:.2f} bullish")
         else:
             signals.append(("SELL", 0.5))
-            notes.append(f"SMA5={sma_short:.2f} < SMA13={sma_long:.2f} bearish")
+            notes.append(f"SMA9={sma_short:.2f} < SMA21={sma_long:.2f} bearish")
 
     # Sentiment nudge
     if sentiment_avg is not None:
@@ -129,8 +139,8 @@ async def analyst_node(state: AgentState) -> AgentState:
     price = state.market.price
 
     rsi = rsi_from_list(closes)
-    sma_short = _compute_sma(closes, 5)
-    sma_long = _compute_sma(closes, 13)
+    sma_short = _compute_sma(closes, 9)
+    sma_long = _compute_sma(closes, 21)
 
     # Classify and persist volatility regime
     regime = _classify_volatility(closes)
@@ -160,9 +170,9 @@ async def analyst_node(state: AgentState) -> AgentState:
     if rsi is not None:
         indicators["rsi"] = rsi
     if sma_short is not None:
-        indicators["sma_5"] = sma_short
+        indicators["sma_9"] = sma_short
     if sma_long is not None:
-        indicators["sma_13"] = sma_long
+        indicators["sma_21"] = sma_long
     if sentiment_avg is not None:
         indicators["sentiment_avg"] = sentiment_avg
 
