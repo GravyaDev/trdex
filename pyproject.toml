@@ -31,11 +31,14 @@ dependencies = [
     "streamlit>=1.56.0",
     "plotly>=6.6.0",
     "slowapi>=0.1.9",
+    # Security pins (transitive)
+    "langsmith>=0.7.31",           # GHSA-rr7j-v2q5-chgv
+    "python-multipart>=0.0.26",    # CVE-2026-40347
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
+    "pytest>=9.0.3",          # CVE-2025-71176
     "pytest-asyncio>=0.23",
     "pytest-cov>=5.0",
     "ruff>=0.4",
