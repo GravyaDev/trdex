@@ -523,35 +523,72 @@ with st.expander("🟣 Telegram Signals (observe-only)"):
         report_rows = sig_data.get("report", []) or []
         recent_rows = sig_data.get("recent", []) or []
 
+        # Observe-only mode persists budget=0, so the tracker's roi_pct
+        # and total_pnl aggregates are always 0. Compute a synthetic
+        # per-signal ROI from entry/exit prices and pretend each signal
+        # was sized at SIMULATED_BUDGET — gives a comparable $ figure
+        # without opening any real position.
+        SIMULATED_BUDGET = 100.0
+
+        def _signal_roi_pct(row: dict) -> float | None:
+            entry = row.get("entry_price") or 0.0
+            exit_p = row.get("exit_price")
+            if exit_p is None or entry == 0:
+                return None
+            direction_sign = 1.0 if row.get("direction") == "BUY" else -1.0
+            return (exit_p - entry) / entry * 100.0 * direction_sign
+
+        for r in recent_rows:
+            roi = _signal_roi_pct(r)
+            r["_roi_pct"] = roi
+            r["_pnl_sim"] = (SIMULATED_BUDGET * roi / 100.0) if roi is not None else None
+
+        closed_recent = [r for r in recent_rows if r["_roi_pct"] is not None]
+        sim_pnl_total = sum((r["_pnl_sim"] or 0.0) for r in closed_recent)
+        wins_recent = sum(1 for r in closed_recent if (r["_roi_pct"] or 0) > 0)
+        winrate_recent = (wins_recent / len(closed_recent)) if closed_recent else 0.0
+
         total_signals = sum(r.get("total_signals", 0) for r in report_rows)
         total_open = sum(r.get("open_signals", 0) for r in report_rows)
         total_closed = sum(r.get("closed_signals", 0) for r in report_rows)
-        total_pnl = sum(r.get("total_pnl", 0.0) for r in report_rows)
 
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("Signals", total_signals)
         c2.metric("Open", total_open)
         c3.metric("Closed", total_closed)
-        c4.metric("Tracked P&L", f"${total_pnl:+.2f}")
+        c4.metric("Win rate", f"{winrate_recent:.1%}")
+        c5.metric("Sim P&L ($100/sig)", f"${sim_pnl_total:+.2f}")
 
-        if report_rows:
-            st.caption("Per-source reliability (closed signals only)")
+        per_source: dict[str, dict] = {}
+        for r in closed_recent:
+            src = r.get("source", "")
+            a = per_source.setdefault(src, {"closed": 0, "wins": 0, "losses": 0, "roi_sum": 0.0, "pnl_sim": 0.0})
+            roi = r["_roi_pct"] or 0.0
+            a["closed"] += 1
+            a["roi_sum"] += roi
+            a["pnl_sim"] += r["_pnl_sim"] or 0.0
+            if roi >= 0:
+                a["wins"] += 1
+            else:
+                a["losses"] += 1
+
+        if per_source:
+            st.caption(f"Per-source reliability (last {len(closed_recent)} resolved, simulated ${SIMULATED_BUDGET:.0f}/signal)")
             table_rows = []
-            for row in report_rows:
+            for src, a in sorted(per_source.items(), key=lambda kv: kv[1]["pnl_sim"], reverse=True):
+                wr = (a["wins"] / a["closed"]) if a["closed"] else 0.0
+                avg_roi = (a["roi_sum"] / a["closed"]) if a["closed"] else 0.0
                 table_rows.append({
-                    "source": row.get("source", ""),
-                    "total": row.get("total_signals", 0),
-                    "open": row.get("open_signals", 0),
-                    "closed": row.get("closed_signals", 0),
-                    "wins": row.get("wins", 0),
-                    "losses": row.get("losses", 0),
-                    "win_rate": f"{row.get('win_rate', 0.0) * 100:.1f}%",
-                    "roi_pct": f"{row.get('roi_pct', 0.0):+.2f}%",
-                    "pnl": f"${row.get('total_pnl', 0.0):+.2f}",
+                    "source": src,
+                    "closed": a["closed"],
+                    "wins": a["wins"],
+                    "losses": a["losses"],
+                    "win_rate": f"{wr * 100:.1f}%",
+                    "avg_roi": f"{avg_roi:+.2f}%",
+                    "sim_pnl": f"${a['pnl_sim']:+.2f}",
                 })
             st.dataframe(table_rows, hide_index=True, use_container_width=True)
         else:
-            # Check if the monitor is actually streaming
             status_data = get("/v1/status")
             tg_streaming = (
                 status_data.get("telegram", {}).get("streaming", False)
@@ -559,8 +596,8 @@ with st.expander("🟣 Telegram Signals (observe-only)"):
             )
             if tg_streaming:
                 st.info(
-                    "Monitor is active and listening. No signals parsed yet "
-                    "— waiting for channels to publish new trading signals."
+                    "Monitor is active. No resolved signals yet — "
+                    "waiting for evaluator to close TP/SL/stale."
                 )
             else:
                 st.info(
@@ -577,6 +614,10 @@ with st.expander("🟣 Telegram Signals (observe-only)"):
                 entry = row.get("entry_price", 0.0)
                 exit_p = row.get("exit_price")
                 exit_str = f"{exit_p:.5g}" if exit_p is not None else "—"
+                roi = row.get("_roi_pct")
+                roi_str = f"{roi:+.2f}%" if roi is not None else "—"
+                pnl_sim = row.get("_pnl_sim")
+                pnl_sim_str = f"${pnl_sim:+.2f}" if pnl_sim is not None else "—"
                 recent_table.append({
                     "when": (row.get("executed_at") or "")[:19].replace("T", " "),
                     "source": row.get("source", ""),
@@ -584,12 +625,15 @@ with st.expander("🟣 Telegram Signals (observe-only)"):
                     "dir": row.get("direction", ""),
                     "entry": f"{entry:.5g}",
                     "exit": exit_str,
+                    "roi%": roi_str,
+                    "sim_pnl": pnl_sim_str,
                     "status": row.get("status", "open"),
                 })
             st.dataframe(recent_table, hide_index=True, use_container_width=True)
 
         st.caption(
             "Observe-only mode: signals are recorded with no capital at risk. "
+            f"Simulated P&L assumes ${SIMULATED_BUDGET:.0f} per signal. "
             "Post-hoc TP/SL evaluation runs hourly and updates status to "
             "`tp` / `sl` / `stale` once the window resolves."
         )
