@@ -62,6 +62,24 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str, type]] = {
     ("telegram", "telegram_channel_titles"): (None, str),  # JSON map {chat_id: title}
     # Feeds
     ("feeds", "selected_feeds"): (None, str),  # No env var equivalent
+    # Integration toggles — each one enables/disables a component at
+    # boot independently of whether its API key is set. Changing any
+    # toggle requires a container restart (no hot-reload yet: feed
+    # manager and news scheduler do not implement unregister()).
+    ("integrations", "binance_feed_enabled"): (None, bool),
+    ("integrations", "binance_ws_feed_enabled"): (None, bool),
+    ("integrations", "coingecko_feed_enabled"): (None, bool),
+    ("integrations", "cryptocompare_feed_enabled"): (None, bool),
+    ("integrations", "alphavantage_feed_enabled"): (None, bool),
+    ("integrations", "twelvedata_feed_enabled"): (None, bool),
+    ("integrations", "yfinance_feed_enabled"): (None, bool),
+    ("integrations", "freecryptoapi_feed_enabled"): (None, bool),
+    ("integrations", "forex_feed_enabled"): (None, bool),
+    ("integrations", "cryptocompare_news_enabled"): (None, bool),
+    ("integrations", "stockdata_news_enabled"): (None, bool),
+    ("integrations", "perplexity_news_enabled"): (None, bool),
+    ("integrations", "telegram_monitor_enabled"): (None, bool),
+    ("integrations", "qdrant_embeddings_enabled"): (None, bool),
 }
 
 CREDENTIAL_KEYS = {k for (cat, k), _ in _KEY_REGISTRY.items() if cat == "credentials"}
@@ -191,6 +209,61 @@ class RuntimeConfigService:
                 seeded += 1
         if seeded:
             logger.info("[RuntimeConfig] seeded %d keys from env vars", seeded)
+
+    async def seed_integration_defaults(self, settings) -> None:
+        """First-boot defaults for the ``integrations`` category.
+
+        Rule: a component is enabled by default if it works without a
+        per-component API key OR if its key is already configured. A
+        component that requires a key and has none starts disabled —
+        the operator flips the toggle after pasting the key.
+
+        Only writes keys that do not yet exist in the DB (idempotent).
+        On upgrades of existing deployments this preserves the current
+        behaviour (every component that was effectively active now has
+        its flag explicitly set to true).
+        """
+        from trdex.storage.runtime_config_repo import RuntimeConfigRepository
+
+        cc_key = bool(settings.cryptocompare_api_key or self.get("credentials", "cryptocompare_api_key"))
+        sd_key = bool(settings.stockdata_api_key or self.get("credentials", "stockdata_api_key"))
+        px_key = bool(settings.perplexity_api_key or self.get("credentials", "perplexity_api_key"))
+        av_key = bool(settings.alphavantage_api_key)
+        td_key = bool(self.get("credentials", "twelve_data_api_key"))
+        fc_key = bool(settings.freecryptoapi_key)
+        fx_key = bool(settings.forex_api_key or self.get("credentials", "forex_api_key"))
+        tg_cfg = bool(settings.telegram_api_id)
+        jn_key = bool(settings.jina_api_key)
+
+        defaults: dict[str, bool] = {
+            "binance_feed_enabled": True,         # public endpoints, no key
+            "binance_ws_feed_enabled": True,      # public WS
+            "coingecko_feed_enabled": True,       # public endpoints, key optional
+            "yfinance_feed_enabled": True,        # free, no key
+            "cryptocompare_feed_enabled": cc_key,
+            "alphavantage_feed_enabled": av_key,
+            "twelvedata_feed_enabled": td_key,
+            "freecryptoapi_feed_enabled": fc_key,
+            "forex_feed_enabled": fx_key,
+            "cryptocompare_news_enabled": cc_key,
+            "stockdata_news_enabled": sd_key,
+            "perplexity_news_enabled": px_key,
+            "telegram_monitor_enabled": tg_cfg,
+            "qdrant_embeddings_enabled": jn_key,
+        }
+
+        seeded = 0
+        async with self._sf() as session:
+            repo = RuntimeConfigRepository(session)
+            for key, value in defaults.items():
+                if self._cache.get("integrations", {}).get(key) is not None:
+                    continue
+                stored = "true" if value else "false"
+                await repo.put("integrations", key, stored)
+                self._cache.setdefault("integrations", {})[key] = stored
+                seeded += 1
+        if seeded:
+            logger.info("[RuntimeConfig] seeded %d integration toggles", seeded)
 
     # ── reads (instant, from cache) ──────────────────────────────────────
 

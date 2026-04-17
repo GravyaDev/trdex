@@ -725,6 +725,96 @@ with st.expander("📡 Telegram Channels"):
         "The parser auto-classifies each channel as signal source or news context."
     )
 
+# ── Integrations (enable/disable components) ──────────────────────────────
+
+_INTEGRATIONS_SPEC = [
+    # (key, label, credential_key or None, group)
+    ("binance_feed", "Binance feed (spot OHLCV + ticker)", None, "Feeds"),
+    ("binance_ws_feed", "Binance WebSocket (real-time ticker)", None, "Feeds"),
+    ("coingecko_feed", "CoinGecko feed", "coingecko_api_key", "Feeds"),
+    ("cryptocompare_feed", "CryptoCompare feed", "cryptocompare_api_key", "Feeds"),
+    ("alphavantage_feed", "AlphaVantage feed (FX, equity)", "alphavantage_api_key", "Feeds"),
+    ("twelvedata_feed", "Twelve Data feed (FX, commodity)", "twelve_data_api_key", "Feeds"),
+    ("yfinance_feed", "Yahoo Finance feed (fallback)", None, "Feeds"),
+    ("freecryptoapi_feed", "FreeCryptoAPI feed", "freecryptoapi_key", "Feeds"),
+    ("forex_feed", "Forex feed (exchangerate-api)", "forex_api_key", "Feeds"),
+    ("cryptocompare_news", "CryptoCompare news ingestion", "cryptocompare_api_key", "News"),
+    ("stockdata_news", "StockData news ingestion", "stockdata_api_key", "News"),
+    ("perplexity_news", "Perplexity news ingestion", "perplexity_api_key", "News"),
+    ("telegram_monitor", "Telegram signal/news monitor", None, "Other"),
+    ("qdrant_embeddings", "Qdrant embeddings (context vector store)", "jina_api_key", "Other"),
+]
+
+with st.expander("🔌 Integrations"):
+    st.caption(
+        "Enable or disable each component independently of whether its API "
+        "key is configured. **Changes require a container restart** (no hot-reload yet)."
+    )
+
+    ig_settings = get("/v1/settings/integrations")
+    ig_values: dict[str, str] = {}
+    if ig_settings:
+        ig_values = ig_settings.get("values", {}) or {}
+
+    cred_settings = get("/v1/settings/credentials")
+    cred_values: dict[str, str] = {}
+    if cred_settings:
+        cred_values = cred_settings.get("values", {}) or {}
+
+    def _has_key(cred_key: str | None) -> bool:
+        if cred_key is None:
+            return True
+        v = cred_values.get(cred_key, "")
+        return bool(v and v != "***")
+
+    groups: dict[str, list[tuple[str, str, str | None]]] = {}
+    for key, label, cred_key, group in _INTEGRATIONS_SPEC:
+        groups.setdefault(group, []).append((key, label, cred_key))
+
+    pending_updates: dict[str, str] = {}
+    for group, items in groups.items():
+        st.markdown(f"**{group}**")
+        for key, label, cred_key in items:
+            flag_key = f"{key}_enabled"
+            current = ig_values.get(flag_key, "").strip().lower() in ("true", "1", "yes", "on")
+            key_ok = _has_key(cred_key)
+            help_text = (
+                "No API key required" if cred_key is None
+                else (f"API key `{cred_key}` OK" if key_ok else f"Missing API key `{cred_key}` — set it under Runtime Config → Credentials first")
+            )
+            new_val = st.checkbox(
+                f"{label}" + ("" if key_ok else "  ⚠️"),
+                value=current,
+                key=f"ig_toggle_{flag_key}",
+                help=help_text,
+                disabled=not key_ok and not current,
+            )
+            if new_val != current:
+                pending_updates[flag_key] = "true" if new_val else "false"
+
+    if pending_updates:
+        if st.button(f"Apply {len(pending_updates)} change(s)", key="ig_apply"):
+            import httpx as _httpx
+            headers = {"X-API-Key": api_key} if api_key else {}
+            try:
+                _httpx.put(
+                    f"{base_url}/v1/settings/integrations",
+                    json={"values": pending_updates},
+                    headers=headers,
+                    timeout=10,
+                )
+                st.success(f"Updated {len(pending_updates)} flag(s). Restart the app container for changes to take effect.")
+                st.cache_data.clear()
+                st.rerun()
+            except Exception as e:
+                st.error(str(e))
+
+    st.caption(
+        "⚠️ Components marked with a warning have no API key configured — "
+        "their toggle is locked off. Add the key under Runtime Config → Credentials, "
+        "then refresh this page to enable the toggle."
+    )
+
 # ── Scheduler Symbol Watchlist ──────────────────────────────────────────────
 
 with st.expander("📋 Scheduler Symbols"):

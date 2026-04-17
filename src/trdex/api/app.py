@@ -44,6 +44,10 @@ _agent_task: asyncio.Task[None] | None = None
 
 async def _ingest_signal_to_qdrant(signal) -> None:
     """Embed a Telegram signal as context document and store in Qdrant."""
+    from trdex.services.runtime_config import get_config_service
+    _svc = get_config_service()
+    if _svc is not None and not _svc.get_typed("integrations", "qdrant_embeddings_enabled", True):
+        return
     try:
         from trdex.context.ingestion import ContextIngestionPipeline
         from trdex.context.vector_store import ContextDocument
@@ -71,6 +75,10 @@ async def _ingest_signal_to_qdrant(signal) -> None:
 
 async def _ingest_news_to_qdrant(chat_id: str, text: str, timestamp) -> None:
     """Ingest a non-signal Telegram message as news context into Qdrant."""
+    from trdex.services.runtime_config import get_config_service
+    _svc = get_config_service()
+    if _svc is not None and not _svc.get_typed("integrations", "qdrant_embeddings_enabled", True):
+        return
     try:
         from trdex.context.ingestion import ContextIngestionPipeline
         from trdex.context.vector_store import ContextDocument
@@ -253,6 +261,16 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # --- Runtime config: seed from env, then DB is source of truth ---
     from trdex.services.runtime_config import init_config_service, get_config_service
     config_svc = await init_config_service(session_factory, settings)
+    # Seed the integration toggles on first boot (idempotent).
+    # Default: components without API-key requirement → true;
+    # components with API-key requirement → true iff a key is present.
+    await config_svc.seed_integration_defaults(settings)
+
+    def _enabled(component: str) -> bool:
+        """Read an integration toggle. Defaults to True on a fresh DB
+        (seed above has already run) so this is purely cosmetic; but
+        kept defensive in case the seed was skipped for some reason."""
+        return config_svc.get_typed("integrations", f"{component}_enabled", True)
 
     # --- Security checks ---
     if not settings.api_key:
@@ -278,32 +296,36 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await _tracker.load_from_db(session_factory)
 
     # --- Price feed manager ---
+    # Each feed is gated by an integration toggle from Runtime Config.
+    # A feed that requires an API key needs BOTH the toggle on AND the
+    # key present; key-less feeds only need the toggle.
     feed_manager = PriceFeedManager()
-    feed_manager.register(BinanceFeed())
-    feed_manager.register(CoinGeckoFeed(api_key=settings.coingecko_api_key))
-    if settings.forex_api_key:
+    if _enabled("binance_feed"):
+        feed_manager.register(BinanceFeed())
+    if _enabled("coingecko_feed"):
+        feed_manager.register(CoinGeckoFeed(api_key=settings.coingecko_api_key))
+    if _enabled("forex_feed") and settings.forex_api_key:
         feed_manager.register(ForexFeed(api_key=settings.forex_api_key))
-    if settings.cryptocompare_api_key:
+    if _enabled("cryptocompare_feed") and settings.cryptocompare_api_key:
         feed_manager.register(CryptoCompareFeed(api_key=settings.cryptocompare_api_key))
-    if settings.alphavantage_api_key:
+    if _enabled("alphavantage_feed") and settings.alphavantage_api_key:
         feed_manager.register(AlphaVantageFeed(api_key=settings.alphavantage_api_key))
-    # TwelveData: primary Forex/commodity feed when an API key is present.
-    # Free tier 800 req/day, native symbol format (XAU/USD, EUR/USD, ...).
-    # Key lives in Runtime Config (credentials.twelve_data_api_key), editable
-    # from the dashboard — read from there rather than settings so the
-    # dashboard hot-swap works on next restart.
+    # TwelveData: primary Forex/commodity feed. Key lives in Runtime
+    # Config (credentials.twelve_data_api_key), dashboard-editable.
     twelve_data_key = config_svc.get("credentials", "twelve_data_api_key", "")
-    if twelve_data_key:
+    if _enabled("twelvedata_feed") and twelve_data_key:
         from trdex.market.feeds.twelvedata import TwelveDataFeed
         feed_manager.register(TwelveDataFeed(api_key=twelve_data_key))
-    # YFinance: free fallback for forex, commodities, and indices
-    # (XAU/USD, GBP/NZD, NAS100, etc.) — used when TwelveData is not
-    # configured or rate-limited.
-    from trdex.market.feeds.yfinance import YFinanceFeed
-    feed_manager.register(YFinanceFeed())
-    feed_manager.register(FreeCryptoAPIFeed(api_key=settings.freecryptoapi_key))
-    ws_feed = BinanceWSFeed()
-    feed_manager.register(ws_feed)
+    # YFinance: free fallback for forex, commodities, and indices.
+    if _enabled("yfinance_feed"):
+        from trdex.market.feeds.yfinance import YFinanceFeed
+        feed_manager.register(YFinanceFeed())
+    if _enabled("freecryptoapi_feed") and settings.freecryptoapi_key:
+        feed_manager.register(FreeCryptoAPIFeed(api_key=settings.freecryptoapi_key))
+    ws_feed = None
+    if _enabled("binance_ws_feed"):
+        ws_feed = BinanceWSFeed()
+        feed_manager.register(ws_feed)
 
     # --- Load market specs (lot size, precision, min notional) ---
     # Must run after BinanceFeed is registered. Uses the underlying CCXT
@@ -327,14 +349,17 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     portfolio_routes.set_service_factory(session_factory, feed_manager, gateway=gateway)
     agent_routes.set_agent_factory(session_factory, feed_manager, gateway=gateway)
 
-    # Subscribe WS feed for existing open positions
-    async with session_factory() as _session:
-        from trdex.storage.portfolio_repo import PortfolioRepository
-        _repo = PortfolioRepository(_session)
-        _open = await _repo.get_open_positions()
-        for _sym in {p.symbol for p in _open}:
-            await ws_feed.subscribe_ticker(_sym)
-            logger.info("[ws] subscribed %s", _sym)
+    # Subscribe WS feed for existing open positions (only when the WS
+    # feed is enabled — otherwise we skip pre-subscription and fall back
+    # to REST polling via BinanceFeed).
+    if ws_feed is not None:
+        async with session_factory() as _session:
+            from trdex.storage.portfolio_repo import PortfolioRepository
+            _repo = PortfolioRepository(_session)
+            _open = await _repo.get_open_positions()
+            for _sym in {p.symbol for p in _open}:
+                await ws_feed.subscribe_ticker(_sym)
+                logger.info("[ws] subscribed %s", _sym)
 
     # --- Telegram streaming ---
     # Wrapped in try/except so a failing Telethon login (e.g. missing
@@ -347,7 +372,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _tg_channels_csv = config_svc.get("telegram", "telegram_channels") or settings.telegram_channels
     channels = [c.strip() for c in _tg_channels_csv.split(",") if c.strip()] if _tg_channels_csv else []
     monitor = None
-    if channels and settings.telegram_api_id:
+    if _enabled("telegram_monitor") and channels and settings.telegram_api_id:
         try:
             monitor = TelegramMonitor(
                 api_id=settings.telegram_api_id,
@@ -394,11 +419,11 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _ing_syms_csv = config_svc.get("symbols", "ingestion_symbols")
     _ing_syms = [s.strip() for s in _ing_syms_csv.split(",") if s.strip()] if _ing_syms_csv else []
     _scheduler = IngestionScheduler(interval_seconds=config_svc.get_typed("scheduler", "ingestion_interval", settings.ingestion_interval))
-    if _cc_key:
+    if _enabled("cryptocompare_news") and _cc_key:
         _scheduler.register(CryptoCompareNewsSource(api_key=_cc_key))
-    if _sd_key:
+    if _enabled("stockdata_news") and _sd_key:
         _scheduler.register(StockDataNewsSource(api_key=_sd_key))
-    if _px_key:
+    if _enabled("perplexity_news") and _px_key:
         from trdex.context.news_sources.perplexity import PerplexityNewsSource
         _scheduler.register(PerplexityNewsSource(api_key=_px_key))
     _scheduler.set_symbols(_ing_syms)
