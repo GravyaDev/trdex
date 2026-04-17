@@ -256,3 +256,43 @@ class TelegramMonitor:
             "[TelegramMonitor] channels hot-reloaded — now %d channels",
             len(normalized),
         )
+
+    async def resolve_titles(self, channels: list[str]) -> dict[str, str]:
+        """Resolve each channel identifier (chat_id or @username) to its title.
+
+        Calls Telethon `get_entity()` once per channel. Failures are logged
+        and the entry is skipped — partial maps are fine. The caller can
+        persist the result (e.g., into Runtime Config) so the dashboard
+        can display human-readable names alongside raw chat_ids.
+
+        Returns a dict `{original_token: title}` keyed by the input string
+        (not a normalized form) so the dashboard can look up by whatever
+        the user pasted in the CSV.
+        """
+        if not self._running:
+            raise RuntimeError("TelegramMonitor is not running — call start() first.")
+        titles: dict[str, str] = {}
+        for token in channels:
+            token = token.strip()
+            if not token:
+                continue
+            lookup = int(token) if token.lstrip("-").isdigit() else token
+            try:
+                entity = await self._client.get_entity(lookup)
+            except Exception as exc:
+                logger.warning(
+                    "[TelegramMonitor] could not resolve %r: %s", token, exc,
+                )
+                continue
+            title = (
+                getattr(entity, "title", None)
+                or getattr(entity, "first_name", None)
+                or getattr(entity, "username", None)
+                or str(lookup)
+            )
+            titles[token] = title
+        logger.info(
+            "[TelegramMonitor] resolved %d/%d channel titles",
+            len(titles), len(channels),
+        )
+        return titles

@@ -460,6 +460,23 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             set_selected_feeds(feed_list or [])
             logger.info("[hot-reload] selected feeds → %s", feed_list or "ALL")
 
+    async def _resolve_and_store_titles(ch_list: list[str]) -> None:
+        """Resolve each channel id/username to a human title and persist the
+        map into runtime_config `telegram_channel_titles` (JSON). Best-effort
+        — failures are logged but do not block the monitor hot-swap."""
+        import json as _json
+        try:
+            titles = await monitor.resolve_titles(ch_list)
+            await config_svc.put(
+                "telegram", "telegram_channel_titles", _json.dumps(titles),
+            )
+            logger.info(
+                "[hot-reload] telegram channel titles resolved — %d/%d",
+                len(titles), len(ch_list),
+            )
+        except Exception:
+            logger.exception("[hot-reload] failed to resolve telegram channel titles")
+
     def _on_telegram_change(key: str, value: str) -> None:
         if key == "telegram_channels" and monitor:
             ch_list = [c.strip() for c in value.split(",") if c.strip()]
@@ -467,6 +484,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             try:
                 loop = _aio.get_running_loop()
                 loop.create_task(monitor.update_channels(ch_list))
+                loop.create_task(_resolve_and_store_titles(ch_list))
                 logger.info("[hot-reload] telegram channels → %d channels", len(ch_list))
             except RuntimeError:
                 logger.warning("[hot-reload] no running loop for telegram update")

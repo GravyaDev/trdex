@@ -645,17 +645,40 @@ with st.expander("🟣 Telegram Signals (observe-only)"):
 with st.expander("📡 Telegram Channels"):
     tg_settings = get("/v1/settings/telegram")
     tg_channels_csv = ""
+    tg_titles_json = ""
     if tg_settings:
         tg_channels_csv = tg_settings.get("values", {}).get("telegram_channels", "")
+        tg_titles_json = tg_settings.get("values", {}).get("telegram_channel_titles", "")
     tg_channels = [c.strip() for c in tg_channels_csv.split(",") if c.strip()] if tg_channels_csv else []
 
-    st.caption(f"{len(tg_channels)} channels monitored (signals + news auto-classified)")
+    # Resolve chat_id → human title. The backend persists this map on
+    # every save of telegram_channels (see api/app.py _resolve_and_store_titles).
+    tg_titles: dict[str, str] = {}
+    if tg_titles_json:
+        try:
+            import json as _json
+            tg_titles = _json.loads(tg_titles_json) or {}
+        except (ValueError, TypeError):
+            tg_titles = {}
+
+    resolved = sum(1 for ch in tg_channels if ch in tg_titles)
+    st.caption(
+        f"{len(tg_channels)} channels monitored ({resolved} with resolved name; "
+        "signals + news auto-classified)"
+    )
 
     if tg_channels:
         cols = st.columns(min(len(tg_channels), 4))
         for i, ch in enumerate(tg_channels):
             with cols[i % len(cols)]:
-                if st.button(f"X {ch}", key=f"rm_tg_{ch}"):
+                label = tg_titles.get(ch, ch)
+                if label != ch:
+                    # Truncate long titles so 4-col grid stays readable
+                    display_label = label if len(label) <= 22 else label[:20] + "…"
+                    btn_text = f"X {display_label}"
+                else:
+                    btn_text = f"X {ch}"
+                if st.button(btn_text, key=f"rm_tg_{ch}", help=ch if label != ch else None):
                     new_list = [c for c in tg_channels if c != ch]
                     import httpx as _httpx
                     headers = {"X-API-Key": api_key} if api_key else {}

@@ -59,6 +59,7 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str, type]] = {
     # Telegram
     ("telegram", "telegram_channels"): ("telegram_channels", str),
     ("telegram", "telegram_enabled"): (None, bool),
+    ("telegram", "telegram_channel_titles"): (None, str),  # JSON map {chat_id: title}
     # Feeds
     ("feeds", "selected_feeds"): (None, str),  # No env var equivalent
 }
