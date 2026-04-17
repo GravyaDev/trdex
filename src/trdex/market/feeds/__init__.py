@@ -7,6 +7,7 @@ from trdex.market.feeds.coingecko import CoinGeckoFeed
 from trdex.market.feeds.cryptocompare import CryptoCompareFeed
 from trdex.market.feeds.forex import ForexFeed
 from trdex.market.feeds.freecryptoapi import FreeCryptoAPIFeed
+from trdex.market.feeds.twelvedata import TwelveDataFeed
 
 __all__ = [
     "AlphaVantageFeed",
@@ -16,4 +17,5 @@ __all__ = [
     "CryptoCompareFeed",
     "ForexFeed",
     "FreeCryptoAPIFeed",
+    "TwelveDataFeed",
 ]

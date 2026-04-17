@@ -28,6 +28,34 @@ gh api repos/GravyaDev/<REPO>/hooks
 
 ---
 
+## Section 1.5 — ⚠️ CRITICAL: Source type change recreates the app
+
+**Read this before touching any existing Coolify application.**
+
+In Coolify 4.0-beta, **changing an application's Source type** (e.g., from "Public Repository" to "GitHub App") is **NOT an in-place operation**. What actually happens:
+
+- Coolify **creates a new application** with a new UUID (e.g. `e5tqc26v...`)
+- The new application gets **new volumes** — `<new-uuid>_pgdata`, `<new-uuid>_redis`, `<new-uuid>_qdrant`, etc.
+- The old application's volumes (`<old-uuid>_pgdata`, ...) become **orphan** — they still exist on disk but no container mounts them
+- The new app starts with an **empty database, empty Redis, empty Qdrant collections** — zero data
+
+This wipes all application state that lived in volumes: trading positions, balance ledger, signal outcomes, persistent stop-loss events, vector embeddings, Telethon session files, etc. Environment variables are **not** automatically copied either — you have to re-enter them in the new app's UI.
+
+**Before changing Source type, decide one of**:
+
+1. **Accept the data wipe** — only valid if the persistent state is truly disposable (dev environment, freshly reset DB, staging app with no production data).
+2. **Plan the migration upfront**:
+   - Dump each volume's data: `pg_dump` for Postgres, `redis-cli --rdb` for Redis, Qdrant snapshot API for vector DB, rsync for file volumes.
+   - Switch Source → wait for new app to deploy → restore into the new volumes.
+   - Alternatively: stop new containers → `docker run --rm -v <old_vol>:/src -v <new_vol>:/dst alpine cp -av /src/. /dst/` for each volume → restart.
+3. **Skip the Source switch entirely** and register the webhook manually on the existing app — GitHub repo → Settings → Webhooks → add webhook pointing to Coolify's deploy URL for that app. Preserves volumes, avoids the whole problem. Trade-off: one manual step per repo, not universal.
+
+**When this matters most**: production apps with live data. The wipe is usually silent — the new app comes up healthy, but every dashboard metric is 0. Users discover it only when they look.
+
+**History**: on 2026-04-17 this happened on trdex production. The GitHub App was installed correctly, but clicking "switch source to GitHub App" on the existing `w35035...` trdex app silently created a new `e5tqc26v...` app and left the old pgdata/redis/qdrant volumes orphaned. 24h of trading data were disposable so the wipe was accepted, but had the same been done on the gravya-platform production DB the loss would have been unrecoverable.
+
+---
+
 ## Section 2 — Install Coolify GitHub App (one-time, org-wide)
 
 This is the **universal** step. Do it once per GitHub org (`GravyaDev`), not per repo. It requires UI access to Coolify and GitHub — an LLM agent cannot do it alone, brief the human operator to do it.
@@ -43,9 +71,11 @@ This is the **universal** step. Do it once per GitHub org (`GravyaDev`), not per
 
 **Reconnect existing app to the new Source** (only if the app was previously on "Public Repository"):
 
+> ⚠️ **STOP**: before proceeding, re-read **Section 1.5**. Changing an existing app's Source type in Coolify 4.0-beta **creates a new application with empty volumes** (DB wipe). If the app has any data you cannot afford to lose, plan the migration first — or skip to the manual webhook registration in Section 4 instead.
+
 5. In Coolify → your application (e.g. `trdex`) → **Configuration** → **Source**.
 6. Change the source from **Public Repository** to the new **GitHub App** source you just installed. Save.
-7. Coolify now creates the webhook on GitHub automatically. No manual webhook creation needed.
+7. Coolify will now spin up a new application with a new UUID. The webhook is created on GitHub automatically, but all volumes are fresh. Re-enter env vars, then migrate data (or accept the wipe) per Section 1.5.
 
 ---
 

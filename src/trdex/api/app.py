@@ -287,8 +287,18 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         feed_manager.register(CryptoCompareFeed(api_key=settings.cryptocompare_api_key))
     if settings.alphavantage_api_key:
         feed_manager.register(AlphaVantageFeed(api_key=settings.alphavantage_api_key))
+    # TwelveData: primary Forex/commodity feed when an API key is present.
+    # Free tier 800 req/day, native symbol format (XAU/USD, EUR/USD, ...).
+    # Key lives in Runtime Config (credentials.twelve_data_api_key), editable
+    # from the dashboard — read from there rather than settings so the
+    # dashboard hot-swap works on next restart.
+    twelve_data_key = config_svc.get("credentials", "twelve_data_api_key", "")
+    if twelve_data_key:
+        from trdex.market.feeds.twelvedata import TwelveDataFeed
+        feed_manager.register(TwelveDataFeed(api_key=twelve_data_key))
     # YFinance: free fallback for forex, commodities, and indices
-    # (XAU/USD, GBP/NZD, NAS100, etc.) that no other feed supports.
+    # (XAU/USD, GBP/NZD, NAS100, etc.) — used when TwelveData is not
+    # configured or rate-limited.
     from trdex.market.feeds.yfinance import YFinanceFeed
     feed_manager.register(YFinanceFeed())
     feed_manager.register(FreeCryptoAPIFeed(api_key=settings.freecryptoapi_key))
