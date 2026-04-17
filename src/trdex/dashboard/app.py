@@ -246,21 +246,6 @@ if history_data and history_data.get("history"):
 else:
     st.info("No closed trades yet — P&L history will appear here.")
 
-# ── Signal tracker ────────────────────────────────────────────────────────────
-
-st.header("Telegram Signal Tracker")
-signals_data = get("/v1/signals")
-if signals_data and signals_data.get("report"):
-    import pandas as pd
-    df_sig = pd.DataFrame(signals_data["report"])
-    if not df_sig.empty:
-        df_sig = df_sig.sort_values("roi_pct", ascending=False)
-        st.dataframe(df_sig, use_container_width=True)
-    else:
-        st.info("No signals tracked yet.")
-else:
-    st.info("No signals tracked yet.")
-
 # ── P&L by source ────────────────────────────────────────────────────────────
 
 st.subheader("Realized P&L by Source")
