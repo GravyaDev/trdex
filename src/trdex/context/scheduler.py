@@ -48,6 +48,26 @@ class IngestionScheduler:
         self._sources.append(source)
         logger.info("[scheduler] registered source: %s", source.name)
 
+    def unregister(self, name: str) -> bool:
+        """Remove a news source by name. Returns True if found and removed, False otherwise.
+
+        Schedules source.close() as a background task when a running loop is available.
+        Safe to call from synchronous context (e.g. dashboard toggle handler).
+        """
+        for source in self._sources:
+            if source.name == name:
+                self._sources.remove(source)
+                try:
+                    asyncio.get_running_loop()  # raises RuntimeError if no loop running
+                    asyncio.create_task(source.close())
+                except RuntimeError:
+                    logger.warning(
+                        "[scheduler] no running loop — skipping close() for source: %s", name
+                    )
+                logger.info("[scheduler] unregistered source: %s", name)
+                return True
+        return False
+
     def set_symbols(self, symbols: list[str]) -> None:
         """Set the list of symbols to fetch news for (in addition to global news)."""
         self._symbols = list(symbols)
