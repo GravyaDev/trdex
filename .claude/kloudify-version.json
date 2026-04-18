@@ -1,7 +1,7 @@
 {
-  "version": "v1.3.2",
-  "source_commit": "38e38e0",
-  "installed_at": "2026-04-13",
+  "version": "v1.4.4",
+  "source_commit": "174586a",
+  "installed_at": "2026-04-18",
   "source_repo": "https://github.com/GravyaDev/Kloudify.git",
   "mode": "upgrade"
 }

@@ -76,7 +76,7 @@ warn() {
   exit 0
 }
 
-GATE_WARNING="QUALITY GATE ACTIVE: The session judge has flagged recent turns as low-quality (2+ verdict blocks). Operate with extreme caution: (1) explain the intended step before executing, (2) ask user confirmation for any non-trivial action, (3) prefer read-only verification over write operations, (4) do NOT batch multiple changes. The gate clears after 3 consecutive clean turns or via /clear | /resume."
+GATE_WARNING="QUALITY GATE ACTIVE: stuck-detector.sh has logged 3+ tool failures of the same category in the recent window — the session is likely stuck in a pattern. Operate with extreme caution: (1) explain the intended step before executing, (2) ask user confirmation for any non-trivial action, (3) prefer read-only verification over write operations, (4) do NOT batch multiple changes. The gate auto-clears after 30 minutes without new same-category failures, or immediately via /clear | /resume (which trigger session-reset.sh at the next SessionStart)."
 
 # ═══════════════════════════════════════════════════════
 # HARD BLOCK — dangerous actions forbidden while gate active

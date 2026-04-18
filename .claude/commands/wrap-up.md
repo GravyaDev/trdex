@@ -198,6 +198,20 @@ Keeps project docs in sync with the week's changes. Output goes to the daily not
 
 Read `.claude/logs/incident-log.md`. Summarize any notable events.
 
+### Step 7b: Append deterministic daily digest
+
+Generate a deterministic digest of today's activity (commits, tool failures by
+category, incidents by severity) and append it to today's daily note under
+**Notes**. Zero LLM calls — pure aggregation over local logs.
+
+```bash
+bash "$CLAUDE_PROJECT_DIR/.claude/hooks/wrap-up-digest.sh" >> "Daily Notes/$(date +%Y-%m-%d).md"
+```
+
+This replaces the old `verdicts.jsonl` analysis that was deprecated along with
+the Stop-hook LLM verdict system. Signal sources are `failure-log.md`,
+`incident-log.md`, and git.
+
 ### Step 8: Preview tomorrow
 
 Based on Task Board and Open Threads, suggest 1-3 priorities for tomorrow.

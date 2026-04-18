@@ -193,8 +193,10 @@ fi
 
 # curl/wget to external URLs (enforces CLAUDE.md hard rule: no direct third-party API calls).
 # Excludes localhost, 127.0.0.1, 0.0.0.0, and context7 MCP (which is allowed).
+# SECURITY ACCEPTED 2026-04-11: raw.githubusercontent.com whitelisted for
+# Kloudify self-update (install.sh --from-remote downloads from GitHub).
 if echo "$COMMAND_SHELL" | grep -qE '\b(curl|wget)\s+.*https?://' && \
-   ! echo "$COMMAND_SHELL" | grep -qE 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])'; then
+   ! echo "$COMMAND_SHELL" | grep -qE 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|raw\.githubusercontent\.com|github\.com)'; then
   log_incident "MEDIUM" "SOFT BLOCKED: curl/wget to external URL → $COMMAND"
   deny "SOFT BLOCK: Direct calls to third-party APIs via curl/wget are forbidden by CLAUDE.md hard rule." "Use a proper Python/Node tool with rate-limiting, retries, and auth handling. If this is a one-shot doc fetch, use the WebFetch tool instead."
 fi

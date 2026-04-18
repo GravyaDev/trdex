@@ -1,7 +1,15 @@
 #!/bin/bash
 # PostToolUse hook — logs tool failures to incident log.
-# Categories: BUILD, API, FILESYSTEM, NETWORK, PERMISSION, OTHER
+# Categories: BUILD, API, FILESYSTEM, NETWORK, PERMISSION, CONTEXT, OTHER
 # Severities: CRITICAL, ERROR, WARN, INFO
+#
+# CONTEXT is reserved for failures where the agent exceeded a token /
+# context budget (file too large, context window full, output too long).
+# Repeated CONTEXT failures are a real stuck pattern — the agent should
+# switch to offset/limit reads, grep, or smaller edits — and are counted
+# by stuck-detector.sh. OTHER is an unclassified-fallback bucket and is
+# intentionally excluded from stuck counting (unrelated errors in OTHER
+# do not constitute a repeated pattern).
 
 INPUT=$(cat)
 TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
@@ -26,7 +34,7 @@ CATEGORY="OTHER"
 SEVERITY="ERROR"
 
 case "$ERROR" in
-  *"ENOENT"*|*"No such file"*|*"not found"*)
+  *"ENOENT"*|*"No such file"*|*"not found"*|*"EISDIR"*|*"Is a directory"*|*"illegal operation on a directory"*)
     CATEGORY="FILESYSTEM"
     SEVERITY="WARN"
     ;;
@@ -44,6 +52,10 @@ case "$ERROR" in
     ;;
   *"build"*|*"compile"*|*"syntax"*|*"TypeError"*|*"ReferenceError"*)
     CATEGORY="BUILD"
+    SEVERITY="ERROR"
+    ;;
+  *"exceeds maximum allowed tokens"*|*"context window"*|*"too many tokens"*|*"prompt is too long"*|*"maximum context length"*)
+    CATEGORY="CONTEXT"
     SEVERITY="ERROR"
     ;;
   *"CRITICAL"*|*"fatal"*|*"panic"*)

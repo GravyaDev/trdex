@@ -6,6 +6,7 @@ allowed-tools:
   - Edit
   - Bash(date:*)
   - Bash(bash:*)
+  - Bash(rm:*)
 ---
 
 Lightweight session resume after `/clear`. Skips the full `/start` ceremony
@@ -17,6 +18,16 @@ Lightweight session resume after `/clear`. Skips the full `/start` ceremony
 ---
 
 ## Steps
+
+### Step 0: Clear stale gate state
+
+Remove any quality-gate state leftover from the previous session. The gate's
+auto-recovery needs 30 min; an explicit `/resume` should unblock immediately —
+mirrors Step 0 of `/clear`.
+
+```bash
+rm -f ".claude/logs/.quality-gate-active" ".claude/logs/.stuck-detected" ".claude/logs/.tool-call-count" ".claude/logs/.compaction-occurred"
+```
 
 ### Step 1: Find today's handoff
 

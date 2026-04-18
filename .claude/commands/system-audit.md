@@ -46,7 +46,6 @@ Comprehensive infrastructure audit. Run monthly or after major system changes.
 - `audit-trail.md`: Is it under 5000 lines?
 - `incident-log.md`: Are there unresolved CRITICAL/HIGH events?
 - `failure-log.md`: Are there recurring patterns?
-- `verdicts.jsonl`: What's the block rate? Any task-type clustering?
 
 ### Check 6: Permission & Config Coherence
 - `.claude/settings.json` hooks match actual hook files

@@ -37,11 +37,20 @@ WINDOW=$(tail -30 "$FAILURE_LOG" 2>/dev/null)
 # Aggregate by CATEGORY (column 3 in pipe-separated format).
 # Format reminder: - `TIMESTAMP` | SEVERITY | CATEGORY | TOOL | ERROR
 # Single-pass awk: count per category, emit "count category" for the top one.
+#
+# OTHER is the unclassified-fallback bucket in log-failures.sh. Repeated
+# OTHER entries almost always represent unrelated errors (generic exit
+# code 1, unusual native errors, etc.) that happen to all miss the
+# specific classifier rules — NOT a genuine stuck pattern. Counting OTHER
+# caused the gate to fire spuriously whenever heterogeneous bash/read
+# errors piled up in the window. We skip OTHER here; if a new error
+# class becomes common, add it to log-failures.sh with its own category
+# (like CONTEXT) so it can be tracked deliberately.
 # ═══════════════════════════════════════════════════════
 TOP_LINE=$(echo "$WINDOW" | awk -F'|' '
   {
     gsub(/^[ \t]+|[ \t]+$/, "", $3)
-    if ($3 != "") counts[$3]++
+    if ($3 != "" && $3 != "OTHER") counts[$3]++
   }
   END {
     max = 0; top = ""
