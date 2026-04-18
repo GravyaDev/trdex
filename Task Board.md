@@ -60,9 +60,13 @@ Auth: GitHub OAuth via oauth2-proxy.
 
 ## 🟡 Pending — llm-agents branch
 
-- [ ] **Deploy trdex-llm on Coolify** — see `docs/deploy-llm-instance.md`
-  - DNS `trdex-llm.gravya.it` created
-  - Needs: Coolify app setup, ANTHROPIC_API_KEY, OAuth callback URL
+- [ ] **Deploy trdex-llm on Coolify** — runbook `docs/deploy-trdex-llm-runbook.md` (auto-deploy via GitHub App, no manual webhook). Pre-flight verified 2026-04-18: DNS OK, branch `llm-agents` pushed, GitHub App already installed org-wide (2026-04-17), OAuth App for trdex-llm created, all 3 LLM provider keys available.
+  - [ ] Step 1 (UI): create Coolify application — Private Repo (GitHub App source), branch `llm-agents`, Docker Compose, Auto Deploy ON
+  - [ ] Step 2 (UI): env vars — 5 groups: secrets (POSTGRES_PASSWORD / TRDEX_API_KEY / OAUTH2_PROXY_COOKIE_SECRET / TRDEX_CONFIG_ENCRYPTION_KEY) + OAuth + 3 LLM providers + operational (TRDEX_MODE=simulation, scheduler off) + defaults
+  - [ ] Step 3 (VPS): `mkdir -p /opt/trdex-llm/session && chown 1000:1000`
+  - [ ] Step 4 (UI + CLI): first deploy + `gh api repos/GravyaDev/trdex/hooks` verify + health checks on `/v1/health` and `/dashboard/` + empty-commit push smoke test
+  - [ ] Step 5 (dashboard): enable LLM per agent + (optional) RAG Tier 4b populate via `backfill_ohlcv` + `generate_episodes` scripts inside container
+  - [ ] Step 6: 48h cost watch, compare vs trdex prod rule-engine signals
 
 - [ ] **Task 8: Evaluation framework** (deferred — needs live data)
   - 50 golden scenarios, LLM vs rule engine A/B, directional consistency tests
