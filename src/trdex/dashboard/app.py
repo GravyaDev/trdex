@@ -246,21 +246,6 @@ if history_data and history_data.get("history"):
 else:
     st.info("No closed trades yet — P&L history will appear here.")
 
-# ── Signal tracker ────────────────────────────────────────────────────────────
-
-st.header("Telegram Signal Tracker")
-signals_data = get("/v1/signals")
-if signals_data and signals_data.get("report"):
-    import pandas as pd
-    df_sig = pd.DataFrame(signals_data["report"])
-    if not df_sig.empty:
-        df_sig = df_sig.sort_values("roi_pct", ascending=False)
-        st.dataframe(df_sig, use_container_width=True)
-    else:
-        st.info("No signals tracked yet.")
-else:
-    st.info("No signals tracked yet.")
-
 # ── P&L by source ────────────────────────────────────────────────────────────
 
 st.subheader("Realized P&L by Source")
@@ -717,35 +702,72 @@ with st.expander("🟣 Telegram Signals (observe-only)"):
         report_rows = sig_data.get("report", []) or []
         recent_rows = sig_data.get("recent", []) or []
 
+        # Observe-only mode persists budget=0, so the tracker's roi_pct
+        # and total_pnl aggregates are always 0. Compute a synthetic
+        # per-signal ROI from entry/exit prices and pretend each signal
+        # was sized at SIMULATED_BUDGET — gives a comparable $ figure
+        # without opening any real position.
+        SIMULATED_BUDGET = 100.0
+
+        def _signal_roi_pct(row: dict) -> float | None:
+            entry = row.get("entry_price") or 0.0
+            exit_p = row.get("exit_price")
+            if exit_p is None or entry == 0:
+                return None
+            direction_sign = 1.0 if row.get("direction") == "BUY" else -1.0
+            return (exit_p - entry) / entry * 100.0 * direction_sign
+
+        for r in recent_rows:
+            roi = _signal_roi_pct(r)
+            r["_roi_pct"] = roi
+            r["_pnl_sim"] = (SIMULATED_BUDGET * roi / 100.0) if roi is not None else None
+
+        closed_recent = [r for r in recent_rows if r["_roi_pct"] is not None]
+        sim_pnl_total = sum((r["_pnl_sim"] or 0.0) for r in closed_recent)
+        wins_recent = sum(1 for r in closed_recent if (r["_roi_pct"] or 0) > 0)
+        winrate_recent = (wins_recent / len(closed_recent)) if closed_recent else 0.0
+
         total_signals = sum(r.get("total_signals", 0) for r in report_rows)
         total_open = sum(r.get("open_signals", 0) for r in report_rows)
         total_closed = sum(r.get("closed_signals", 0) for r in report_rows)
-        total_pnl = sum(r.get("total_pnl", 0.0) for r in report_rows)
 
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("Signals", total_signals)
         c2.metric("Open", total_open)
         c3.metric("Closed", total_closed)
-        c4.metric("Tracked P&L", f"${total_pnl:+.2f}")
+        c4.metric("Win rate", f"{winrate_recent:.1%}")
+        c5.metric("Sim P&L ($100/sig)", f"${sim_pnl_total:+.2f}")
 
-        if report_rows:
-            st.caption("Per-source reliability (closed signals only)")
+        per_source: dict[str, dict] = {}
+        for r in closed_recent:
+            src = r.get("source", "")
+            a = per_source.setdefault(src, {"closed": 0, "wins": 0, "losses": 0, "roi_sum": 0.0, "pnl_sim": 0.0})
+            roi = r["_roi_pct"] or 0.0
+            a["closed"] += 1
+            a["roi_sum"] += roi
+            a["pnl_sim"] += r["_pnl_sim"] or 0.0
+            if roi >= 0:
+                a["wins"] += 1
+            else:
+                a["losses"] += 1
+
+        if per_source:
+            st.caption(f"Per-source reliability (last {len(closed_recent)} resolved, simulated ${SIMULATED_BUDGET:.0f}/signal)")
             table_rows = []
-            for row in report_rows:
+            for src, a in sorted(per_source.items(), key=lambda kv: kv[1]["pnl_sim"], reverse=True):
+                wr = (a["wins"] / a["closed"]) if a["closed"] else 0.0
+                avg_roi = (a["roi_sum"] / a["closed"]) if a["closed"] else 0.0
                 table_rows.append({
-                    "source": row.get("source", ""),
-                    "total": row.get("total_signals", 0),
-                    "open": row.get("open_signals", 0),
-                    "closed": row.get("closed_signals", 0),
-                    "wins": row.get("wins", 0),
-                    "losses": row.get("losses", 0),
-                    "win_rate": f"{row.get('win_rate', 0.0) * 100:.1f}%",
-                    "roi_pct": f"{row.get('roi_pct', 0.0):+.2f}%",
-                    "pnl": f"${row.get('total_pnl', 0.0):+.2f}",
+                    "source": src,
+                    "closed": a["closed"],
+                    "wins": a["wins"],
+                    "losses": a["losses"],
+                    "win_rate": f"{wr * 100:.1f}%",
+                    "avg_roi": f"{avg_roi:+.2f}%",
+                    "sim_pnl": f"${a['pnl_sim']:+.2f}",
                 })
             st.dataframe(table_rows, hide_index=True, use_container_width=True)
         else:
-            # Check if the monitor is actually streaming
             status_data = get("/v1/status")
             tg_streaming = (
                 status_data.get("telegram", {}).get("streaming", False)
@@ -753,8 +775,8 @@ with st.expander("🟣 Telegram Signals (observe-only)"):
             )
             if tg_streaming:
                 st.info(
-                    "Monitor is active and listening. No signals parsed yet "
-                    "— waiting for channels to publish new trading signals."
+                    "Monitor is active. No resolved signals yet — "
+                    "waiting for evaluator to close TP/SL/stale."
                 )
             else:
                 st.info(
@@ -771,6 +793,10 @@ with st.expander("🟣 Telegram Signals (observe-only)"):
                 entry = row.get("entry_price", 0.0)
                 exit_p = row.get("exit_price")
                 exit_str = f"{exit_p:.5g}" if exit_p is not None else "—"
+                roi = row.get("_roi_pct")
+                roi_str = f"{roi:+.2f}%" if roi is not None else "—"
+                pnl_sim = row.get("_pnl_sim")
+                pnl_sim_str = f"${pnl_sim:+.2f}" if pnl_sim is not None else "—"
                 recent_table.append({
                     "when": (row.get("executed_at") or "")[:19].replace("T", " "),
                     "source": row.get("source", ""),
@@ -778,12 +804,15 @@ with st.expander("🟣 Telegram Signals (observe-only)"):
                     "dir": row.get("direction", ""),
                     "entry": f"{entry:.5g}",
                     "exit": exit_str,
+                    "roi%": roi_str,
+                    "sim_pnl": pnl_sim_str,
                     "status": row.get("status", "open"),
                 })
             st.dataframe(recent_table, hide_index=True, use_container_width=True)
 
         st.caption(
             "Observe-only mode: signals are recorded with no capital at risk. "
+            f"Simulated P&L assumes ${SIMULATED_BUDGET:.0f} per signal. "
             "Post-hoc TP/SL evaluation runs hourly and updates status to "
             "`tp` / `sl` / `stale` once the window resolves."
         )
@@ -795,17 +824,40 @@ with st.expander("🟣 Telegram Signals (observe-only)"):
 with st.expander("📡 Telegram Channels"):
     tg_settings = get("/v1/settings/telegram")
     tg_channels_csv = ""
+    tg_titles_json = ""
     if tg_settings:
         tg_channels_csv = tg_settings.get("values", {}).get("telegram_channels", "")
+        tg_titles_json = tg_settings.get("values", {}).get("telegram_channel_titles", "")
     tg_channels = [c.strip() for c in tg_channels_csv.split(",") if c.strip()] if tg_channels_csv else []
 
-    st.caption(f"{len(tg_channels)} channels monitored (signals + news auto-classified)")
+    # Resolve chat_id → human title. The backend persists this map on
+    # every save of telegram_channels (see api/app.py _resolve_and_store_titles).
+    tg_titles: dict[str, str] = {}
+    if tg_titles_json:
+        try:
+            import json as _json
+            tg_titles = _json.loads(tg_titles_json) or {}
+        except (ValueError, TypeError):
+            tg_titles = {}
+
+    resolved = sum(1 for ch in tg_channels if ch in tg_titles)
+    st.caption(
+        f"{len(tg_channels)} channels monitored ({resolved} with resolved name; "
+        "signals + news auto-classified)"
+    )
 
     if tg_channels:
         cols = st.columns(min(len(tg_channels), 4))
         for i, ch in enumerate(tg_channels):
             with cols[i % len(cols)]:
-                if st.button(f"X {ch}", key=f"rm_tg_{ch}"):
+                label = tg_titles.get(ch, ch)
+                if label != ch:
+                    # Truncate long titles so 4-col grid stays readable
+                    display_label = label if len(label) <= 22 else label[:20] + "…"
+                    btn_text = f"X {display_label}"
+                else:
+                    btn_text = f"X {ch}"
+                if st.button(btn_text, key=f"rm_tg_{ch}", help=ch if label != ch else None):
                     new_list = [c for c in tg_channels if c != ch]
                     import httpx as _httpx
                     headers = {"X-API-Key": api_key} if api_key else {}
@@ -850,6 +902,96 @@ with st.expander("📡 Telegram Channels"):
     st.caption(
         "Changes apply immediately via hot-reload (no redeploy needed). "
         "The parser auto-classifies each channel as signal source or news context."
+    )
+
+# ── Integrations (enable/disable components) ──────────────────────────────
+
+_INTEGRATIONS_SPEC = [
+    # (key, label, credential_key or None, group)
+    ("binance_feed", "Binance feed (spot OHLCV + ticker)", None, "Feeds"),
+    ("binance_ws_feed", "Binance WebSocket (real-time ticker)", None, "Feeds"),
+    ("coingecko_feed", "CoinGecko feed", "coingecko_api_key", "Feeds"),
+    ("cryptocompare_feed", "CryptoCompare feed", "cryptocompare_api_key", "Feeds"),
+    ("alphavantage_feed", "AlphaVantage feed (FX, equity)", "alphavantage_api_key", "Feeds"),
+    ("twelvedata_feed", "Twelve Data feed (FX, commodity)", "twelve_data_api_key", "Feeds"),
+    ("yfinance_feed", "Yahoo Finance feed (fallback)", None, "Feeds"),
+    ("freecryptoapi_feed", "FreeCryptoAPI feed", "freecryptoapi_key", "Feeds"),
+    ("forex_feed", "Forex feed (exchangerate-api)", "forex_api_key", "Feeds"),
+    ("cryptocompare_news", "CryptoCompare news ingestion", "cryptocompare_api_key", "News"),
+    ("stockdata_news", "StockData news ingestion", "stockdata_api_key", "News"),
+    ("perplexity_news", "Perplexity news ingestion", "perplexity_api_key", "News"),
+    ("telegram_monitor", "Telegram signal/news monitor", None, "Other"),
+    ("qdrant_embeddings", "Qdrant embeddings (context vector store)", "jina_api_key", "Other"),
+]
+
+with st.expander("🔌 Integrations"):
+    st.caption(
+        "Enable or disable each component independently of whether its API "
+        "key is configured. **Changes require a container restart** (no hot-reload yet)."
+    )
+
+    ig_settings = get("/v1/settings/integrations")
+    ig_values: dict[str, str] = {}
+    if ig_settings:
+        ig_values = ig_settings.get("values", {}) or {}
+
+    cred_settings = get("/v1/settings/credentials")
+    cred_values: dict[str, str] = {}
+    if cred_settings:
+        cred_values = cred_settings.get("values", {}) or {}
+
+    def _has_key(cred_key: str | None) -> bool:
+        if cred_key is None:
+            return True
+        v = cred_values.get(cred_key, "")
+        return bool(v and v != "***")
+
+    groups: dict[str, list[tuple[str, str, str | None]]] = {}
+    for key, label, cred_key, group in _INTEGRATIONS_SPEC:
+        groups.setdefault(group, []).append((key, label, cred_key))
+
+    pending_updates: dict[str, str] = {}
+    for group, items in groups.items():
+        st.markdown(f"**{group}**")
+        for key, label, cred_key in items:
+            flag_key = f"{key}_enabled"
+            current = ig_values.get(flag_key, "").strip().lower() in ("true", "1", "yes", "on")
+            key_ok = _has_key(cred_key)
+            help_text = (
+                "No API key required" if cred_key is None
+                else (f"API key `{cred_key}` OK" if key_ok else f"Missing API key `{cred_key}` — set it under Runtime Config → Credentials first")
+            )
+            new_val = st.checkbox(
+                f"{label}" + ("" if key_ok else "  ⚠️"),
+                value=current,
+                key=f"ig_toggle_{flag_key}",
+                help=help_text,
+                disabled=not key_ok and not current,
+            )
+            if new_val != current:
+                pending_updates[flag_key] = "true" if new_val else "false"
+
+    if pending_updates:
+        if st.button(f"Apply {len(pending_updates)} change(s)", key="ig_apply"):
+            import httpx as _httpx
+            headers = {"X-API-Key": api_key} if api_key else {}
+            try:
+                _httpx.put(
+                    f"{base_url}/v1/settings/integrations",
+                    json={"values": pending_updates},
+                    headers=headers,
+                    timeout=10,
+                )
+                st.success(f"Updated {len(pending_updates)} flag(s). Restart the app container for changes to take effect.")
+                st.cache_data.clear()
+                st.rerun()
+            except Exception as e:
+                st.error(str(e))
+
+    st.caption(
+        "⚠️ Components marked with a warning have no API key configured — "
+        "their toggle is locked off. Add the key under Runtime Config → Credentials, "
+        "then refresh this page to enable the toggle."
     )
 
 # ── Scheduler Symbol Watchlist ──────────────────────────────────────────────

@@ -8,6 +8,25 @@ Workflow: fix su main → merge forward nel branch. Mai il contrario.
 
 ---
 
+## Production status (2026-04-17, merged 2026-04-18)
+
+**trdex LIVE** su `https://trdex.gravya.it` + dashboard `/dashboard/` — **nuova app Coolify UUID `e5tqc26vgsnm6czy8wnqpxl2`** (riconnessa 2026-04-17 a GitHub App source, DB wiped — accettato).
+Scheduler: 10 symbols, 5 min interval. Strategy: SMA 9/21, RSI direzionale >50/<50 + overextension >70/<30. SL 2%, TP 4%, trailing 1.5%. Gate readiness 20gg.
+Tests: 359/359. Telegram monitor: 36 canali ri-inseriti manualmente (auto-classified signal/news), evaluator ogni ora. Kloudify v1.4.4.
+**Auto-deploy Coolify FUNZIONA** end-to-end (GitHub App→push→rebuild→restart, confermato 2026-04-17 con commit `1fd4060`).
+DB fresh — $10k seed da reconfigurare se serve.
+
+## Next Session (inherited from main 2026-04-17)
+
+- **[P1] Hot-reload integration toggles** — oggi cambiare un toggle in Runtime Config → `integrations` richiede restart container. Implementare `unregister()` su `PriceFeedManager` + `IngestionScheduler` + safe stop/start su `TelegramMonitor` per supportare hot-reload. Effort stimato: ~2-3h. File primari: `src/trdex/market/manager.py`, `src/trdex/market/ingestion.py`, `src/trdex/telegram/monitor.py`.
+- **[P3] Issue #1 CoinGecko `supports_symbol` filter** — residuo di https://github.com/GravyaDev/trdex/issues/1 dopo fix Binance (2026-04-17). Implementare `supports_symbol(symbol: str) -> bool` predicate su `CoinGeckoFeed` + filter nel `PriceFeedManager._rate_limited_call` per skippare feed che non supportano il simbolo. Effort ~30 min. Low priority (pure log hygiene).
+- **[P1] Osservazione post-reset** — 5-7gg con nuova strategia. Target $20-30/giorno. Verificare win rate reale su ≥20 trade chiusi. (Nota dalla sim 2026-04-16: la retro-simulation sul parametro sweep suggerisce che trailing 2.5% > trailing 1.5% — +$19.21 vs +$0.54 sui 26 trade, ma sample troppo piccolo per cambiare adesso.)
+- **[P2] Auto-resolve Telegram channel names on CSV save** — quando un utente salva `telegram_channels` in Runtime Config, un endpoint `/v1/telegram/resolve-channels` chiama `client.get_entity(chat_id)` per ogni token, popola una mappa `telegram_channel_titles` (JSON runtime_config key) e il widget dashboard mostra "Nome · chat_id" invece di solo chat_id. Eager al save + lazy fallback ai messaggi in arrivo. Effort ~30-45 min.
+- **[P3] 58 canali mancanti** — cercare da `channels_failed_lookup.md` e aggiungere dal dashboard
+- **[P3] Cleanup orphan volumes** — dismettere `w35035ypb7dl7t94flyn9c5f_{pgdata,redis,qdrant,telegram-session}` (~70MB pgdata + others) dal VPS via `docker volume rm` quando sicuro del nuovo deploy
+
+---
+
 ## Production status (2026-04-15)
 
 **trdex LIVE** su `https://trdex.gravya.it` + dashboard `/dashboard/`
@@ -112,6 +131,11 @@ Go-live gate: Step 1 positivo + OandaExecutor + review manuale primi 5 segnali.
 - [ ] Multi-symbol portfolio rotation (ranking momentum, allocazione dinamica)
 - [ ] ExitPolicy (Opzione 4): strategie diverse (mean reversion, breakout, scalping)
 
+### 🟤 CI/CD & automation (from main 2026-04-16 — Coolify auto-deploy ora FUNZIONA, vedi Done 2026-04-17)
+
+- [x] **Auto-redeploy su push via Coolify GitHub App** — done 2026-04-17 (vedi playbook `docs/playbook-coolify-autodeploy.md`). GitHub App installata, trdex riconnessa, auto-deploy verificato end-to-end.
+- [x] **Guida LLM: setup auto-deploy Coolify** — done 2026-04-17 (commit `7272fa6`), playbook in `docs/playbook-coolify-autodeploy.md`.
+
 ---
 
 ## ⚪ Tech debt / minor
@@ -133,6 +157,34 @@ Aperti:
 - [ ] Tier 3+4 features (kline WS stream, CoinGecko screener, hyperopt, Redis cache, Ollama LLM)
 
 ---
+
+## Done — 2026-04-17
+
+- [x] **Telegram evaluator fix verified in prod** — Coolify rebuild (Force Rebuild required, normal "Redeploy" riusa cache layers) deploys commit `632f084` (yfinance in pyproject). yfinance 1.3.0 installato nel container, cascade feed cryptocompare→alphavantage→yfinance funzionante. Primo signal risolto: `BUY XAU/USD id=5 → tp @ 4821.0`.
+- [x] **Dashboard simulated P&L per Telegram signals** (commit `161f179`) — widget 🟣 Telegram Signals ora calcola ROI% reale + $100/signal sim P&L on-the-fly da `entry_price`/`exit_price` dei `recent_rows`. Zero backend change. 5 metric header (Signals, Open, Closed, Win rate, Sim P&L) + per-source table + enriched recent table.
+- [x] **TwelveDataFeed impl** (commit `fd90dfa`) — `market/feeds/twelvedata.py` primary Forex/commodity feed, 800 req/day free tier, native symbol format (XAU/USD, EUR/USD — no mapping). Registrato in manager prima di yfinance (che resta fallback), gated da `config_svc.get("credentials", "twelve_data_api_key")`. Doc fetched da api.twelvedata.com via Jina Reader.
+- [x] **Mako security pin** (commit `1fd4060`) — mako 1.3.10 → 1.3.11 per GHSA-v92g-xgxw-vvmm (path traversal alembic transitive). pyproject pin + uv lock. Dependabot alert #5 chiuso.
+- [x] **Coolify auto-redeploy setup** — GitHub App installata su org `GravyaDev` con Webhooks Read&Write. App trdex riconnessa a GitHub App source → Coolify ha ricreato nuova applicazione UUID `e5tqc26v...` (DB volumes wiped — accettato). Save su Configuration→Source + push di test → rebuild automatico partito entro secondi, container deployed in ~2 min. **FUNZIONA end-to-end**. Nota: `gh api repos/.../hooks` ritorna `[]` con GitHub App source (comportamento normale — l'App riceve eventi via proprio endpoint interno, NON registra webhook classici). Test empirico = vedere deploy partire.
+- [x] **Playbook Coolify auto-deploy** (commit `7272fa6`) — `docs/playbook-coolify-autodeploy.md` riutilizzabile per tutti i repo Gravya. 8 sezioni + Section 1.5 "⚠️ CRITICAL: Source type change recreates the app" aggiunta dopo l'incidente di oggi (data wipe su trdex). Documenta il pattern App vs Actions, race conditions, diagnostica, multi-repo rollout.
+- [x] **Commit identity fix** — local git config era `GravyaDev <dev@gravya.it>` (mailbox inesistente), corretto a `Daniele <daniele@gravya.it>` via `-c user.email=...` inline per ogni commit. `.claude/memory.md` allineata a KB. Feedback memoria `feedback_commit_identity.md` salvata.
+- [x] **Recovery 36 canali Telegram post-wipe** — lista recuperata via `scripts/telegram_list_channels.py` nel container (Telethon session era bind mount `/opt/trdex/session/`, sopravvissuta al DB wipe). CSV ri-inserita in Runtime Config. Discovered: parser auto-classifica signal vs news da una singola key `telegram_channels` — conferma da `api/app.py:201` + `dashboard/app.py:652`.
+
+## Done — 2026-04-16
+
+- [x] **Security: 3 CVE patched** (commit `dafa56c`) — langsmith 0.7.25→0.7.32 (GHSA-rr7j-v2q5-chgv), python-multipart 0.0.22→0.0.26 (CVE-2026-40347), pytest 9.0.2→9.0.3 (CVE-2025-71176). Transitives pinned in pyproject. pip-audit 3→0.
+- [x] **Telegram evaluator bug fix: yfinance dep** (commit `632f084`) — scoperto che tutti i 15 segnali Forex aperti erano stuck con `exit_price=NULL` perché `yfinance` feed era registrato nel manager ma il modulo non era in pyproject. All feeds failing. Aggiunto `yfinance>=0.2`. **Pending Coolify rebuild** per attivarsi in prod.
+- [x] **Trading results verification (2026-04-16)** — cross-check 26 trade chiusi via query DB + Binance klines. Ledger quadra al centesimo (+$38.21 realised). Math spot-check 4/6 OK, 2/6 sub-0.2% discrepancy (simulator slippage, non bug). Nessun phantom gain. Script `scripts/verify_today_trades.py`.
+- [x] **Retro-simulation TP/trailing sweep (2026-04-16)** — replay dei 26 trade su candele Binance 1min reali, 9 combo TP×trail. Baseline SL 2%/TP 4%/trail 1.5% = +$0.54. **Best = SL 2%/TP 4%/trail 2.5% = +$19.21**. Insight: trailing troppo stretto, NON TP sbagliato. Sample size insufficiente per cambio subito. Script `scripts/sim_tp_trail_variants.py`.
+- [x] **Task Board expansion** — 4 nuovi P0/P0-tech per domani: verify evaluator post-rebuild, TwelveDataFeed impl, AlphaVantage feed registration, Coolify GitHub App setup + playbook LLM.
+
+## Done — 2026-04-15
+
+- [x] **DB reset produzione** — TRUNCATE positions/balance/signal_outcomes/agent_runs/stop_loss_events + reseed $10k.
+- [x] **Gate readiness 25→20 giorni** (commit `ac6217b`) — default in `config.py` + esposto via Runtime Config con fallback.
+- [x] **Strategy tuning** (commit `5725a3d`) — RSI 40/60 zona neutrale → momentum direzionale (>50 BUY / <50 SELL) + overextension (>70 SELL / <30 BUY). SMA 5/13 → 9/21. SL 3%→2%, TP 5%→4%, trailing 2%→1.5%. Symbols 25 → 10 liquidi. Basato su consensus analysis Perplexity/Claude/Gemini (`docs/Risposte LLM Strategia/`).
+- [x] **Manual open/close positions** (commit `a15bd84`) — endpoint API + UI dashboard. Gateway-routed con tutti i gate (fees/slippage/kill-switch/lot-size).
+- [x] **gate_min_days in Runtime Config** (commit `a15bd84`) — editabile da dashboard senza redeploy.
+- [x] **Handoff doc llm-agents** — `docs/handoff-main-to-llm-agents-2026-04-15.md`. 3 commit principali da mergiare forward.
 
 ## Done — 2026-04-11
 

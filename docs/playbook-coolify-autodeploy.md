@@ -83,21 +83,20 @@ This is the **universal** step. Do it once per GitHub org (`GravyaDev`), not per
 
 After the human completes Section 2, verify from the LLM agent side (read-only):
 
-> ⚠️ **Do NOT use `gh api repos/.../hooks` as a proof-of-setup.** A GitHub App receives events via its own internal endpoint — it does NOT register a classic webhook on the repo. That API will return `[]` regardless of whether the setup works. It is a false-negative trap (mis-diagnosed once on trdex before we caught it). Use the empirical push test instead.
-
 ```bash
-# 1) End-to-end smoke test: push a no-op commit and watch for rebuild
+# 1) Webhook should now exist on GitHub
+gh api repos/GravyaDev/<REPO>/hooks --jq '.[].config.url'
+# Expected output: https://coolify.gravya.it/webhooks/source/github/events/...
+
+# 2) End-to-end smoke test: push a no-op commit
 git commit --allow-empty -m "chore: smoke test auto-deploy"
 git push origin main
 
-# 2) Watch Coolify UI → application → Deployments. A new deployment should
+# 3) Watch Coolify UI → application → Deployments. A new deployment should
 #    start within ~5 seconds of the push.
 
-# 3) GitHub side: Settings → Webhooks → Recent Deliveries.
-#    The push event should show a 200 OK response IF Coolify is using
-#    a classic webhook. With a GitHub App source, this list may be empty
-#    — check the App's "Advanced → Recent Deliveries" page instead
-#    (accessible from Settings → Applications → the App → Advanced).
+# 4) GitHub side: Settings → Webhooks → Recent Deliveries.
+#    The push event should show a 200 OK response.
 ```
 
 If the deployment doesn't start, see **Section 6 — Diagnostics**.
