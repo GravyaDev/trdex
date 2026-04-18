@@ -53,6 +53,16 @@ class PriceFeed(ABC):
         """Close all connections and release resources."""
         ...
 
+    def supports_symbol(self, symbol: str) -> bool:  # noqa: ARG002
+        """Return True if this feed can handle the given symbol.
+
+        Default implementation always returns True so that feeds that do not
+        override remain fully compatible.  Override in feeds that only cover a
+        subset of symbols (e.g. CoinGeckoFeed) to let the cascade skip the
+        feed silently instead of attempting the call and logging a warning.
+        """
+        return True
+
     @property
     @abstractmethod
     def name(self) -> str:

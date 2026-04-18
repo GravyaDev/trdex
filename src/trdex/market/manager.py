@@ -83,6 +83,30 @@ class PriceFeedManager:
         )
         logger.info("Registered feed: %s (rate limit: %d rpm)", feed.name, effective_rpm)
 
+    def unregister(self, name: str) -> bool:
+        """Unregister a price feed by name, supporting hot-reload of integration toggles.
+
+        Args:
+            name: The feed name to unregister.
+
+        Returns:
+            True if the feed was registered and has been removed, False if not found.
+        """
+        feed = self._feeds.pop(name, None)
+        if feed is None:
+            return False
+        self._limiters.pop(name, None)
+        if hasattr(feed, "close"):
+            try:
+                asyncio.get_running_loop()
+                asyncio.create_task(feed.close())
+            except RuntimeError:
+                logger.warning(
+                    "No running event loop; skipping async close for feed: %s", name
+                )
+        logger.info("Unregistered feed: %s", name)
+        return True
+
     def _check_feeds(self) -> None:
         """Raise ConfigurationError if no feeds are registered."""
         if not self._feeds:
@@ -120,6 +144,8 @@ class PriceFeedManager:
         # Try each feed in order until one succeeds
         last_error: Exception | None = None
         for feed in self._feeds.values():
+            if not feed.supports_symbol(symbol):
+                continue
             try:
                 return await self._rate_limited_call(
                     feed.name, feed.get_ticker(symbol),
@@ -239,6 +265,8 @@ class PriceFeedManager:
 
         last_error: Exception | None = None
         for feed in self._feeds.values():
+            if not feed.supports_symbol(symbol):
+                continue
             try:
                 return await self._rate_limited_call(
                     feed.name,
