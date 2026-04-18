@@ -66,6 +66,11 @@ class CoinGeckoFeed(PriceFeed):
     def name(self) -> str:
         return "coingecko"
 
+    def supports_symbol(self, symbol: str) -> bool:
+        """Return True only if the base currency is in the CoinGecko mapping table."""
+        base = symbol.split("/")[0].upper()
+        return base in _SYMBOL_MAP
+
     def _cg_id(self, symbol: str) -> str:
         """Extract base currency from 'BTC/USDT' and map to CoinGecko ID."""
         base = symbol.split("/")[0].upper()

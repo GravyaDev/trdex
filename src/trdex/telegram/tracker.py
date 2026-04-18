@@ -49,6 +49,20 @@ class SignalOutcome:
             return Decimal("0")
         return self.pnl / self.budget * 100
 
+    @property
+    def roi_pct(self) -> Decimal:
+        """Direction-aware ROI as a percentage of entry price.
+
+        Unlike pnl/pnl_pct this is independent of budget, so it is
+        meaningful in observe-only mode (budget == 0).  Positive means
+        the trade went the right way; negative means it didn't.
+        Returns 0 for open signals or when entry_price is zero.
+        """
+        if self.exit_price is None or self.entry_price == 0:
+            return Decimal("0")
+        raw = (self.exit_price - self.entry_price) / self.entry_price * 100
+        return raw if self.direction == "BUY" else -raw
+
 
 @dataclass
 class SourceStats:
@@ -165,7 +179,7 @@ class SignalTracker:
             s.closed_signals += 1
             s.budget_allocated += o.budget
             s.total_pnl += o.pnl
-            if o.pnl >= 0:
+            if o.roi_pct > 0:
                 s.wins += 1
             else:
                 s.losses += 1

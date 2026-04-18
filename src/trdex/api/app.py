@@ -522,10 +522,215 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             except RuntimeError:
                 logger.warning("[hot-reload] no running loop for telegram update")
 
+    # Integration toggles — hot-reload a feed/news source/telegram monitor
+    # without a container restart. The listener is sync, so async work
+    # (feed.close, monitor.start) is scheduled on the running loop via
+    # create_task. A missing API key keeps the component off even when
+    # the toggle flips to true — symmetric with the startup logic above.
+    nonlocal_state = {"monitor": monitor, "ws_feed": ws_feed}
+
+    def _on_integrations_change(key: str, value: str) -> None:
+        if not key.endswith("_enabled"):
+            return
+        component = key[: -len("_enabled")]
+        enabled = str(value).lower() in ("true", "1", "yes")
+        import asyncio as _aio
+
+        # ── Price feeds ──
+        feed_registered_as = {
+            "binance_feed": ("binance", lambda: BinanceFeed(), None),
+            "coingecko_feed": (
+                "coingecko",
+                lambda: CoinGeckoFeed(api_key=settings.coingecko_api_key),
+                None,
+            ),
+            "forex_feed": (
+                "forex",
+                lambda: ForexFeed(api_key=settings.forex_api_key),
+                lambda: settings.forex_api_key,
+            ),
+            "cryptocompare_feed": (
+                "cryptocompare",
+                lambda: CryptoCompareFeed(api_key=settings.cryptocompare_api_key),
+                lambda: settings.cryptocompare_api_key,
+            ),
+            "alphavantage_feed": (
+                "alphavantage",
+                lambda: AlphaVantageFeed(api_key=settings.alphavantage_api_key),
+                lambda: settings.alphavantage_api_key,
+            ),
+            "twelvedata_feed": (
+                "twelvedata",
+                lambda: __import__(
+                    "trdex.market.feeds.twelvedata", fromlist=["TwelveDataFeed"]
+                ).TwelveDataFeed(
+                    api_key=config_svc.get("credentials", "twelve_data_api_key", "")
+                ),
+                lambda: config_svc.get("credentials", "twelve_data_api_key", ""),
+            ),
+            "yfinance_feed": (
+                "yfinance",
+                lambda: __import__(
+                    "trdex.market.feeds.yfinance", fromlist=["YFinanceFeed"]
+                ).YFinanceFeed(),
+                None,
+            ),
+            "freecryptoapi_feed": (
+                "freecryptoapi",
+                lambda: FreeCryptoAPIFeed(api_key=settings.freecryptoapi_key),
+                lambda: settings.freecryptoapi_key,
+            ),
+        }
+        if component in feed_registered_as:
+            feed_name, builder, key_check = feed_registered_as[component]
+            if enabled:
+                if key_check is not None and not key_check():
+                    logger.warning(
+                        "[hot-reload] %s toggled on but API key empty — skipping",
+                        component,
+                    )
+                    return
+                if feed_name in feed_manager.feeds:
+                    return
+                try:
+                    feed_manager.register(builder())
+                    logger.info("[hot-reload] feed registered: %s", feed_name)
+                except Exception:
+                    logger.exception(
+                        "[hot-reload] failed to register feed %s", feed_name
+                    )
+            else:
+                feed_manager.unregister(feed_name)
+            return
+
+        # ── Binance WebSocket feed (special: tracks ws_feed for resubscribe) ──
+        if component == "binance_ws_feed":
+            if enabled:
+                if "binance_ws" in feed_manager.feeds:
+                    return
+                try:
+                    new_ws = BinanceWSFeed()
+                    feed_manager.register(new_ws)
+                    nonlocal_state["ws_feed"] = new_ws
+                    logger.info("[hot-reload] feed registered: binance_ws")
+                except Exception:
+                    logger.exception("[hot-reload] failed to register binance_ws")
+            else:
+                feed_manager.unregister("binance_ws")
+                nonlocal_state["ws_feed"] = None
+            return
+
+        # ── News sources ──
+        news_map = {
+            "cryptocompare_news": (
+                "cryptocompare_news",
+                lambda: CryptoCompareNewsSource(
+                    api_key=config_svc.get("credentials", "cryptocompare_api_key", "")
+                ),
+                lambda: config_svc.get("credentials", "cryptocompare_api_key", ""),
+            ),
+            "stockdata_news": (
+                "stockdata_news",
+                lambda: StockDataNewsSource(
+                    api_key=config_svc.get("credentials", "stockdata_api_key", "")
+                ),
+                lambda: config_svc.get("credentials", "stockdata_api_key", ""),
+            ),
+            "perplexity_news": (
+                "perplexity_sonar",
+                lambda: __import__(
+                    "trdex.context.news_sources.perplexity",
+                    fromlist=["PerplexityNewsSource"],
+                ).PerplexityNewsSource(
+                    api_key=config_svc.get("credentials", "perplexity_api_key", "")
+                ),
+                lambda: config_svc.get("credentials", "perplexity_api_key", ""),
+            ),
+        }
+        if component in news_map:
+            source_name, builder, key_check = news_map[component]
+            if enabled:
+                if key_check is not None and not key_check():
+                    logger.warning(
+                        "[hot-reload] %s toggled on but API key empty — skipping",
+                        component,
+                    )
+                    return
+                if any(s.name == source_name for s in _scheduler._sources):
+                    return
+                try:
+                    _scheduler.register(builder())
+                    if not _scheduler._running:
+                        try:
+                            loop = _aio.get_running_loop()
+                            loop.create_task(_scheduler.start())
+                        except RuntimeError:
+                            logger.warning(
+                                "[hot-reload] no running loop to start scheduler"
+                            )
+                    logger.info("[hot-reload] news source registered: %s", source_name)
+                except Exception:
+                    logger.exception(
+                        "[hot-reload] failed to register news source %s", source_name
+                    )
+            else:
+                _scheduler.unregister(source_name)
+            return
+
+        # ── Telegram monitor ──
+        if component == "telegram_monitor":
+            current = nonlocal_state.get("monitor")
+            if enabled:
+                if current is not None:
+                    return
+                if not settings.telegram_api_id:
+                    logger.warning(
+                        "[hot-reload] telegram_monitor toggled on but telegram_api_id not set"
+                    )
+                    return
+                try:
+                    loop = _aio.get_running_loop()
+                except RuntimeError:
+                    logger.warning(
+                        "[hot-reload] no running loop for telegram monitor start"
+                    )
+                    return
+
+                async def _start_monitor() -> None:
+                    try:
+                        m = TelegramMonitor(
+                            api_id=settings.telegram_api_id,
+                            api_hash=settings.telegram_api_hash,
+                            phone=settings.telegram_phone,
+                        )
+                        await m.start()
+                        nonlocal_state["monitor"] = m
+                        logger.info("[hot-reload] telegram monitor started")
+                    except Exception:
+                        logger.exception(
+                            "[hot-reload] telegram monitor start failed"
+                        )
+
+                loop.create_task(_start_monitor())
+            else:
+                if current is None:
+                    return
+                try:
+                    loop = _aio.get_running_loop()
+                    loop.create_task(current.stop())
+                    nonlocal_state["monitor"] = None
+                    logger.info("[hot-reload] telegram monitor stopped")
+                except RuntimeError:
+                    logger.warning(
+                        "[hot-reload] no running loop to stop telegram monitor"
+                    )
+            return
+
     config_svc.register_listener("thresholds", _on_thresholds_change)
     config_svc.register_listener("symbols", _on_symbols_change)
     config_svc.register_listener("feeds", _on_feeds_change)
     config_svc.register_listener("telegram", _on_telegram_change)
+    config_svc.register_listener("integrations", _on_integrations_change)
 
     # --- Memory context loader (7-tier stack for agent prompts) ---
     from pathlib import Path
