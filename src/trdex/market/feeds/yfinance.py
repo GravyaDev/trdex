@@ -50,6 +50,16 @@ _SYMBOL_MAP: dict[str, str] = {
     "UK100/GBP": "^FTSE",
 }
 
+# Fiat currencies that appear as the quote side of a Forex pair.
+# A symbol whose quote is NOT in this set is treated as crypto (or other
+# non-Forex) and skipped by supports_symbol — avoids yfinance producing
+# "possibly delisted" noise for e.g. LINK/USDT → LINKUSDT=X.
+_FIAT_QUOTES: frozenset[str] = frozenset({
+    "USD", "EUR", "GBP", "JPY", "CHF", "AUD", "CAD", "NZD",
+    "SEK", "NOK", "DKK", "HKD", "SGD", "MXN", "ZAR", "CNY",
+    "PLN", "TRY", "CZK", "HUF",
+})
+
 # Timeframe map: our standard → yfinance interval
 _TIMEFRAME_MAP: dict[str, str] = {
     "1m": "1m",
@@ -86,6 +96,19 @@ class YFinanceFeed(PriceFeed):
     @property
     def name(self) -> str:
         return "yfinance"
+
+    def supports_symbol(self, symbol: str) -> bool:
+        """True only for explicit commodities/indices or Forex pairs with
+        a fiat quote. Crypto symbols (quote in USDT, BTC, etc.) are
+        skipped so the cascade does not log "possibly delisted" noise
+        for every crypto tick handed through this fallback feed.
+        """
+        if symbol in _SYMBOL_MAP:
+            return True
+        if "/" not in symbol:
+            return False
+        quote = symbol.split("/", 1)[1].upper()
+        return quote in _FIAT_QUOTES
 
     async def get_ticker(self, symbol: str) -> Ticker:
         """Get current price via yfinance fast_info."""
