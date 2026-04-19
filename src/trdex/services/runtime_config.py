@@ -60,6 +60,9 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str, type]] = {
     ("telegram", "telegram_channels"): ("telegram_channels", str),
     ("telegram", "telegram_enabled"): (None, bool),
     ("telegram", "telegram_channel_titles"): (None, str),  # JSON map {chat_id: title}
+    ("telegram", "entry_drift_tolerance"): (None, float),
+    ("telegram", "reliability_min_samples"): (None, int),
+    ("telegram", "reliability_win_rate_min"): (None, float),
     # Feeds
     ("feeds", "selected_feeds"): (None, str),  # No env var equivalent
     # Integration toggles — each one enables/disables a component at
@@ -80,6 +83,7 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str, type]] = {
     ("integrations", "perplexity_news_enabled"): (None, bool),
     ("integrations", "telegram_monitor_enabled"): (None, bool),
     ("integrations", "qdrant_embeddings_enabled"): (None, bool),
+    ("integrations", "telegram_executor_enabled"): (None, bool),
 }
 
 CREDENTIAL_KEYS = {k for (cat, k), _ in _KEY_REGISTRY.items() if cat == "credentials"}
