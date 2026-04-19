@@ -26,4 +26,9 @@ Every entry MUST cite its source using one of:
 - **La skill `persistent-memory-stack` non è applicabile as-is a trdex** — usa pgvector (noi Qdrant) e psycopg3 (noi asyncpg). Solo il Tier 5 (Entity Graph) è applicabile ed è stato estratto e adattato. [Source: agent inference 2026-04-05]
 
 ## Known Failure Modes
-- (none yet)
+- **`pip-audit` senza `--python <venv>` scansiona il Python globale, non il venv del progetto.** In un venv uv senza pip installato, `pip-audit` dal PATH usa il global interpreter e riporta vulnerabilità di pacchetti non presenti nel venv (falsi positivi). Usare sempre `uvx --python .venv/Scripts/python.exe pip-audit` per scansionare correttamente il venv di progetto. [Source: empirical 2026-04-18]
+- **`uv.lock` si inquina con dep di tool installati via `uv pip` + `uv sync` nella stessa sessione.** Cozempic (o qualsiasi tool) installato durante la sessione può lasciare entry nel lock (anthropic, distro, ecc.) anche dopo la rimozione. Pattern: fare `git diff uv.lock` prima di ogni merge forward; revert se ci sono entry estranee al progetto. [Source: empirical 2026-04-18]
+
+## Merge Forward Rules
+- **Task Board.md su feature branch è stato PER-BRANCH — risolvere sempre con `--ours`.** Confermato su 3+ merge forward consecutivi. [Source: empirical 2026-04-10 + 2026-04-11]
+- **Strategia B per merge forward con dep conflict (uv.lock/pyproject.toml):** revert locale su pyproject+uv.lock → commit gli altri file → eseguire merge forward → risolvere uv.lock con `--theirs` (upstream è autoritativo per il lock). Evita conflitti manuali su 3000+ righe. [Source: empirical 2026-04-18]

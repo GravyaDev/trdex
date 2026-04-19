@@ -64,9 +64,21 @@ TOP_COUNT=$(echo "$TOP_LINE" | awk '{print $1+0}')
 TOP_CATEGORY=$(echo "$TOP_LINE" | awk '{print $2}')
 
 # ═══════════════════════════════════════════════════════
-# Threshold: 3+ failures of the same category in the window.
+# Threshold per category. FS_* sub-categories (see log-failures.sh)
+# have different severities and deserve different thresholds:
+#   FS_SPACE → 2  (catastrophic — almost immediate)
+#   FS_PERM  → 3  (real infra problem)
+#   FS_LOCK  → 3  (concurrency)
+#   FS_PATH  → 5  (benign while orienting, high threshold)
+# Everything else defaults to 3.
 # ═══════════════════════════════════════════════════════
-if [ "$TOP_COUNT" -ge 3 ]; then
+case "$TOP_CATEGORY" in
+  FS_SPACE) THRESHOLD=2 ;;
+  FS_PATH)  THRESHOLD=5 ;;
+  *)        THRESHOLD=3 ;;
+esac
+
+if [ "$TOP_COUNT" -ge "$THRESHOLD" ]; then
   # Avoid spamming: only alert if marker is older than 10 minutes (or absent)
   SHOULD_ALERT=1
   if [ -f "$STUCK_MARKER" ]; then
@@ -80,7 +92,7 @@ if [ "$TOP_COUNT" -ge 3 ]; then
     # Sample tools involved (last 5)
     SAMPLE_TOOLS=$(echo "$WINDOW" | awk -F'|' -v c="$TOP_CATEGORY" '{gsub(/ /, "", $3); gsub(/^ /, "", $4); gsub(/ $/, "", $4); if ($3==c) print $4}' | tail -5 | tr '\n' ',' | sed 's/,$//')
 
-    echo "- \`$TIMESTAMP\` | STUCK | HIGH | Repeated $TOP_CATEGORY failures detected ($TOP_COUNT in last 30 events) — tools: $SAMPLE_TOOLS — consider /unstick or step back" >> "$INCIDENT_LOG"
+    echo "- \`$TIMESTAMP\` | STUCK | HIGH | Repeated $TOP_CATEGORY failures detected ($TOP_COUNT in last 30 events, threshold=$THRESHOLD) — tools: $SAMPLE_TOOLS — consider /unstick or step back" >> "$INCIDENT_LOG"
 
     # Activate quality gate — real tool failures are a stronger signal
     # than an LLM verdict. The gate is enforced by check-quality-gate.sh
@@ -91,12 +103,17 @@ if [ "$TOP_COUNT" -ge 3 ]; then
       echo "- \`$TIMESTAMP\` | STUCK | WARN | Quality gate activated — $TOP_COUNT $TOP_CATEGORY failures" >> "$INCIDENT_LOG"
     fi
 
-    # Touch marker so we don't re-alert for 10 minutes
+    # Touch marker so we don't re-alert for 10 minutes.
+    # last_failure_ts is the Unix timestamp of THIS detection; check-
+    # quality-gate.sh uses it for evidence-based auto-recovery (gate
+    # clears when no new failure has landed for >RECOVERY_WINDOW_SEC).
+    LAST_FAILURE_TS=$(date +%s)
     cat > "$STUCK_MARKER" <<EOF
 $TIMESTAMP
 category=$TOP_CATEGORY
 count=$TOP_COUNT
 tools=$SAMPLE_TOOLS
+last_failure_ts=$LAST_FAILURE_TS
 EOF
   fi
 fi

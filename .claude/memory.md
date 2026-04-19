@@ -3,23 +3,24 @@
 ## Now
 
 - **trdex LIVE in production**: `https://trdex.gravya.it` (FastAPI) + `/dashboard/` (Streamlit, GitHub OAuth)
-- **Phase 2 observation**: 25 crypto symbols (aggressive tuning), Runtime Config DB-backed + Fernet-encrypted credentials, scheduler 5 min
-- **Sessione 2026-04-12 chiusa**: 3 merge forward da main (14 commit totali: Telegram multi-channel, parser rewrite, evaluator, encrypted creds, debug gate, drawdown gate, rate limiter X-Forwarded-For). Security 7/7 CLOSED. Memory snapshot sanitization + CLI validation fixati localmente. 400/400 test pass.
+- **trdex-llm deploy-ready**: runbook `docs/deploy-trdex-llm-runbook.md`. DNS OK, branch `llm-agents` pushato @ `f3fea47`, GitHub App Coolify già installata org-wide, OAuth App creata, 3 LLM provider key pronte. Prossimo passo: creare app Coolify UI.
+- **Sessione 2026-04-18 (completata)**: Kloudify v1.3.2→v1.4.4 + 2 merge forward (7+3 commit) + runbook deploy trdex-llm + P1 hot-reload integration toggles CHIUSO. Commits: `c720f0e`, `7850117`, `98e69e3`, `f3fea47`. Push done. 400/400 test. 0 vulns.
 
 ## ⚠️ Branch LLM dev — `llm-agents`
 
 - **Branch**: `llm-agents` (worktree `trdex-llm/`, pushato su origin)
-- **Stato**: Task 1-7 LLM agents DONE. RAG Tier 4b DONE. Telegram pipeline COMPLETE (30+ channels, dual-path signal+news, evaluator, dashboard). Security 7/7 CLOSED. 400/400 test. Merge forward x5 totali.
+- **Stato**: Task 1-7 LLM agents DONE. LLMCaller wired nel lifespan (commit `bb9b1a4`). RAG Tier 4b DONE. Telegram pipeline COMPLETE. Security 7/7 CLOSED. Merge forward x6 totali. 400/400 test.
 - **Design doc**: `.claude/reports/llm-agents-design-2026-04-08.md` (Rev 1, 23 objections)
 - **Deploy guide**: `docs/deploy-llm-instance.md` — parallel Coolify app `trdex-llm.gravya.it` (DNS created)
 - **Workflow**: bug di prod su main → merge forward nel branch. MAI il contrario.
 
 ## Prossima sessione
 
-1. **Deploy trdex-llm su Coolify** — ANTHROPIC_API_KEY, OAuth callback, TRDEX_CONFIG_ENCRYPTION_KEY, attivare Analyst LLM da dashboard
-2. **Attivare RAG Tier 4b in prod** — `backfill_ohlcv.py --days 365` per symbol + `generate_episodes.py --all`
-3. **TelegramSignalExecutor** — Step 2 del Telegram integration (va approvato su main prima, poi merge forward). Gate: 7 giorni dati, win_rate >= 0.6, >= 20 segnali resolved
-4. **Task 8 LLM Evaluation framework** — quando hai dati live (50 golden scenarios, LLM vs rule A/B)
+1. **Deploy trdex-llm Step 1-3 (UI Coolify + VPS)** — seguire `docs/deploy-trdex-llm-runbook.md`. Step 1-3 umani, Step 4-6 insieme.
+2. **Attivare RAG Tier 4b in prod** — dopo deploy OK: `backfill_ohlcv.py --days 365` per symbol + `generate_episodes.py --all`
+3. **TelegramSignalExecutor** — Step 2 Telegram integration (7 subtask in Task Board)
+4. **Multi-asset Forex** — design approvato, 4 fasi (AssetClassRegistry → OANDA → Dashboard split)
+5. **Task 8 LLM Evaluation framework** — quando hai dati live dal deploy
 
 ## Project: trdex
 
@@ -30,7 +31,7 @@
 - **Memory**: 7-tier (KB / agent_memory / nominations / trade_narratives / market_episodes / entity_graph / agent_runs)
 - **Owner**: Daniele (daniele@gravya.it), app privata (no MiFID)
 - **Tests**: 400/400 passing
-- **Commit identity**: `Author: GravyaDev <dev@gravya.it>`, trailer `Co-Authored-By: Kloud <kloud@gravya.it>`. MAI Claude.
+- **Commit identity**: `Author: Daniele <daniele@gravya.it>`, trailer `Co-Authored-By: Kloud <kloud@gravya.it>`. MAI Claude. MAI `dev@gravya.it` (mailbox inesistente, era regressione pre-2026-04-17).
 
 ## Production state
 
@@ -49,7 +50,8 @@
 
 ## Scelte tecniche fisse
 
-- RSI Wilder smoothing, SMA 5/13 (aggressive), Sharpe 365 days/year
+- RSI Wilder + direzionale (>50 BUY, <50 SELL, 30/70 overextension), SMA 9/21 su 1h, Sharpe 365 days/year
+- SL 2% / TP 4% / trailing 1.5% (post-tuning 2026-04-15), 10 symbols liquidi (BTC ETH SOL BNB XRP ADA AVAX LINK POL ATOM)
 - Balance ledger source of truth, idempotency `agent:{run_id}` / `close:{pos_id}`
 - Intent enum con short reserved, readiness gate legge da ledger
 - VPS ports: 8500→8000 (app), 8501→8501 (dashboard)

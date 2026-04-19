@@ -227,7 +227,7 @@ sections of project-stack.md and derive which audit tools to run:
 - "Node.js (npm)" or Node dependency sections present → `npm audit`
 - "Node.js (pnpm)" → `pnpm audit`
 - "Node.js (yarn)" → `yarn audit`
-- "Python (pip)" or Python dependency sections present → `pip-audit`
+- "Python (pip)" or Python dependency sections present → `pip-audit -r <service>/requirements.lock` if a `requirements.lock` file exists alongside `requirements.txt` (lockfile-based audit — audits exact container pins, not the current interpreter); otherwise fall back to `pip-audit -r <service>/requirements.txt`
 - "Python (pyproject)" → `pip-audit` (via pyproject.toml)
 - "Rust (cargo)" → `cargo audit`
 - "Go (modules)" → `govulncheck`

@@ -13,6 +13,7 @@ mkdir -p "$LOG_DIR"
 # ═══════════════════════════════════════════════════════
 rm -f "$LOG_DIR/.quality-gate-active" \
       "$LOG_DIR/.stuck-detected" \
+      "$LOG_DIR/.gate-warning-acknowledged" \
       "$LOG_DIR/.tool-call-count" \
       "$LOG_DIR/.compaction-occurred" 2>/dev/null
 

@@ -1,6 +1,7 @@
 #!/bin/bash
 # PostToolUse hook — logs tool failures to incident log.
-# Categories: BUILD, API, FILESYSTEM, NETWORK, PERMISSION, CONTEXT, OTHER
+# Categories: BUILD, API, FS_PATH, FS_PERM, FS_SPACE, FS_LOCK,
+#             NETWORK, PERMISSION, CONTEXT, OTHER
 # Severities: CRITICAL, ERROR, WARN, INFO
 #
 # CONTEXT is reserved for failures where the agent exceeded a token /
@@ -10,6 +11,18 @@
 # by stuck-detector.sh. OTHER is an unclassified-fallback bucket and is
 # intentionally excluded from stuck counting (unrelated errors in OTHER
 # do not constitute a repeated pattern).
+#
+# FILESYSTEM is split into four sub-categories because the failure
+# modes have wildly different root causes and deserve different stuck
+# thresholds:
+#   FS_PATH   — wrong path, file not found, is-a-directory. Normal
+#               while an agent orients in a large repo; high threshold.
+#   FS_PERM   — permission denied. Real infra problem; low threshold.
+#   FS_SPACE  — disk full, quota exceeded. Catastrophic; lowest
+#               threshold (fires almost immediately).
+#   FS_LOCK   — file locked, already exists, resource busy. Concurrency;
+#               medium threshold.
+# Per-sub-category thresholds live in stuck-detector.sh.
 
 INPUT=$(cat)
 TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
@@ -34,11 +47,31 @@ CATEGORY="OTHER"
 SEVERITY="ERROR"
 
 case "$ERROR" in
+  # FS_SPACE — disk / quota. Match first; highest impact.
+  *"ENOSPC"*|*"No space left"*|*"disk full"*|*"quota exceeded"*|*"Disk quota"*)
+    CATEGORY="FS_SPACE"
+    SEVERITY="CRITICAL"
+    ;;
+  # FS_LOCK — concurrency / existence conflicts.
+  *"EEXIST"*|*"File exists"*|*"EBUSY"*|*"resource busy"*|*"EAGAIN"*|*"lock held"*|*"already locked"*)
+    CATEGORY="FS_LOCK"
+    SEVERITY="ERROR"
+    ;;
+  # FS_PATH — wrong path, missing file, is-a-directory (benign).
   *"ENOENT"*|*"No such file"*|*"not found"*|*"EISDIR"*|*"Is a directory"*|*"illegal operation on a directory"*)
-    CATEGORY="FILESYSTEM"
+    CATEGORY="FS_PATH"
     SEVERITY="WARN"
     ;;
-  *"EACCES"*|*"Permission denied"*|*"EPERM"*)
+  # FS_PERM — permission on filesystem (distinct from PERMISSION which
+  # is broader). Match after FS_PATH so benign directory-read failures
+  # on restricted subtrees don't get tagged as PERM first.
+  *"EACCES"*|*"Permission denied"*|*"EPERM"*|*"Operation not permitted"*)
+    CATEGORY="FS_PERM"
+    SEVERITY="ERROR"
+    ;;
+  # Legacy PERMISSION kept for non-filesystem auth failures (401-like
+  # locally-raised errors that don't go through the API branch).
+  *"unauthorized"*|*"not authorized"*)
     CATEGORY="PERMISSION"
     SEVERITY="ERROR"
     ;;

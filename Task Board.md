@@ -18,7 +18,7 @@ DB fresh — $10k seed da reconfigurare se serve.
 
 ## Next Session (inherited from main 2026-04-17)
 
-- **[P1] Hot-reload integration toggles** — oggi cambiare un toggle in Runtime Config → `integrations` richiede restart container. Implementare `unregister()` su `PriceFeedManager` + `IngestionScheduler` + safe stop/start su `TelegramMonitor` per supportare hot-reload. Effort stimato: ~2-3h. File primari: `src/trdex/market/manager.py`, `src/trdex/market/ingestion.py`, `src/trdex/telegram/monitor.py`.
+- [x] **[P1] Hot-reload integration toggles** — done 2026-04-18 (merge forward #8, commit `f3fea47` / main `f590fd5`). `unregister()` su `PriceFeedManager`, `supports_symbol` predicate sui feed, scheduler hot-reload in `api/app.py` + `context/scheduler.py`. Bonus da main: `6ef4281` preparatorio (base feed + coingecko supports_symbol) + `e8f88c9` telegram ROI direction-aware.
 - **[P3] Issue #1 CoinGecko `supports_symbol` filter** — residuo di https://github.com/GravyaDev/trdex/issues/1 dopo fix Binance (2026-04-17). Implementare `supports_symbol(symbol: str) -> bool` predicate su `CoinGeckoFeed` + filter nel `PriceFeedManager._rate_limited_call` per skippare feed che non supportano il simbolo. Effort ~30 min. Low priority (pure log hygiene).
 - **[P1] Osservazione post-reset** — 5-7gg con nuova strategia. Target $20-30/giorno. Verificare win rate reale su ≥20 trade chiusi. (Nota dalla sim 2026-04-16: la retro-simulation sul parametro sweep suggerisce che trailing 2.5% > trailing 1.5% — +$19.21 vs +$0.54 sui 26 trade, ma sample troppo piccolo per cambiare adesso.)
 - **[P2] Auto-resolve Telegram channel names on CSV save** — quando un utente salva `telegram_channels` in Runtime Config, un endpoint `/v1/telegram/resolve-channels` chiama `client.get_entity(chat_id)` per ogni token, popola una mappa `telegram_channel_titles` (JSON runtime_config key) e il widget dashboard mostra "Nome · chat_id" invece di solo chat_id. Eager al save + lazy fallback ai messaggi in arrivo. Effort ~30-45 min.
@@ -161,6 +161,14 @@ Aperti:
 - [ ] Tier 3+4 features (kline WS stream, CoinGecko screener, hyperopt, Redis cache, Ollama LLM)
 
 ---
+
+## Done — 2026-04-18
+
+- [x] **Kloudify upgrade v1.3.2 → v1.4.4** (commit `c720f0e`) — 11 `.kloudify-new` conflict files reviewed and adopted. Universal-rules +2 entries (GitHub Apps webhooks false-negative, BetterAuth nanoid IDs). New `wrap-up-digest.sh` hook for Step 7b deterministic digest. `settings.json` adopted despite cozempic hook loss (reinstalled from scratch after sync).
+- [x] **Merge forward #7** (commit `7850117`) — 10 commits from main: 2 security patches (langsmith/pytest/python-multipart + mako CVE), TwelveDataFeed, per-component enable toggles, yfinance dep, simulated P&L telegram dashboard. 3 conflicts resolved (uv.lock→theirs, playbook→theirs, Task Board→manual).
+- [x] **Runbook deploy trdex-llm** (commit `98e69e3`) — `docs/deploy-trdex-llm-runbook.md`: 6-step operational checklist for fresh Coolify app creation via GitHub App source. Section 1.5 of playbook (data-wipe risk) explicitly NOT applicable — new app, not Source-type conversion.
+- [x] **Merge forward #8** (commit `f3fea47`) — 3 commits from main: `6ef4281` supports_symbol predicate + feed unregister (infra), `f590fd5` **P1 hot-reload integration toggles** (+205 lines in api/app.py, +20 in context/scheduler.py), `e8f88c9` telegram win/loss direction-aware ROI. Zero conflicts. 400/400 tests. 0 vulns.
+- [x] **Cozempic reinstalled globally** — via uv tool (standalone, outside project venv). 1.8.0 working.
 
 ## Done — 2026-04-17
 

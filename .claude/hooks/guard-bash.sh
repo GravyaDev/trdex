@@ -109,22 +109,30 @@ check_outside_write() {
   return 1
 }
 
+# Redirect / tee / dd checks run against COMMAND_SHELL (heredoc body stripped).
+# Rationale: prior versions used $COMMAND, which matches angle-bracket placeholders
+# or literal "> /path" substrings inside HEREDOC bodies (e.g. commit messages,
+# docs, gh pr --body content). A quoted `<foo>/file.ext` inside a HEREDOC was
+# hard-blocked as "writing outside project dir" even though no shell redirect
+# was actually present. Use $COMMAND_SHELL (heredoc body removed by sed at top)
+# to gate only real shell-level redirects.
+
 # Redirect: > /path or >> /path
-REDIR_TARGET=$(echo "$COMMAND" | grep -oE '>>?\s*/[^ ;|&]+' | head -1 | sed -E 's/^>>?\s*//')
+REDIR_TARGET=$(echo "$COMMAND_SHELL" | grep -oE '>>?\s*/[^ ;|&]+' | head -1 | sed -E 's/^>>?\s*//')
 if [ -n "$REDIR_TARGET" ] && check_outside_write "$REDIR_TARGET"; then
   log_incident "HIGH" "BLOCKED: redirect outside project dir → $COMMAND"
   deny "HARD BLOCK: writing outside project dir is strictly forbidden." "Redirect target: $REDIR_TARGET"
 fi
 
 # tee: tee /path or tee -a /path
-TEE_TARGET=$(echo "$COMMAND" | grep -oE '\btee\s+(-[aA]\s+)?/[^ ;|&]+' | head -1 | sed -E 's/^tee\s+(-[aA]\s+)?//')
+TEE_TARGET=$(echo "$COMMAND_SHELL" | grep -oE '\btee\s+(-[aA]\s+)?/[^ ;|&]+' | head -1 | sed -E 's/^tee\s+(-[aA]\s+)?//')
 if [ -n "$TEE_TARGET" ] && check_outside_write "$TEE_TARGET"; then
   log_incident "HIGH" "BLOCKED: tee outside project dir → $COMMAND"
   deny "HARD BLOCK: writing outside project dir is strictly forbidden." "tee target: $TEE_TARGET"
 fi
 
 # dd: dd of=/path
-DD_TARGET=$(echo "$COMMAND" | grep -oE '\bdd\s+.*\bof=/[^ ;|&]+' | head -1 | sed -E 's/.*\bof=//')
+DD_TARGET=$(echo "$COMMAND_SHELL" | grep -oE '\bdd\s+.*\bof=/[^ ;|&]+' | head -1 | sed -E 's/.*\bof=//')
 if [ -n "$DD_TARGET" ] && check_outside_write "$DD_TARGET"; then
   log_incident "HIGH" "BLOCKED: dd outside project dir → $COMMAND"
   deny "HARD BLOCK: writing outside project dir is strictly forbidden." "dd target: $DD_TARGET"
@@ -179,8 +187,10 @@ if echo "$COMMAND_SHELL" | grep -qE 'rm\s+(-[a-zA-Z]*[rf][a-zA-Z]*\s+)'; then
   deny "SOFT BLOCK: rm with -r or -f flags deletes files permanently." "Command blocked: recursive/force delete. If intentional, ask the user to confirm with specific file paths listed."
 fi
 
-# Overwriting system/config files
-if echo "$COMMAND" | grep -qE '>\s*(~\/\.|\/etc\/|\.env|\.ssh|\.claude\/settings)'; then
+# Overwriting system/config files (checked against COMMAND_SHELL to avoid
+# heredoc false-positives — docs and commit messages may reference ~/.ssh/
+# or .claude/settings as literal text).
+if echo "$COMMAND_SHELL" | grep -qE '>\s*(~\/\.|\/etc\/|\.env|\.ssh|\.claude\/settings)'; then
   log_incident "HIGH" "SOFT BLOCKED: config/system file overwrite → $COMMAND"
   deny "SOFT BLOCK: Writing to a sensitive config/system file." "Command blocked: system file overwrite detected. Verify this is intentional with the user."
 fi
