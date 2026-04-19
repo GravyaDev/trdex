@@ -40,7 +40,7 @@ These are out-of-scope for this spec. They live on the roadmap and will get thei
 | `src/trdex/execution/symbol_router.py` | `route(symbol) → (PriceFeed, Gateway)`. Today only crypto; forex/commodity raise `SymbolNotRoutable`. |
 | `src/trdex/execution/telegram_executor.py` | Orchestrator: risk gates → price fetch → qty sizing → order placement → persistence. |
 | `src/trdex/execution/telegram_gates.py` | Five pure gate functions. Each returns `GateResult(passed: bool, reason: str)`. Testable in isolation. |
-| `migrations/017_telegram_signal_execution.sql` | Adds `executed_mode TEXT NULL` (`null` / `'simulation'` / `'live'`) to `signal_outcomes`. |
+| ~~`migrations/017`~~ | **Dropped after reality-check.** See "Implementation corrections" below — `positions.signal_id` already bridges observe↔executed, no new column needed. |
 | `tests/execution/test_symbol_router.py` | Crypto routes correctly; forex raises. |
 | `tests/execution/test_telegram_gates.py` | One test per gate (5) + happy path + ordering test. |
 | `tests/execution/test_telegram_executor.py` | Integration: mock monitor → fake signal → assert position opened / skipped with expected reason. |
@@ -51,7 +51,7 @@ These are out-of-scope for this spec. They live on the roadmap and will get thei
 | Path | Change |
 |---|---|
 | `src/trdex/api/app.py::_telegram_background` | After observe-only record and dedup check, if `telegram_executor_enabled` is true, call `telegram_executor.execute(signal, session_factory)`. |
-| `src/trdex/risk/stop_loss.py::_compute_stop_loss` | When `position.note` (JSON) has `source == 'telegram'` with `stop_loss` / `targets`, use those. Otherwise fallback to existing CV-adaptive SL. |
+| ~~`src/trdex/risk/stop_loss.py`~~ | **No change needed** after reality-check. `StopLossMonitor.check_now()` already reads `pos.stop_loss_pct` / `pos.take_profit_pct` with absolute precedence over CV-adaptive. Task 2.4 is satisfied by writing those fields at open time. |
 | `src/trdex/dashboard/app.py` (positions panel) | Add "Telegram" filter chip next to existing source filters. No new component. |
 | `src/trdex/services/runtime_config.py` (or equivalent seed) | Register four new RuntimeConfig keys (see below). |
 
@@ -175,9 +175,29 @@ Reliability gate query counts observe + simulation + live together — all three
 2. **Gate telemetry**. Skipped signals should be logged with reason for dashboard visibility. Spec captures this as log-only; if we need a gate-skip-count dashboard widget later, it's additive (read `signal_outcomes` + a new `skipped_reason` col, or rely on log scraping).
 3. **Multiple TP evolution**. `targets[1:]` ignored today. If we later want scale-out, we'll need either (a) partial close orders at each target, or (b) a trailing SL that advances through targets. Captured as roadmap item.
 
+## Implementation corrections after reality check
+
+Reality-check pass 2026-04-19 found five deviations from initial assumptions. These are the binding interpretations for the implementation plan:
+
+1. **No migration 017 needed.** `positions.signal_id` (already exists, `String(100)`, nullable, from migration earlier) is the bridge between `signal_outcomes.id` and the executed position. Query "was this signal executed?" = `SELECT 1 FROM positions WHERE signal_id = :id` — zero schema change. The `signal_outcomes.source` column (VARCHAR 100, not `source_channel`) already stores the Telegram chat_id.
+
+2. **No `stop_loss.py` change needed.** `StopLossMonitor.check_now()` in `src/trdex/risk/stop_loss.py:434` already reads `pos.stop_loss_pct` and `pos.take_profit_pct` with absolute precedence over CV-adaptive thresholds (`migrations/014` added these columns specifically for this use case). Task 2.4 is satisfied by: convert `signal.stop_loss` / `signal.targets[0]` from absolute prices to percentages relative to `entry_price`, then pass them to `PortfolioService.record_open_fill(...)` at open time.
+
+3. **No `position.note` JSON.** The `positions` table has no `note` column. The storage model (`src/trdex/storage/portfolio_models.py`) uses discrete columns: `source: str` (default `"manual"`), `signal_id: str | None`, `stop_loss_pct: float | None`, `take_profit_pct: float | None`. The executor writes these fields directly. The signal identity (channel, signal_outcome_id) is captured in `source="telegram"` + `signal_id=str(outcome.id)`.
+
+4. **Gateway call signature.** `DefaultExecutionGateway.place(symbol, direction, qty, price, idempotency_key)` — no `note`, no `market=True` flag (always market). The executor computes `price` from the current feed and passes it through. Fills land in `OrderResult`; the executor then calls `PortfolioService.record_open_fill(...)` to persist the position.
+
+5. **Reliability gate query.** Signal tracker's win-rate lives in-memory (`SignalTracker.report()` in `app.py:1059`). For the gate we add one SQL method to `SignalOutcomeRepository`: `win_rate_by_source(source: str) -> tuple[int, float]` returning `(sample_count, win_rate)` where a win is `(direction == 'BUY' AND exit_price >= entry_price) OR (direction == 'SELL' AND exit_price <= entry_price)` counted only on rows with `exit_price IS NOT NULL`. Reliability gate input is just that method's output.
+
+6. **New repo method.** `PositionRepository.get_open_by_symbol_side(symbol: str, side: str) -> PositionRecord | None` — needed for the dedup gate. Today callers filter `get_open_positions()` in Python; we need a dedicated SQL-level query to avoid scanning all opens on every signal.
+
+7. **Wire-up point.** In `src/trdex/api/app.py::_telegram_background`, the executor call is inserted **inside the `if signal is not None:` branch**, **after** `await _ingest_signal_to_qdrant(signal)` and **before** the `else:` branch that handles non-signal news messages. The executor reads the `outcome.id` returned by the just-completed `repo.save(...)` call (app.py:182-197), so it runs only when `signal.entry is not None` (same guard as persistence). For signals with no entry price, the executor is not invoked — parity with how observe-only behaves.
+
+8. **Test file name correction.** `test_telegram_executor.py` should assert `position.source == "telegram"` + `position.signal_id == str(outcome.id)` + `position.stop_loss_pct` / `position.take_profit_pct` computed correctly. References to `position.note` in the Testing section above are superseded by this section.
+
 ## Rollout plan
 
-1. Migration 017 applied on startup (lifespan already runs migrations).
+1. ~~Migration 017 applied on startup.~~ **No migration needed.**
 2. `telegram_executor_enabled = false` in prod → zero behavior change, purely new code paths dormant.
 3. Unit + integration tests pass (400+ baseline must stay green).
 4. Flip flag to `true` in simulation first. Observe for N days (budget $100/signal × expected volume; small enough that $ burn is trivial).
