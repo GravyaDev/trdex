@@ -85,7 +85,17 @@ Auth: GitHub OAuth via oauth2-proxy.
 - [ ] [telegram] **2.6 Dashboard TG positions panel** — positions `source='telegram'` con entry/current/TP/SL/pnl% + "close now".
 - [ ] [telegram] **2.7 Test simulation mode** — `TRDEX_MODE=simulation` + budget simbolico $10 prima di live.
 
+**Design spec**: `docs/superpowers/specs/2026-04-19-telegram-signal-executor-design.md` (approvato 2026-04-19)
+
 Go-live gate: Step 1 positivo + OandaExecutor + review manuale primi 5 segnali.
+
+**Roadmap derivata dallo spec (deferred, scope futuro)**:
+- [ ] [telegram-future] **Forex/commodity routing** — estende `symbol_router.py` con ramo non-crypto. Dipende da Multi-asset Forex epic (OandaFeed + OandaExecutor).
+- [ ] [telegram-future] **Multiple TP scaling** — oggi usiamo solo `signal.targets[0]`. Evoluzione: scale-out partial close ad ogni target o trailing SL che avanza.
+- [ ] [telegram-future] **Cancel/adjust su signal update** — se un canale posta follow-up, oggi ignoriamo. Valutare mutazione posizione aperta.
+- [ ] [telegram-future] **Budget hot-reload via RuntimeConfig** — oggi `telegram_signal_budget` vive in `settings` (env). Spostarlo a RuntimeConfig per hot-reload da dashboard.
+- [ ] [telegram-future] **Gate skip telemetry** — aggiungere `skipped_reason` column o dashboard widget per contare skip-per-gate.
+- [ ] [telegram-future] **Binance Square signals integration** — parser + executor separati per Binance Square (terza fonte segnali).
 
 ### 🟠 Multi-asset (Forex + crypto) — mergiato da main, design approvato
 
