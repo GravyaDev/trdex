@@ -670,10 +670,20 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             return
 
         # ── Telegram monitor ──
+        # Guards rapid-fire on/off toggles that would otherwise spawn a
+        # second MTProto session before the first has finished shutting
+        # down. nonlocal_state["monitor"] has four states:
+        #   None          — not running
+        #   "starting"    — start_monitor() scheduled, Telethon handshake in flight
+        #   <Monitor obj> — running
+        #   "stopping"    — stop() awaiting Telethon disconnect
         if component == "telegram_monitor":
             current = nonlocal_state.get("monitor")
             if enabled:
                 if current is not None:
+                    # Already running, starting, or stopping — in any non-None
+                    # state a new start is unsafe. "stopping" in particular
+                    # must wait for the disconnect to clear nonlocal_state.
                     return
                 if not settings.telegram_api_id:
                     logger.warning(
@@ -688,6 +698,8 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
                     )
                     return
 
+                nonlocal_state["monitor"] = "starting"
+
                 async def _start_monitor() -> None:
                     try:
                         m = TelegramMonitor(
@@ -696,26 +708,57 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
                             phone=settings.telegram_phone,
                         )
                         await m.start()
+                        # If a concurrent toggle-off flipped us to "stopping"
+                        # or back to None during the handshake, tear the new
+                        # monitor down instead of leaking a second session.
+                        if nonlocal_state.get("monitor") != "starting":
+                            await m.stop()
+                            logger.info(
+                                "[hot-reload] telegram monitor aborted post-start "
+                                "(concurrent toggle-off)"
+                            )
+                            return
                         nonlocal_state["monitor"] = m
                         logger.info("[hot-reload] telegram monitor started")
                     except Exception:
+                        nonlocal_state["monitor"] = None
                         logger.exception(
                             "[hot-reload] telegram monitor start failed"
                         )
 
                 loop.create_task(_start_monitor())
             else:
-                if current is None:
+                # Not a real instance → nothing to stop.
+                if current is None or isinstance(current, str):
+                    # "starting" → flip to None so the in-flight start sees
+                    # the abort signal. "stopping" → already stopping.
+                    if current == "starting":
+                        nonlocal_state["monitor"] = None
                     return
                 try:
                     loop = _aio.get_running_loop()
-                    loop.create_task(current.stop())
-                    nonlocal_state["monitor"] = None
-                    logger.info("[hot-reload] telegram monitor stopped")
                 except RuntimeError:
                     logger.warning(
                         "[hot-reload] no running loop to stop telegram monitor"
                     )
+                    return
+                nonlocal_state["monitor"] = "stopping"
+
+                async def _stop_monitor(m: TelegramMonitor) -> None:
+                    try:
+                        await m.stop()
+                        logger.info("[hot-reload] telegram monitor stopped")
+                    except Exception:
+                        logger.exception(
+                            "[hot-reload] telegram monitor stop failed"
+                        )
+                    finally:
+                        # Clear the sentinel only after disconnect completes
+                        # — this is what lets a subsequent toggle-on proceed.
+                        if nonlocal_state.get("monitor") == "stopping":
+                            nonlocal_state["monitor"] = None
+
+                loop.create_task(_stop_monitor(current))
             return
 
     config_svc.register_listener("thresholds", _on_thresholds_change)
