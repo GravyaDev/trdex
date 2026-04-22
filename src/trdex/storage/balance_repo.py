@@ -37,6 +37,21 @@ class BalanceRepository:
         row = result.scalar_one_or_none()
         return row if row is not None else Decimal("10000")
 
+    async def total_trade_pnl(self) -> Decimal:
+        """Cumulative realised P&L from every trade_fill row in the ledger.
+
+        Single source of truth for realised P&L: sums the ``amount`` column
+        across all ``event_type='trade_fill'`` rows. Includes fees because
+        the PnL written at close is ``gross - fee_open - fee_close``.
+        """
+        result = await self._session.execute(
+            select(func.coalesce(func.sum(BalanceRecord.amount), 0)).where(
+                BalanceRecord.event_type == "trade_fill"
+            )
+        )
+        row = result.scalar_one_or_none()
+        return Decimal(str(row)) if row is not None else Decimal("0")
+
     async def record_event(
         self,
         event_type: str,

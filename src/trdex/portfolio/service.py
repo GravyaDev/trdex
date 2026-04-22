@@ -78,19 +78,30 @@ class PortfolioService:
         return [_record_to_position(r, price_map.get(r.symbol, Decimal("0"))) for r in records]
 
     async def snapshot(self) -> Portfolio:
-        """Full portfolio snapshot: open positions + realized P&L stats."""
+        """Full portfolio snapshot: open positions + realized P&L stats.
+
+        Balance and total realised P&L are read from the ``account_balance``
+        ledger — the single source of truth. Previously ``balance`` fell
+        back to the Pydantic default ($10,000) because it was never set,
+        and ``total_pnl`` was recomputed from ``positions`` without fees,
+        drifting from the ledger by one round-trip fee per trade.
+        """
         positions = await self.mark_to_market()
         closed = await self._repo.get_closed_positions(limit=10_000)
 
+        bal_repo = BalanceRepository(self._repo._session)
+        balance = await bal_repo.current_balance()
+        total_pnl = await bal_repo.total_trade_pnl()
+
         total_trades = len(closed)
         winning_trades = sum(1 for r in closed if _is_win(r))
-        realized_pnl = sum(_realized_pnl(r) for r in closed)
 
         return Portfolio(
+            balance=balance,
             positions=positions,
             total_trades=total_trades,
             winning_trades=winning_trades,
-            total_pnl=Decimal(str(realized_pnl)),
+            total_pnl=total_pnl,
         )
 
     async def _fetch_price(self, symbol: str):  # type: ignore[return]
