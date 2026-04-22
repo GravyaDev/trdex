@@ -165,9 +165,18 @@ def run_backtest(
     Iteration order: symbols are processed sequentially. Within each symbol
     we loop bar-by-bar. Equity withdrawn at open is restored at close.
     """
-    equity = [params.initial_equity]  # mutable cell for closures
+    # Apply strategy-level overrides
+    effective = EngineParams(
+        initial_equity=params.initial_equity,
+        position_size_pct=params.position_size_pct,
+        fee_pct=params.fee_pct,
+        sl_pct=getattr(strategy, "sl_pct_override", params.sl_pct),
+        tp_pct=getattr(strategy, "tp_pct_override", params.tp_pct),
+        trail_pct=getattr(strategy, "trail_pct_override", params.trail_pct),
+    )
+    equity = [effective.initial_equity]
     trades: list[dict[str, Any]] = []
-    equity_curve = [params.initial_equity]
+    equity_curve = [effective.initial_equity]
 
     for symbol, bars in ohlcv_by_symbol.items():
         if strategy.timeframe == "1d":
@@ -181,13 +190,13 @@ def run_backtest(
             bars=working_bars,
             indicators=indicators,
             strategy=strategy,
-            params=params,
+            params=effective,
             equity_cell=equity,
             trades=trades,
             equity_curve=equity_curve,
         )
 
-    return _build_result(strategy.name, trades, equity_curve, params)
+    return _build_result(strategy.name, trades, equity_curve, effective)
 
 
 def _precompute_indicators(bars: list[list]) -> dict:

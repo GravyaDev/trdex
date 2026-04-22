@@ -329,3 +329,27 @@ def test_precompute_indicators_includes_sma20_4h() -> None:
     # First bars are None (warmup), tail has numeric values.
     assert ind["sma20_4h"][0] is None
     assert ind["sma20_4h"][-1] is not None
+
+
+class StrategyWithTpOverride:
+    name = "TpOverride"
+    timeframe = "1h"
+    tp_pct_override = 0.008  # tight scalp TP
+
+    def generate_signal(self, bar_index, candles, indicators, position_state):
+        if bar_index == 5 and position_state == "flat":
+            return "BUY"
+        return "HOLD"
+
+
+def test_strategy_tp_override_is_applied() -> None:
+    # Entry at bar 5 price 100. Bar 6 high 100.9 (above tight TP 100.8).
+    bars = _flat_bars(30)
+    bars[6] = [6 * 3_600_000, 100.0, 100.9, 99.9, 100.0, 10.0]
+    result = run_backtest(
+        StrategyWithTpOverride(), {"BTC/USDT": bars}, EngineParams()
+    )
+    assert result.trades_count == 1
+    t = result.trades[0]
+    assert t["reason"] == "TP"
+    assert abs(t["exit_price"] - 100.8) < 1e-6  # entry 100 * (1 + 0.008)
