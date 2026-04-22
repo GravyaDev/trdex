@@ -131,3 +131,102 @@ def test_engine_params_defaults() -> None:
     assert p.sl_pct == 0.02
     assert p.tp_pct == 0.04
     assert p.trail_pct == 0.015
+
+
+class OpenLongOnceStrategy:
+    """Issues BUY on bar 5, then HOLD forever."""
+    name = "OpenLongOnce"
+    timeframe = "1h"
+
+    def generate_signal(self, bar_index, candles, indicators, position_state):
+        if bar_index == 5 and position_state == "flat":
+            return "BUY"
+        return "HOLD"
+
+
+class BuyOnceSellOnceStrategy:
+    """BUY at bar 5, CLOSE_LONG at bar 20."""
+    name = "BuyOnceSellOnce"
+    timeframe = "1h"
+
+    def generate_signal(self, bar_index, candles, indicators, position_state):
+        if bar_index == 5 and position_state == "flat":
+            return "BUY"
+        if bar_index == 20 and position_state == "long":
+            return "CLOSE_LONG"
+        return "HOLD"
+
+
+def _flat_bars(n: int = 50, price: float = 100.0) -> list[list]:
+    return [[i * 3_600_000, price, price, price, price, 10.0] for i in range(n)]
+
+
+def test_long_opens_at_signal_bar_and_stays_open() -> None:
+    bars = _flat_bars(30)
+    result = run_backtest(OpenLongOnceStrategy(), {"BTC/USDT": bars}, EngineParams())
+    # No exit trigger (price is flat, no SL/TP/trail hit, no CLOSE signal) → 0 closed trades.
+    assert result.trades_count == 0
+
+
+def test_long_tp_hit_registers_trade() -> None:
+    # Flat until bar 10, then a bar that hits +4% high.
+    bars = _flat_bars(30)
+    bars[15] = [15 * 3_600_000, 100.0, 104.5, 99.9, 100.0, 10.0]  # TP hit on high
+    result = run_backtest(
+        OpenLongOnceStrategy(), {"BTC/USDT": bars}, EngineParams()
+    )
+    assert result.trades_count == 1
+    t = result.trades[0]
+    assert t["reason"] == "TP"
+    # TP at entry*1.04 = 100*1.04 = 104. Net pnl: (104-100)*qty - fees
+    assert t["exit_price"] == 104.0
+    assert t["net_pnl"] > 0
+
+
+def test_long_sl_hit_registers_trade() -> None:
+    # Bar 10 triggers SL at low = 97 (entry 100, SL 2% → 98).
+    bars = _flat_bars(30)
+    bars[10] = [10 * 3_600_000, 100.0, 100.1, 97.0, 100.0, 10.0]
+    result = run_backtest(
+        OpenLongOnceStrategy(), {"BTC/USDT": bars}, EngineParams()
+    )
+    assert result.trades_count == 1
+    t = result.trades[0]
+    assert t["reason"] == "SL"
+    assert t["exit_price"] == 98.0  # SL at entry * (1 - 0.02)
+    assert t["net_pnl"] < 0
+
+
+def test_long_close_signal_exits_at_next_open() -> None:
+    bars = _flat_bars(30)
+    # Bar 20 has a distinct open so we can verify exit price is bar 20's open.
+    # Strategy generates CLOSE_LONG at bar_index=20; the engine acts on it
+    # immediately at bar 20's open (same bar, step 4 of the state machine).
+    bars[20] = [20 * 3_600_000, 101.0, 101.5, 100.9, 101.2, 10.0]
+    result = run_backtest(
+        BuyOnceSellOnceStrategy(), {"BTC/USDT": bars}, EngineParams()
+    )
+    assert result.trades_count == 1
+    t = result.trades[0]
+    assert t["reason"] == "SIGNAL"
+    assert t["exit_price"] == 101.0  # bar 20 open
+
+
+def test_long_trail_raises_with_new_highs() -> None:
+    # Bar 6: price rises to 103 (up 3%). Trail moves to 103*(1-0.015)=101.455.
+    # Bar 7: price drops to low 101. That's above trail (101.455? no, 101<101.455, so hit trail)
+    # Actually 101 < 101.455 → trail hit. Use a more explicit setup:
+    bars = _flat_bars(30)
+    # Entry at bar 5 with price 100 (flat bars)
+    # Bar 6: high 103 → trail now at 103 * 0.985 = 101.455
+    bars[6] = [6 * 3_600_000, 100.0, 103.0, 100.0, 102.5, 10.0]
+    # Bar 7: low 101 → trail hit at 101.455
+    bars[7] = [7 * 3_600_000, 102.5, 102.5, 101.0, 101.5, 10.0]
+    result = run_backtest(
+        OpenLongOnceStrategy(), {"BTC/USDT": bars}, EngineParams()
+    )
+    assert result.trades_count == 1
+    t = result.trades[0]
+    assert t["reason"] == "TRAIL"
+    # Trail exit price ~= 103 * (1 - 0.015) = 101.455
+    assert abs(t["exit_price"] - 101.455) < 1e-6

@@ -120,6 +120,13 @@ def split_trades_by_quarter(trades: list[dict]) -> dict[str, list[dict]]:
 
 
 from typing import Literal, Protocol
+from scripts.backtest.indicators import (
+    bollinger_bands,
+    is_squeezing,
+    sma,
+    volume_ma,
+    wilder_rsi,
+)
 
 
 Signal = Literal["BUY", "SELL", "CLOSE_LONG", "CLOSE_SHORT", "HOLD"]
@@ -184,8 +191,27 @@ def run_backtest(
 
 
 def _precompute_indicators(bars: list[list]) -> dict:
-    """Placeholder — filled in Task 5 once strategies are concrete."""
-    return {}
+    closes = [b[4] for b in bars]
+    highs = [b[2] for b in bars]
+    lows = [b[3] for b in bars]
+    volumes = [b[5] for b in bars]
+    bb_upper, bb_mid, bb_lower = bollinger_bands(closes, period=20, std_dev=2.0)
+    return {
+        "closes": closes,
+        "highs": highs,
+        "lows": lows,
+        "volumes": volumes,
+        "rsi14": wilder_rsi(closes, period=14),
+        "sma9": sma(closes, 9),
+        "sma21": sma(closes, 21),
+        "sma50": sma(closes, 50),
+        "sma20_4h": None,         # filled in Task 7 for MultiTimeframeConfirm if needed
+        "bb_upper": bb_upper,
+        "bb_mid": bb_mid,
+        "bb_lower": bb_lower,
+        "vol_ma24": volume_ma(volumes, period=24),
+        "squeeze": is_squeezing(closes, bb_period=20, std_dev=2.0, lookback=100, pct=0.3),
+    }
 
 
 def _simulate_symbol(
@@ -199,21 +225,109 @@ def _simulate_symbol(
     trades: list,
     equity_curve: list[float],
 ) -> None:
-    """Per-symbol simulation. In the skeleton, only handles HOLD.
+    position_state: str = "flat"
+    entry_price = 0.0
+    entry_qty = 0.0
+    entry_ts = 0
+    max_seen = 0.0
+    trail_sl = 0.0
+    initial_sl = 0.0
 
-    Task 5 adds open_long / exit_long.
-    Task 6 adds open_short / exit_short / flip.
-    """
     for i in range(1, len(bars)):
-        # Skeleton: consult strategy but never act (HOLD-only test coverage).
-        _ = strategy.generate_signal(
+        ts, o, h, l, c, _v = bars[i]
+
+        # 1) Intra-bar exit check on open long
+        if position_state == "long":
+            tp_price = entry_price * (1 + params.tp_pct)
+            if l <= trail_sl:
+                reason = "TRAIL" if trail_sl > initial_sl else "SL"
+                _close_long(
+                    symbol=symbol, ts=ts, entry_price=entry_price,
+                    entry_qty=entry_qty, entry_ts=entry_ts,
+                    exit_price=trail_sl, reason=reason, fee_pct=params.fee_pct,
+                    equity_cell=equity_cell, trades=trades,
+                )
+                position_state = "flat"
+            elif h >= tp_price:
+                _close_long(
+                    symbol=symbol, ts=ts, entry_price=entry_price,
+                    entry_qty=entry_qty, entry_ts=entry_ts,
+                    exit_price=tp_price, reason="TP", fee_pct=params.fee_pct,
+                    equity_cell=equity_cell, trades=trades,
+                )
+                position_state = "flat"
+            else:
+                # 2) Trail update on new high
+                if h > max_seen:
+                    max_seen = h
+                    new_trail = max_seen * (1 - params.trail_pct)
+                    if new_trail > trail_sl:
+                        trail_sl = new_trail
+
+        # 3) Consult strategy for this bar (using data up to bar i-1)
+        sig = strategy.generate_signal(
             bar_index=i,
             candles=bars,
             indicators=indicators,
-            position_state="flat",
+            position_state=position_state,
         )
-        # Mark-to-market equity (no open position → unchanged)
-        equity_curve.append(equity_cell[0])
+
+        # 4) Execute signal at bar i's open
+        if sig == "BUY" and position_state == "flat":
+            equity = equity_cell[0]
+            budget = equity * params.position_size_pct
+            if budget > 0:
+                entry_price = o
+                entry_qty = (budget / entry_price) * (1 - params.fee_pct)
+                entry_ts = ts
+                max_seen = entry_price
+                initial_sl = entry_price * (1 - params.sl_pct)
+                trail_sl = initial_sl
+                equity_cell[0] = equity - budget
+                position_state = "long"
+        elif sig == "CLOSE_LONG" and position_state == "long":
+            _close_long(
+                symbol=symbol, ts=ts, entry_price=entry_price,
+                entry_qty=entry_qty, entry_ts=entry_ts,
+                exit_price=o, reason="SIGNAL", fee_pct=params.fee_pct,
+                equity_cell=equity_cell, trades=trades,
+            )
+            position_state = "flat"
+
+        # Mark-to-market equity for this bar
+        mtm = equity_cell[0] + (entry_qty * c if position_state == "long" else 0.0)
+        equity_curve.append(mtm)
+
+
+def _close_long(
+    *,
+    symbol: str,
+    ts: int,
+    entry_price: float,
+    entry_qty: float,
+    entry_ts: int,
+    exit_price: float,
+    reason: str,
+    fee_pct: float,
+    equity_cell: list[float],
+    trades: list,
+) -> None:
+    gross_value = entry_qty * exit_price
+    exit_fee = gross_value * fee_pct
+    proceeds = gross_value - exit_fee
+    equity_cell[0] += proceeds
+    net_pnl = (exit_price - entry_price) * entry_qty - exit_fee
+    trades.append({
+        "symbol": symbol,
+        "side": "long",
+        "entry_ts": entry_ts,
+        "exit_ts": ts,
+        "entry_price": entry_price,
+        "exit_price": exit_price,
+        "qty": entry_qty,
+        "net_pnl": net_pnl,
+        "reason": reason,
+    })
 
 
 def _build_result(
