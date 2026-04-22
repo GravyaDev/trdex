@@ -175,3 +175,98 @@ def test_bollinger_squeeze_fires_on_squeeze_release_up() -> None:
         bar_index=30, candles=bars, indicators=ind, position_state="flat"
     )
     assert sig == "BUY"
+
+
+from scripts.backtest.strategies import (
+    PullbackInUptrend,
+    TimeFilterLive,
+    ZanniLikeScalp,
+)
+
+HOUR_MS = 3_600_000
+
+
+def _bar_at_utc_hour(h: int, day_offset: int = 0) -> list:
+    # ts_ms at UTC hour h on day `day_offset` (from 1970-01-01)
+    return [day_offset * 86_400_000 + h * HOUR_MS, 100.0, 100.0, 100.0, 100.0, 10.0]
+
+
+def test_time_filter_live_buys_inside_window() -> None:
+    # Bar at UTC 15:00 — inside 13–22 window, RSI 55 → BUY
+    bars = [_bar_at_utc_hour(i) for i in range(20)]
+    ind = {
+        "rsi14": [None] * 15 + [55.0] + [None] * 4,
+    }
+    # bar_index=16 means we consult indicator at 15
+    sig = TimeFilterLive().generate_signal(
+        bar_index=16, candles=bars, indicators=ind, position_state="flat"
+    )
+    assert sig == "BUY"
+
+
+def test_time_filter_live_holds_outside_window() -> None:
+    # Bar at UTC 08:00 — outside 13–22 window
+    bars = [_bar_at_utc_hour(i) for i in range(20)]
+    ind = {
+        "rsi14": [None] * 8 + [55.0] + [None] * 11,
+    }
+    sig = TimeFilterLive().generate_signal(
+        bar_index=9, candles=bars, indicators=ind, position_state="flat"
+    )
+    assert sig == "HOLD"
+
+
+def test_pullback_in_uptrend_buys_when_conditions_met() -> None:
+    # 25 bars of synthetic, SMA50 must be rising over 24 bars, RSI < 40.
+    bars = [[i * HOUR_MS, 100.0, 100.0, 100.0, 100.0, 10.0] for i in range(100)]
+    ind = {
+        # SMA50 rising: 100 at i-24, 102 at i-1
+        "sma50": [None] * 50 + [100.0 + j * 0.05 for j in range(50)],
+        "rsi14": [None] * 98 + [35.0, None],
+    }
+    sig = PullbackInUptrend().generate_signal(
+        bar_index=99, candles=bars, indicators=ind, position_state="flat"
+    )
+    assert sig == "BUY"
+
+
+def test_pullback_in_uptrend_no_short() -> None:
+    # Even in oversold + downtrend, long-only strategy never emits SELL.
+    bars = [[i * HOUR_MS, 100.0, 100.0, 100.0, 100.0, 10.0] for i in range(100)]
+    ind = {
+        "sma50": [None] * 50 + [100.0 - j * 0.05 for j in range(50)],  # falling
+        "rsi14": [None] * 99 + [35.0],
+    }
+    sig = PullbackInUptrend().generate_signal(
+        bar_index=99, candles=bars, indicators=ind, position_state="flat"
+    )
+    assert sig == "HOLD"
+
+
+def test_zanni_like_scalp_buys_on_three_rising_bars_in_window() -> None:
+    # Construct 10 bars at UTC hours 12..21. Bars 17, 18, 19 are rising closes,
+    # and bar 19 is inside the 13–22 window. RSI at bar 19 is 55.
+    bars = []
+    for i, h in enumerate(range(12, 22)):
+        # Rising close pattern on last three:
+        if i >= 6:
+            close = 100.0 + (i - 6) * 0.3
+        else:
+            close = 100.0
+        bars.append([h * HOUR_MS, close, close, close, close, 10.0])
+    # Need RSI at bar_index-1 = index 9 → RSI[9] = 55
+    ind = {
+        "rsi14": [None] * 9 + [55.0],
+    }
+    sig = ZanniLikeScalp().generate_signal(
+        bar_index=10, candles=bars, indicators=ind, position_state="flat"
+    )
+    assert sig == "BUY"
+
+
+def test_zanni_like_scalp_uses_tight_tp_via_attribute() -> None:
+    # The strategy must expose tight TP via a class attribute so the runner
+    # can override EngineParams.tp_pct when running Zanni.
+    s = ZanniLikeScalp()
+    assert hasattr(s, "tp_pct_override")
+    assert s.tp_pct_override == 0.008

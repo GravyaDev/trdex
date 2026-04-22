@@ -198,3 +198,83 @@ class BollingerSqueezeBreakout:
                 return "SELL"
             return "HOLD"
         return "HOLD"
+
+
+from datetime import datetime, timezone
+
+
+def _utc_hour(ts_ms: int) -> int:
+    return datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).hour
+
+
+class TimeFilterLive:
+    name = "TimeFilterLive"
+    timeframe = "1h"
+
+    def generate_signal(self, bar_index, candles, indicators, position_state):
+        rsi = indicators["rsi14"][bar_index - 1]
+        if rsi is None:
+            return "HOLD"
+        hour = _utc_hour(candles[bar_index - 1][0])
+        in_window = 13 <= hour < 22
+        if not in_window:
+            return "HOLD"
+        want_long = rsi >= 50
+        if want_long:
+            if position_state == "flat":
+                return "BUY"
+            if position_state == "short":
+                return "BUY"
+            return "HOLD"
+        else:
+            if position_state == "flat":
+                return "SELL"
+            if position_state == "long":
+                return "SELL"
+            return "HOLD"
+
+
+class PullbackInUptrend:
+    """Long-only: BUY when SMA50 rising over 24 bars AND RSI < 40."""
+    name = "PullbackInUptrend"
+    timeframe = "1h"
+    trail_pct_override = 0.03
+
+    def generate_signal(self, bar_index, candles, indicators, position_state):
+        if bar_index < 25:
+            return "HOLD"
+        sma50 = indicators["sma50"]
+        rsi = indicators["rsi14"][bar_index - 1]
+        s_now = sma50[bar_index - 1]
+        s_then = sma50[bar_index - 25]
+        if rsi is None or s_now is None or s_then is None:
+            return "HOLD"
+        rising = s_now > s_then
+        if rising and rsi < 40 and position_state == "flat":
+            return "BUY"
+        return "HOLD"
+
+
+class ZanniLikeScalp:
+    """Long-only scalp: 13–22 UTC AND 3 rising closes AND 45 <= RSI <= 65."""
+    name = "ZanniLikeScalp"
+    timeframe = "1h"
+    tp_pct_override = 0.008
+    trail_pct_override = 0.0  # no trail
+
+    def generate_signal(self, bar_index, candles, indicators, position_state):
+        if bar_index < 4:
+            return "HOLD"
+        rsi = indicators["rsi14"][bar_index - 1]
+        if rsi is None:
+            return "HOLD"
+        hour = _utc_hour(candles[bar_index - 1][0])
+        in_window = 13 <= hour < 22
+        if not in_window:
+            return "HOLD"
+        # 3 rising closes: c[i-1] > c[i-2] > c[i-3] > c[i-4]
+        c = [candles[bar_index - k][4] for k in (1, 2, 3, 4)]
+        rising = c[0] > c[1] > c[2] > c[3]
+        if rising and 45.0 <= rsi <= 65.0 and position_state == "flat":
+            return "BUY"
+        return "HOLD"
