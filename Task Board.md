@@ -77,13 +77,19 @@ Auth: GitHub OAuth via oauth2-proxy.
 
 ### 🟣 Telegram Signal Step 2 — Auto-execute (mergiato da main, pending implementazione)
 
-- [ ] [telegram] **2.1 Symbol router** — `execution/symbol_router.py` → `(PriceFeed, ExecutionGateway)` in base a `is_forex(symbol)`.
-- [ ] [telegram] **2.2 TelegramSignalExecutor** — `execution/telegram_executor.py`: flow route → market hours → risk gates → fetch price → qty = budget/price → place order con `source="telegram"` → memorizza TP/SL in `position.note`.
-- [ ] [telegram] **2.3 TG risk gates** — budget `settings.telegram_signal_budget`, max 3 open per asset class, reliability gate (win_rate < 0.5 dopo 20 signal → skip).
-- [ ] [telegram] **2.4 SL adattato a TP/SL del segnale** — `stop_loss.py` legge TP/SL da `position.note` se `source=="telegram"`.
-- [ ] [telegram] **2.5 Wire up in lifespan** — `_telegram_background` → `telegram_executor.execute(signal, budget)`.
-- [ ] [telegram] **2.6 Dashboard TG positions panel** — positions `source='telegram'` con entry/current/TP/SL/pnl% + "close now".
-- [ ] [telegram] **2.7 Test simulation mode** — `TRDEX_MODE=simulation` + budget simbolico $10 prima di live.
+- [x] [telegram] **2.1 Symbol router** — DONE 2026-04-19 (commit `480a0a3`). `execution/symbol_router.py` + 11 test. Crypto-only; forex/commodity raise `SymbolNotRoutable`.
+- [x] [telegram] **2.2 TelegramSignalExecutor** — DONE 2026-04-19 (commit `89ed686`). `execution/telegram_executor.py` + 6 test. `ExecuteOutcome` + 5-gate sequencing.
+- [x] [telegram] **2.3 TG risk gates** — DONE 2026-04-19 (commit `bfc7244`). 5 gate funcs + `run_all_gates` ordering + 14 test. Ordine: dedup → asset_cap → budget → reliability (20 samples floor) → entry_drift 0.5%.
+- [x] [telegram] **2.4 SL adattato a TP/SL del segnale** — DONE 2026-04-19 (nessun change a `stop_loss.py` necessario). Migration 014 ha già `stop_loss_pct`/`take_profit_pct` con precedenza su CV-adaptive. L'executor scrive quelle colonne al momento dell'open; `StopLossMonitor.check_now()` le legge già con precedenza assoluta.
+- [ ] [telegram] **2.5 Wire up in lifespan** — `_telegram_background` → `telegram_executor.execute(signal, outcome_id)`. **NEXT SESSION** — richiede "verify helper names" per `PortfolioService(session)`, `BalanceRepository.latest_balance_after`, `get_feed_manager`.
+- [ ] [telegram] **2.8 Security hardening (pre-live)** — dalla scansione 2026-04-19 (mitigazioni necessarie PRIMA di `telegram_executor_enabled=true` in live):
+  - **[HIGH]** `telegram_executor.py:141` default `getattr(order_result, "status", "filled")` → deve essere `None` + esplicito filled-check (rischio phantom fill).
+  - **[HIGH]** `telegram_executor.py:155` `getattr(order_result, "fee", 0.0)` → aggiungi bounds/type validation prima di `Decimal()` (corrompe P&L ledger se gateway restituisce fee adversarial).
+  - **[MEDIUM]** normalizzare `signal.direction` (upper + strip) prima di usarlo nel gate dedup, per evitare bypass via `"buy"` vs `"BUY"` o trailing space.
+  - **[MEDIUM]** guard `current_price == 0` in `telegram_executor.py:111` (oggi raise `ZeroDivisionError` catturato come status=error — preferibile status=skipped con reason esplicito).
+  - **[LOW]** `GateConfig.asset_class_cap >= 1` / `budget > 0` validation da RuntimeConfig (blocca misconfig silenziose). `win_rate_by_source` senza filtro date = scan unbounded (scaling DoS risk).
+- [ ] [telegram] **2.6 Dashboard TG positions panel** — chip "telegram" su panel Open Positions (nessun nuovo componente).
+- [ ] [telegram] **2.7 Test simulation mode** — E2E con `TRDEX_MODE=simulation`, richiede fixture DB test.
 
 **Design spec**: `docs/superpowers/specs/2026-04-19-telegram-signal-executor-design.md` (approvato 2026-04-19)
 
@@ -171,6 +177,22 @@ Aperti:
 - [ ] Tier 3+4 features (kline WS stream, CoinGecko screener, hyperopt, Redis cache, Ollama LLM)
 
 ---
+
+## Done — 2026-04-19
+
+- [x] **Kloudify upgrade v1.4.4 → v1.5.0** (commit `6aa2302`) — 8 `.kloudify-new` conflicts: 7 auto-adottati (start.md lockfile pip-audit, check-quality-gate last_failure_ts clock, guard-bash heredoc-strip, log-failures FS_* sub-categories, stuck-detector per-category thresholds, session-reset gate-warning-acknowledged cleanup, universal-rules +3 rules). `settings.json` mergato manualmente (preservati tutti hook Cozempic + aggiunto nuovo `success-streak.sh`). 0 KB entries redundant.
+- [x] **Merge forward origin/main** (merge `23f4ad1`) — 2 commits: `72d690c` yfinance `supports_symbol` skip crypto quotes (log hygiene), `19ad3c1` telegram monitor toggle race guard (double MTProto session). Zero conflitti.
+- [x] **pip-audit**: 0 vulnerabilità.
+- [x] **TelegramSignalExecutor — design spec + plan** (commits `2d87db4` design, `85bd8a2` reality-check corrections, `f660fec` implementation plan). Multi-agent reality check (3 Sonnet sub-agents parallel) ha trovato 8 deviazioni tra spec iniziale e codebase reale; tutte corrette nello spec prima del plan.
+- [x] **TelegramSignalExecutor — Task 1-7 (core)**: 5 commit atomici, 31 test tutti verdi.
+  - `49e74d6` T1 `portfolio_repo.get_open_by_symbol_side` (dedup gate indexed query).
+  - `3f7838e` T2 `signal_outcome_repo.win_rate_by_source` (reliability SQL aggregate).
+  - `480a0a3` T3 `execution/symbol_router.py` + 11 test.
+  - `d8471dd` T4 `GateResult`, `GateConfig` dataclasses frozen.
+  - `bfc7244` T5 5 gate async functions + `run_all_gates` + 14 test.
+  - `f400c6d` T6 4 RuntimeConfig keys registrate.
+  - `89ed686` T7 `TelegramSignalExecutor` orchestrator + 6 test.
+- Push su origin/llm-agents: `f3fea47..89ed686` (12 commit totali pubblicati).
 
 ## Done — 2026-04-18
 
