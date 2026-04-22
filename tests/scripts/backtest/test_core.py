@@ -93,3 +93,41 @@ def test_split_trades_by_quarter_four_buckets() -> None:
 
 def test_split_trades_empty_returns_empty() -> None:
     assert split_trades_by_quarter([]) == {}
+
+
+from scripts.backtest.core import EngineParams, Strategy, run_backtest
+
+
+class NoopStrategy:
+    """Always returns HOLD. For engine-skeleton tests."""
+    name = "Noop"
+    timeframe = "1h"
+
+    def generate_signal(self, bar_index, candles, indicators, position_state):
+        return "HOLD"
+
+
+def test_engine_returns_result_on_hold_only_strategy() -> None:
+    # 100 bars of synthetic 1h OHLCV, flat price.
+    bars = [[i * 3_600_000, 100.0, 100.1, 99.9, 100.0, 10.0] for i in range(100)]
+    ohlcv = {"BTC/USDT": bars}
+
+    result = run_backtest(
+        strategy=NoopStrategy(),
+        ohlcv_by_symbol=ohlcv,
+        params=EngineParams(),
+    )
+    # No trades, equity unchanged.
+    assert result.trades_count == 0
+    assert result.total_pnl == 0.0
+    assert result.final_equity == 10_000.0
+
+
+def test_engine_params_defaults() -> None:
+    p = EngineParams()
+    assert p.initial_equity == 10_000.0
+    assert p.position_size_pct == 0.05
+    assert p.fee_pct == 0.001
+    assert p.sl_pct == 0.02
+    assert p.tp_pct == 0.04
+    assert p.trail_pct == 0.015

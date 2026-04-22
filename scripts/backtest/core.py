@@ -117,3 +117,153 @@ def split_trades_by_quarter(trades: list[dict]) -> dict[str, list[dict]]:
         q = min(3, (t["entry_ts"] - first_ts) // quarter_ms)
         buckets[f"Q{int(q) + 1}"].append(t)
     return buckets
+
+
+from typing import Literal, Protocol
+
+
+Signal = Literal["BUY", "SELL", "CLOSE_LONG", "CLOSE_SHORT", "HOLD"]
+
+
+class Strategy(Protocol):
+    name: str
+    timeframe: str
+
+    def generate_signal(
+        self,
+        bar_index: int,
+        candles: list,
+        indicators: dict,
+        position_state: str,
+    ) -> Signal: ...
+
+
+@dataclass
+class EngineParams:
+    initial_equity: float = 10_000.0
+    position_size_pct: float = 0.05
+    fee_pct: float = 0.001
+    sl_pct: float = 0.02
+    tp_pct: float = 0.04
+    trail_pct: float = 0.015
+
+
+def run_backtest(
+    strategy: Strategy,
+    ohlcv_by_symbol: dict[str, list[list]],
+    params: EngineParams,
+) -> BacktestResult:
+    """Run the given strategy across all symbols with shared equity.
+
+    Iteration order: symbols are processed sequentially. Within each symbol
+    we loop bar-by-bar. Equity withdrawn at open is restored at close.
+    """
+    equity = [params.initial_equity]  # mutable cell for closures
+    trades: list[dict[str, Any]] = []
+    equity_curve = [params.initial_equity]
+
+    for symbol, bars in ohlcv_by_symbol.items():
+        if strategy.timeframe == "1d":
+            working_bars = aggregate_1h_to_1d(bars)
+        else:
+            working_bars = bars
+
+        indicators = _precompute_indicators(working_bars)
+        _simulate_symbol(
+            symbol=symbol,
+            bars=working_bars,
+            indicators=indicators,
+            strategy=strategy,
+            params=params,
+            equity_cell=equity,
+            trades=trades,
+            equity_curve=equity_curve,
+        )
+
+    return _build_result(strategy.name, trades, equity_curve, params)
+
+
+def _precompute_indicators(bars: list[list]) -> dict:
+    """Placeholder — filled in Task 5 once strategies are concrete."""
+    return {}
+
+
+def _simulate_symbol(
+    *,
+    symbol: str,
+    bars: list[list],
+    indicators: dict,
+    strategy: Strategy,
+    params: EngineParams,
+    equity_cell: list[float],
+    trades: list,
+    equity_curve: list[float],
+) -> None:
+    """Per-symbol simulation. In the skeleton, only handles HOLD.
+
+    Task 5 adds open_long / exit_long.
+    Task 6 adds open_short / exit_short / flip.
+    """
+    for i in range(1, len(bars)):
+        # Skeleton: consult strategy but never act (HOLD-only test coverage).
+        _ = strategy.generate_signal(
+            bar_index=i,
+            candles=bars,
+            indicators=indicators,
+            position_state="flat",
+        )
+        # Mark-to-market equity (no open position → unchanged)
+        equity_curve.append(equity_cell[0])
+
+
+def _build_result(
+    strategy_name: str,
+    trades: list[dict],
+    equity_curve: list[float],
+    params: EngineParams,
+) -> BacktestResult:
+    final_equity = equity_curve[-1] if equity_curve else params.initial_equity
+    total_pnl = final_equity - params.initial_equity
+    return_pct = total_pnl / params.initial_equity * 100.0
+    wins = sum(1 for t in trades if t.get("net_pnl", 0) > 0)
+    win_rate = wins / len(trades) if trades else 0.0
+
+    reasons: dict[str, int] = {}
+    for t in trades:
+        r = t.get("reason", "UNKNOWN")
+        reasons[r] = reasons.get(r, 0) + 1
+
+    per_sym: dict[str, dict[str, Any]] = {}
+    for t in trades:
+        sym = t.get("symbol", "UNKNOWN")
+        d = per_sym.setdefault(sym, {"trades": 0, "wins": 0, "net_pnl": 0.0})
+        d["trades"] += 1
+        if t.get("net_pnl", 0) > 0:
+            d["wins"] += 1
+        d["net_pnl"] += t.get("net_pnl", 0.0)
+
+    per_q: dict[str, dict[str, Any]] = {}
+    for q, q_trades in split_trades_by_quarter(trades).items():
+        q_wins = sum(1 for t in q_trades if t["net_pnl"] > 0)
+        per_q[q] = {
+            "trades": len(q_trades),
+            "wins": q_wins,
+            "win_rate": q_wins / len(q_trades) if q_trades else 0.0,
+            "net_pnl": sum(t["net_pnl"] for t in q_trades),
+        }
+
+    return BacktestResult(
+        strategy_name=strategy_name,
+        final_equity=final_equity,
+        total_pnl=total_pnl,
+        return_pct=return_pct,
+        trades_count=len(trades),
+        wins=wins,
+        win_rate=win_rate,
+        sharpe=sharpe_ratio(equity_curve),
+        max_drawdown_pct=max_drawdown(equity_curve),
+        exit_reasons=reasons,
+        trades=trades,
+        per_symbol=per_sym,
+        per_quarter=per_q,
+    )
