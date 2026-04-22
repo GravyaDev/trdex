@@ -196,6 +196,10 @@ def _precompute_indicators(bars: list[list]) -> dict:
     lows = [b[3] for b in bars]
     volumes = [b[5] for b in bars]
     bb_upper, bb_mid, bb_lower = bollinger_bands(closes, period=20, std_dev=2.0)
+
+    # 4h SMA(20): aggregate 1h bars to 4h closes, compute SMA, broadcast back.
+    sma20_4h = _compute_4h_sma_broadcast(bars, period=20)
+
     return {
         "closes": closes,
         "highs": highs,
@@ -205,13 +209,41 @@ def _precompute_indicators(bars: list[list]) -> dict:
         "sma9": sma(closes, 9),
         "sma21": sma(closes, 21),
         "sma50": sma(closes, 50),
-        "sma20_4h": None,         # filled in Task 7 for MultiTimeframeConfirm if needed
+        "sma20_4h": sma20_4h,
         "bb_upper": bb_upper,
         "bb_mid": bb_mid,
         "bb_lower": bb_lower,
         "vol_ma24": volume_ma(volumes, period=24),
         "squeeze": is_squeezing(closes, bb_period=20, std_dev=2.0, lookback=100, pct=0.3),
     }
+
+
+def _compute_4h_sma_broadcast(bars: list[list], period: int) -> list[float | None]:
+    """Compute SMA(period) on 4h closes built from 1h bars, broadcast to each 1h bar.
+
+    1h bar i belongs to the 4h window ending at the last-completed 4h close.
+    We use the last completed 4h close so the value at bar i does not peek into
+    the future of its own 4h window.
+    """
+    n = len(bars)
+    out: list[float | None] = [None] * n
+    # Group bars into 4h chunks (4 consecutive 1h bars each).
+    # A 4h bar completes at bar index (k+1)*4 - 1.
+    # For 1h bar i, the "last completed 4h close" is bars[((i // 4)) * 4 - 1] if i >= 4.
+    fourh_closes: list[float] = []
+    for k in range(n // 4):
+        end_idx = (k + 1) * 4 - 1
+        fourh_closes.append(bars[end_idx][4])
+    sma_4h = sma(fourh_closes, period)
+    for i in range(n):
+        # Index into sma_4h based on how many completed 4h chunks are visible at bar i.
+        completed = i // 4
+        if completed == 0:
+            out[i] = None
+        else:
+            idx = completed - 1
+            out[i] = sma_4h[idx] if idx < len(sma_4h) else None
+    return out
 
 
 def _simulate_symbol(

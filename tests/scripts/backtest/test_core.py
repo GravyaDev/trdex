@@ -317,3 +317,15 @@ def test_flip_long_to_short_records_two_trades() -> None:
     assert t["reason"] == "FLIP"
     # Exit at bar 15 open = 101.0
     assert t["exit_price"] == 101.0
+
+
+def test_precompute_indicators_includes_sma20_4h() -> None:
+    # 4h SMA(20) needs 80 bars of 1h data. Use 150 bars to have valid tail.
+    from scripts.backtest.core import _precompute_indicators
+    bars = [[i * 3_600_000, 100.0, 100.1, 99.9, 100.0 + i * 0.01, 10.0] for i in range(150)]
+    ind = _precompute_indicators(bars)
+    assert ind["sma20_4h"] is not None
+    assert len(ind["sma20_4h"]) == 150
+    # First bars are None (warmup), tail has numeric values.
+    assert ind["sma20_4h"][0] is None
+    assert ind["sma20_4h"][-1] is not None
