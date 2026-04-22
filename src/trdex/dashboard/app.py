@@ -169,6 +169,16 @@ if positions_data and positions_data.get("positions"):
     for col in ["entry_price", "current_price", "amount", "unrealized_pnl", "unrealized_pnl_pct"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
+    # Provenance chip: render `source` as a short tag so a glance at the
+    # table tells you whether the position came from an agent decision,
+    # a telegram signal, or a manual open.
+    if "source" in df.columns:
+        _chip = {
+            "telegram": "🟣 telegram",
+            "agent": "🤖 agent",
+            "manual": "✋ manual",
+        }
+        df["source"] = df["source"].map(lambda s: _chip.get(s, s or ""))
     # Format prices with enough decimals for microcap coins (e.g. ENJ $0.03077)
     for col in ["entry_price", "current_price"]:
         if col in df.columns:

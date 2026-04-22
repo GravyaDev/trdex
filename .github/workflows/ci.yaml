@@ -3,10 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
-    paths: ["src/**", "tests/**", "pyproject.toml"]
+    paths: ["src/**", "tests/**", "pyproject.toml", "migrations/**"]
   pull_request:
     branches: [main]
-    paths: ["src/**", "tests/**", "pyproject.toml"]
+    paths: ["src/**", "tests/**", "pyproject.toml", "migrations/**"]
 
 jobs:
   test:
@@ -34,3 +34,45 @@ jobs:
 
       - name: Test (pytest)
         run: uv run pytest --cov=src/trdex --cov-report=term-missing
+
+  # Integration tests gated to PRs against main.
+  # Rationale: integration suite stands up a TimescaleDB container, applies
+  # every migration, and exercises the real executor → gateway → DB path.
+  # Too heavy for every feature-branch push; meaningful as a pre-merge gate.
+  integration-test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    services:
+      db-test:
+        image: timescale/timescaledb:2.17.2-pg16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: trdex_test
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d trdex_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TRDEX_TEST_DATABASE_URL: postgresql+asyncpg://test:test@localhost:5434/trdex_test
+      # Required by trdex.config.Settings validation, but unused by the
+      # integration suite (no FastAPI lifespan is started).
+      TRDEX_API_KEY: ""
+      TRDEX_JINA_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run integration tests (pytest -m integration)
+        run: uv run pytest -m integration --tb=short
