@@ -8,6 +8,16 @@ Workflow: fix su main → merge forward nel branch. Mai il contrario.
 
 ---
 
+## Today / Next — 2026-04-23+
+
+1. **[P1] Deploy trdex-llm Coolify** — runbook `docs/deploy-trdex-llm-runbook.md`, Step 1-4 (UI app create, env vars, VPS mkdir session, first deploy + health check).
+2. **[P1] Rotazione credenziali Telegram** — solo contestuale al go-live. Generare nuove API credentials, update `.env` Coolify, invalidare la `trdex_telegram.session` storica (rimane nella history git).
+3. **[P1] 48h observation post-deploy** — `telegram_executor_enabled=false`, verificare observe-only + evaluator come prima.
+4. **[P2] Flip on executor + monitoring primi 5 segnali** — dopo il 48h baseline.
+5. **[P3] Kloudify v1.5.0→v1.5.1** — docs-only, facoltativo. Skip se non interessa.
+
+---
+
 ## Production status (2026-04-17, merged 2026-04-18)
 
 **trdex LIVE** su `https://trdex.gravya.it` + dashboard `/dashboard/` — **nuova app Coolify UUID `e5tqc26vgsnm6czy8wnqpxl2`** (riconnessa 2026-04-17 a GitHub App source, DB wiped — accettato).
@@ -75,21 +85,23 @@ Auth: GitHub OAuth via oauth2-proxy.
 
 - [x] **Manual open/close positions** — mergiato da main 2026-04-15. `POST /v1/portfolio/open` + `POST /v1/portfolio/close/{id}` + dashboard button.
 
-### 🟣 Telegram Signal Step 2 — Auto-execute (mergiato da main, pending implementazione)
+### 🟣 Telegram Signal Step 2 — Auto-execute — ✅ COMPLETE (2026-04-22)
+
+Tutti i task 2.1-2.8 DONE. Feature flag `integrations.telegram_executor_enabled` OFF di default. Go-live gate: deploy Coolify + rotazione credenziali + 48h monitor.
 
 - [x] [telegram] **2.1 Symbol router** — DONE 2026-04-19 (commit `480a0a3`). `execution/symbol_router.py` + 11 test. Crypto-only; forex/commodity raise `SymbolNotRoutable`.
 - [x] [telegram] **2.2 TelegramSignalExecutor** — DONE 2026-04-19 (commit `89ed686`). `execution/telegram_executor.py` + 6 test. `ExecuteOutcome` + 5-gate sequencing.
 - [x] [telegram] **2.3 TG risk gates** — DONE 2026-04-19 (commit `bfc7244`). 5 gate funcs + `run_all_gates` ordering + 14 test. Ordine: dedup → asset_cap → budget → reliability (20 samples floor) → entry_drift 0.5%.
-- [x] [telegram] **2.4 SL adattato a TP/SL del segnale** — DONE 2026-04-19 (nessun change a `stop_loss.py` necessario). Migration 014 ha già `stop_loss_pct`/`take_profit_pct` con precedenza su CV-adaptive. L'executor scrive quelle colonne al momento dell'open; `StopLossMonitor.check_now()` le legge già con precedenza assoluta.
-- [ ] [telegram] **2.5 Wire up in lifespan** — `_telegram_background` → `telegram_executor.execute(signal, outcome_id)`. **NEXT SESSION** — richiede "verify helper names" per `PortfolioService(session)`, `BalanceRepository.latest_balance_after`, `get_feed_manager`.
-- [ ] [telegram] **2.8 Security hardening (pre-live)** — dalla scansione 2026-04-19 (mitigazioni necessarie PRIMA di `telegram_executor_enabled=true` in live):
-  - **[HIGH]** `telegram_executor.py:141` default `getattr(order_result, "status", "filled")` → deve essere `None` + esplicito filled-check (rischio phantom fill).
-  - **[HIGH]** `telegram_executor.py:155` `getattr(order_result, "fee", 0.0)` → aggiungi bounds/type validation prima di `Decimal()` (corrompe P&L ledger se gateway restituisce fee adversarial).
-  - **[MEDIUM]** normalizzare `signal.direction` (upper + strip) prima di usarlo nel gate dedup, per evitare bypass via `"buy"` vs `"BUY"` o trailing space.
-  - **[MEDIUM]** guard `current_price == 0` in `telegram_executor.py:111` (oggi raise `ZeroDivisionError` catturato come status=error — preferibile status=skipped con reason esplicito).
-  - **[LOW]** `GateConfig.asset_class_cap >= 1` / `budget > 0` validation da RuntimeConfig (blocca misconfig silenziose). `win_rate_by_source` senza filtro date = scan unbounded (scaling DoS risk).
-- [ ] [telegram] **2.6 Dashboard TG positions panel** — chip "telegram" su panel Open Positions (nessun nuovo componente).
-- [ ] [telegram] **2.7 Test simulation mode** — E2E con `TRDEX_MODE=simulation`, richiede fixture DB test.
+- [x] [telegram] **2.4 SL adattato a TP/SL del segnale** — DONE 2026-04-19 (no code change). Migration 014 `stop_loss_pct`/`take_profit_pct` precedence.
+- [x] [telegram] **2.5 Wire up in lifespan** — DONE 2026-04-22 (commit `a55089f`). `_telegram_background` accepta `feed_manager` + `gateway`, `_maybe_execute` closure in-session. Helper names verificati contro codice reale (plan errato su 3/6 — annotato). Long-only guard: SELL → error outcome invece di AttributeError.
+- [x] [telegram] **2.8 Security hardening** — DONE 2026-04-22 (commit `7b593a8`). 5 fix + 15 test regression:
+  - **[HIGH] Phantom-fill guard** — status default None, explicit filled-check.
+  - **[HIGH] Fee validation** — NaN/inf/neg rejected prima di Decimal cast; protegge P&L ledger.
+  - **[MEDIUM] Direction normalisation** — strip + upper, dedup gate non bypassabile.
+  - **[MEDIUM] Zero/NaN current_price guard** — skipped con reason esplicito, no ZeroDivisionError.
+  - **[LOW] GateConfig.__post_init__ validation** — ValueError su misconfig (cap<1, budget<=0, wr∉[0,1]).
+- [x] [telegram] **2.6 Dashboard TG positions chip** — DONE 2026-04-22 (commit `76823ff`). `/v1/portfolio/positions` espone `source`; dashboard render 🟣 telegram / 🤖 agent / ✋ manual.
+- [x] [telegram] **2.7 E2E simulation test** — DONE 2026-04-22 (commit `76823ff`). `tests/execution/test_telegram_simulation.py` 2 test (happy + budget skip) su `docker-compose.test.yaml` TimescaleDB.
 
 **Design spec**: `docs/superpowers/specs/2026-04-19-telegram-signal-executor-design.md` (approvato 2026-04-19)
 
@@ -177,6 +189,19 @@ Aperti:
 - [ ] Tier 3+4 features (kline WS stream, CoinGecko screener, hyperopt, Redis cache, Ollama LLM)
 
 ---
+
+## Done — 2026-04-22
+
+- [x] **Pulizia repo** (`ad0b59d`) — `.gitignore` riscritto (era quello del Kloudify base → ignorava asset di progetto). Untrack 25 file runtime/secret/legacy (incluso `trdex_telegram.session`, `Riferimenti/`, `channels_to_join.txt`). Storico del session file resta nella history git — rotare credenziali al go-live. 177 file ignored-but-tracked → 0.
+- [x] **Dep bump** (`a53a0e7`) — 18 pacchetti patch/minor via `uv sync` (altair, cachetools, ccxt, certifi, click, gitpython, idna, langchain-openai, langgraph, langsmith, mypy, narwhals, pyarrow, pydantic, pydantic-core, pydantic-settings, telethon, uvicorn). Zero pollution, pip-audit 0.
+- [x] **Cozempic hook schema v4→v5** (`2fe09bd`) — auto-upgrade del daemon.
+- [x] **Task Board sync + Security 2.8 registrati** (`784d9f2`).
+- [x] **Security hardening telegram executor** (`7b593a8`) — 5 fix (2 HIGH phantom-fill + fee validation, 2 MED direction + current_price guard, 1 LOW GateConfig validation) + 15 test regression.
+- [x] **Task 2.5 wire-up** (`a55089f`) — `_telegram_background` + `_maybe_execute` closure, helper names verificati contro codice reale (plan annotato con i 3 nomi errati). Long-only guard per SELL. +1 test.
+- [x] **Infrastruttura DB test** (`9733ec8`) — `docker-compose.test.yaml` (TimescaleDB 2.17.2-pg16, porta 5434, tmpfs ephemeral), `tests/conftest.py` fixture `test_engine`+`db_session`+`session_factory` (TRUNCATE teardown, auto-skip senza DB), `test_integration_smoke.py` 5 test (trivial SELECT, positions table, hypertable check, TRUNCATE isolation a/b). Marker `integration` registrato, default escluso. Applica migration via runner di prod.
+- [x] **Task 2.6 chip + Task 2.7 E2E + CI gate** (`76823ff`) — `/v1/portfolio/positions` JSON espone `source`, dashboard render chip 🟣/🤖/✋, `test_telegram_simulation.py` 2 test E2E su TimescaleDB reale (happy path + budget skip), CI workflow aggiunto job `integration-test` gated a PR verso main.
+
+**Metriche sessione**: 8 commit atomici. Test 400 baseline → **447/447 unit + 7/7 integration** passing. 0 vulns. Working tree clean.
 
 ## Done — 2026-04-19
 
