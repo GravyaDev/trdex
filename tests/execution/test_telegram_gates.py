@@ -228,3 +228,57 @@ async def test_run_all_gates_stops_at_first_failure() -> None:
     )
     assert result.passed is False
     assert "already open" in result.reason.lower()
+
+
+# ── Config validation (security hardening) ─────────────────────────────
+
+
+def test_gate_config_rejects_zero_asset_class_cap() -> None:
+    with pytest.raises(ValueError, match="asset_class_cap"):
+        GateConfig(asset_class_cap=0)
+
+
+def test_gate_config_rejects_negative_asset_class_cap() -> None:
+    with pytest.raises(ValueError, match="asset_class_cap"):
+        GateConfig(asset_class_cap=-1)
+
+
+def test_gate_config_rejects_zero_budget() -> None:
+    with pytest.raises(ValueError, match="budget"):
+        GateConfig(budget=Decimal("0"))
+
+
+def test_gate_config_rejects_negative_budget() -> None:
+    with pytest.raises(ValueError, match="budget"):
+        GateConfig(budget=Decimal("-10"))
+
+
+def test_gate_config_rejects_out_of_range_win_rate() -> None:
+    with pytest.raises(ValueError, match="reliability_win_rate_min"):
+        GateConfig(reliability_win_rate_min=1.5)
+    with pytest.raises(ValueError, match="reliability_win_rate_min"):
+        GateConfig(reliability_win_rate_min=-0.1)
+
+
+def test_gate_config_rejects_negative_drift_tolerance() -> None:
+    with pytest.raises(ValueError, match="entry_drift_tolerance"):
+        GateConfig(entry_drift_tolerance=-0.01)
+
+
+def test_gate_config_rejects_negative_reliability_samples() -> None:
+    with pytest.raises(ValueError, match="reliability_min_samples"):
+        GateConfig(reliability_min_samples=-1)
+
+
+def test_gate_config_accepts_boundary_values() -> None:
+    """Boundaries are inclusive where it makes sense (cap=1, samples=0,
+    wr=0.0 and wr=1.0, drift=0.0). This anchors them so a future
+    tightening of the bounds breaks this test explicitly."""
+    GateConfig(
+        asset_class_cap=1,
+        reliability_min_samples=0,
+        reliability_win_rate_min=0.0,
+        entry_drift_tolerance=0.0,
+        budget=Decimal("0.01"),
+    )
+    GateConfig(reliability_win_rate_min=1.0)

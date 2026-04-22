@@ -250,3 +250,121 @@ async def test_sell_signal_computes_sl_tp_correctly() -> None:
     # StopLossMonitor already interprets them by side.
     assert call["stop_loss_pct"] == pytest.approx(0.03, rel=1e-4)
     assert call["take_profit_pct"] == pytest.approx(0.05, rel=1e-4)
+
+
+# ── Security hardening (pre-live) regression tests ────────────────────
+
+
+@pytest.mark.asyncio
+async def test_direction_is_normalised_for_dedup_and_place() -> None:
+    """Lower-case / whitespace direction must not bypass the dedup gate
+    nor reach the gateway un-normalised. The parser already returns
+    Literal[BUY, SELL]; this test defends against paths that construct
+    TelegramSignal from external state (signal_outcomes rows, tests)."""
+    gw = FakeGateway()
+    svc = FakePortfolioService()
+    # Same symbol+BUY already open; the dedup gate compares against BUY.
+    repo = FakePortfolioRepo(open_positions=[FakePosition(symbol="BTC/USDT", side="BUY")])
+    executor = _make_executor(gateway=gw, portfolio_repo=repo, portfolio_service=svc)
+    signal = TelegramSignal(
+        source="chat-1", symbol="BTC/USDT", direction=" buy ",  # type: ignore[arg-type]
+        entry=90000.0, targets=[94500.0], stop_loss=87300.0, raw_text="",
+    )
+
+    outcome = await executor.execute(signal, outcome_id=1)
+
+    assert outcome.status == "skipped"
+    assert "already open" in outcome.reason.lower()
+    assert gw.calls == []
+
+
+@pytest.mark.asyncio
+async def test_invalid_direction_is_rejected_before_routing() -> None:
+    gw = FakeGateway()
+    executor = _make_executor(gateway=gw)
+    signal = TelegramSignal(
+        source="chat-1", symbol="BTC/USDT", direction="HOLD",  # type: ignore[arg-type]
+        entry=90000.0, targets=[94500.0], stop_loss=87300.0, raw_text="",
+    )
+
+    outcome = await executor.execute(signal, outcome_id=1)
+
+    assert outcome.status == "skipped"
+    assert "invalid direction" in outcome.reason.lower()
+    assert gw.calls == []
+
+
+@pytest.mark.asyncio
+async def test_zero_price_is_skipped_not_zerodivisionerror() -> None:
+    gw = FakeGateway()
+    executor = _make_executor(gateway=gw, feed=FakeFeed(price=0.0))
+
+    outcome = await executor.execute(make_signal(entry=None), outcome_id=1)
+
+    assert outcome.status == "skipped"
+    assert "invalid current_price" in outcome.reason.lower()
+    assert gw.calls == []
+
+
+@pytest.mark.asyncio
+async def test_nan_price_is_skipped_not_propagated() -> None:
+    import math as _math
+    gw = FakeGateway()
+    executor = _make_executor(gateway=gw, feed=FakeFeed(price=_math.nan))
+
+    outcome = await executor.execute(make_signal(entry=None), outcome_id=1)
+
+    assert outcome.status == "skipped"
+    assert "invalid current_price" in outcome.reason.lower()
+    assert gw.calls == []
+
+
+@pytest.mark.asyncio
+async def test_missing_status_is_treated_as_rejection_not_filled() -> None:
+    """Phantom-fill guard: a gateway result without a status attribute
+    used to default to 'filled' and persist a position. Now it must
+    return error status and must NOT persist."""
+    @dataclass
+    class ResultWithoutStatus:
+        filled_price: float = 90000.0
+        filled_qty: float = 0.00111
+        fee: float = 0.0
+        message: str = "ambiguous — no status field"
+
+    gw = FakeGateway(result=ResultWithoutStatus())  # type: ignore[arg-type]
+    svc = FakePortfolioService()
+    executor = _make_executor(gateway=gw, portfolio_service=svc)
+
+    outcome = await executor.execute(make_signal(), outcome_id=1)
+
+    assert outcome.status == "error"
+    assert "not filled" in outcome.reason.lower()
+    # Position must NOT be persisted — the guard runs before record_open_fill.
+    assert svc.calls == []
+
+
+@pytest.mark.asyncio
+async def test_negative_fee_is_rejected_before_persistence() -> None:
+    gw = FakeGateway(result=FakeOrderResult(fee=-1.5))
+    svc = FakePortfolioService()
+    executor = _make_executor(gateway=gw, portfolio_service=svc)
+
+    outcome = await executor.execute(make_signal(), outcome_id=1)
+
+    assert outcome.status == "error"
+    assert "negative fee" in outcome.reason.lower()
+    assert svc.calls == []
+
+
+@pytest.mark.asyncio
+async def test_nan_fee_is_rejected_before_persistence() -> None:
+    import math as _math
+    gw = FakeGateway(result=FakeOrderResult(fee=_math.inf))
+    svc = FakePortfolioService()
+    executor = _make_executor(gateway=gw, portfolio_service=svc)
+
+    outcome = await executor.execute(make_signal(), outcome_id=1)
+
+    assert outcome.status == "error"
+    assert "invalid fee" in outcome.reason.lower()
+    assert svc.calls == []

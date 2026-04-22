@@ -49,6 +49,28 @@ class GateConfig:
     entry_drift_tolerance: float = 0.005
     budget: Decimal = Decimal("100")
 
+    def __post_init__(self) -> None:
+        # Misconfig from RuntimeConfig must fail loud at build time, not
+        # silently skip every signal or corrupt sizing math later.
+        if self.asset_class_cap < 1:
+            raise ValueError(
+                f"asset_class_cap must be >= 1, got {self.asset_class_cap}"
+            )
+        if self.reliability_min_samples < 0:
+            raise ValueError(
+                f"reliability_min_samples must be >= 0, got {self.reliability_min_samples}"
+            )
+        if not (0.0 <= self.reliability_win_rate_min <= 1.0):
+            raise ValueError(
+                f"reliability_win_rate_min must be in [0, 1], got {self.reliability_win_rate_min}"
+            )
+        if self.entry_drift_tolerance < 0.0:
+            raise ValueError(
+                f"entry_drift_tolerance must be >= 0, got {self.entry_drift_tolerance}"
+            )
+        if self.budget <= 0:
+            raise ValueError(f"budget must be > 0, got {self.budget}")
+
 
 # ── Implementation ──────────────────────────────────────────────────────
 
