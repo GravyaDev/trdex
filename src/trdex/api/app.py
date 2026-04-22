@@ -102,6 +102,9 @@ async def _telegram_background(
     monitor: TelegramMonitor,
     channels: list[str],
     session_factory,
+    *,
+    feed_manager: PriceFeedManager,
+    gateway,
 ) -> None:
     """Background task: stream ALL messages from Telegram channels.
 
@@ -111,6 +114,9 @@ async def _telegram_background(
     2. If parse_signal() returns None (not a trading signal) → ingest
        the raw text as news context into Qdrant so Scout/Analyst agents
        can read market commentary, breaking news, and macro analysis.
+    3. If integrations.telegram_executor_enabled is true, AND the signal
+       was persisted with an entry price, hand the (signal, outcome.id)
+       pair to TelegramSignalExecutor. Fail-closed default: disabled.
 
     This dual flow means every channel contributes either signals OR
     context — nothing is wasted.
@@ -119,6 +125,91 @@ async def _telegram_background(
     from decimal import Decimal
     from trdex.telegram.parser import parse_signal
     from trdex.telegram.tracker import SignalOutcome
+
+    async def _maybe_execute(sig, outcome_id: int, session) -> None:
+        """Hand a just-saved observe-only signal to TelegramSignalExecutor
+        iff the feature flag is on. No-op when disabled — observe-only
+        path is unaffected. Uses the SAME session the outcome was written
+        into so balance reads are consistent with the save we just did.
+        """
+        from trdex.services.runtime_config import get_config_service
+        svc = get_config_service()
+        if svc is None or not svc.get_typed(
+            "integrations", "telegram_executor_enabled", False
+        ):
+            return
+        try:
+            from trdex.config import get_settings as _get_settings
+            from trdex.execution.telegram_gates import GateConfig
+            from trdex.execution.telegram_executor import TelegramSignalExecutor
+            from trdex.storage.portfolio_repo import PortfolioRepository
+            from trdex.storage.signal_outcome_repo import SignalOutcomeRepository
+            from trdex.storage.balance_repo import BalanceRepository
+            from trdex.portfolio.service import PortfolioService
+            from types import SimpleNamespace
+
+            _settings = _get_settings()
+            config = GateConfig(
+                asset_class_cap=int(svc.get_typed(
+                    "telegram", "asset_class_cap", 3,
+                )),
+                reliability_min_samples=int(svc.get_typed(
+                    "telegram", "reliability_min_samples", 20,
+                )),
+                reliability_win_rate_min=float(svc.get_typed(
+                    "telegram", "reliability_win_rate_min", 0.5,
+                )),
+                entry_drift_tolerance=float(svc.get_typed(
+                    "telegram", "entry_drift_tolerance", 0.005,
+                )),
+                budget=Decimal(str(_settings.telegram_signal_budget)),
+            )
+            portfolio_repo = PortfolioRepository(session)
+            outcome_repo = SignalOutcomeRepository(session)
+            balance_repo = BalanceRepository(session)
+            # Ledger-backed balance snapshot. BalanceRepository.current_balance()
+            # returns the running balance after the last event; wrap in a
+            # SimpleNamespace to match the executor's _BalanceLike protocol.
+            current = await balance_repo.current_balance()
+            balance = SimpleNamespace(available=current)
+            portfolio_service = PortfolioService(portfolio_repo, feed_manager)
+
+            # Feed adapter: the executor's _FeedLike protocol expects
+            # `.name: str` + `async get_current_price(symbol) -> float`.
+            # PriceFeedManager instead exposes `get_ticker(symbol) -> Ticker`
+            # with a Decimal price. Adapt inline — one tiny class, no new
+            # public surface — rather than widening the executor's contract.
+            class _FeedAdapter:
+                name = "price-feed-manager"
+
+                def __init__(self, mgr):
+                    self._mgr = mgr
+
+                async def get_current_price(self, symbol: str) -> float:
+                    ticker = await self._mgr.get_ticker(symbol)
+                    return float(ticker.price)
+
+            executor = TelegramSignalExecutor(
+                gateway=gateway,
+                feed=_FeedAdapter(feed_manager),
+                portfolio_repo=portfolio_repo,
+                portfolio_service=portfolio_service,
+                outcome_repo=outcome_repo,
+                balance_provider=lambda: balance,
+                config=config,
+            )
+            result = await executor.execute(sig, outcome_id=outcome_id)
+            logger.info(
+                "[telegram-exec] %s %s from %s -> %s (%s)",
+                sig.direction, sig.symbol, sig.source,
+                result.status, result.reason or "ok",
+            )
+        except Exception:
+            logger.exception(
+                "[telegram-exec] executor crashed for %s %s from %s — "
+                "observe-only record unaffected",
+                sig.direction, sig.symbol, sig.source,
+            )
 
     # Dedup: skip signals with the same (source, symbol, direction)
     # within a 60-second window. Prevents a spammy channel from
@@ -184,7 +275,7 @@ async def _telegram_background(
                         )
                         async with session_factory() as session:
                             repo = SignalOutcomeRepository(session)
-                            await repo.save(
+                            record = await repo.save(
                                 source=outcome.source,
                                 symbol=outcome.symbol,
                                 direction=outcome.direction,
@@ -194,6 +285,15 @@ async def _telegram_background(
                                 executed_at=outcome.executed_at,
                                 closed_at=None,
                                 note=note_payload,
+                            )
+                            # Executor bridge: observe-only record is in the
+                            # ledger, hand it off to the executor iff the
+                            # feature flag is on. Same session → balance
+                            # read sees the observe-only save consistently.
+                            await _maybe_execute(
+                                signal,
+                                outcome_id=record.id,
+                                session=session,
                             )
                         _tracker.record(outcome)
                     except Exception:
@@ -389,7 +489,13 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             )
             await monitor.start()
             _telegram_task = asyncio.create_task(
-                _telegram_background(monitor, channels, session_factory),
+                _telegram_background(
+                    monitor,
+                    channels,
+                    session_factory,
+                    feed_manager=feed_manager,
+                    gateway=gateway,
+                ),
                 name="telegram-stream",
             )
             logger.info("[telegram] streaming %d channels", len(channels))

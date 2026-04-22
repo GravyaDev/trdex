@@ -1466,13 +1466,29 @@ Find the line `await _ingest_signal_to_qdrant(signal)` inside the `if signal is 
 
 Note: `outcome` is only set when `signal.entry is not None` (the persistence branch). When `signal.entry is None`, `outcome` is not defined and the executor is skipped (same contract as persistence — parity).
 
-**IMPORTANT — verify helper names before commit**:
-- `get_feed_manager` (step 4) — the actual helper in `src/trdex/market/manager.py` may be named differently. Confirm and adjust.
-- `balance_repo.latest_balance_after()` — may be named `get_latest` or similar. Confirm against real code.
-- `PortfolioService(session)` constructor — may take different args. Confirm.
-- `PortfolioRepository(session)` / `SignalOutcomeRepository(session)` — same.
+**IMPORTANT — verify helper names before commit** [verified 2026-04-22]:
+- `get_feed_manager` — **does not exist** in `src/trdex/market/manager.py`. The
+  lifespan constructs a `PriceFeedManager()` locally (app.py:410). Solution
+  adopted: pass `feed_manager` and `gateway` as kwargs to
+  `_telegram_background`. No module-level singleton.
+- `balance_repo.latest_balance_after()` — **does not exist**. Real API is
+  `BalanceRepository.current_balance() -> Decimal`. Use that.
+- `PortfolioService(session)` — wrong. Real signature is
+  `PortfolioService(repo: PortfolioRepository, feed_manager: PriceFeedManager)`.
+- `PortfolioRepository(session)` — correct.
+- `SignalOutcomeRepository(session)` — correct.
+- `DefaultExecutionGateway.create(settings)` — correct, `settings` optional.
+- **Feed adapter needed**: `PriceFeedManager.get_ticker(symbol) -> Ticker`
+  (Decimal price), but executor protocol needs `get_current_price(symbol)
+  -> float`. Solution: inline `_FeedAdapter` class inside `_maybe_execute`
+  that wraps `get_ticker` and returns `float(ticker.price)`.
+- **Long-only side-effect**: `PortfolioService.record_open_fill()` silently
+  returns `None` for SELL (system is long-only by design). A SELL Telegram
+  signal will fill the gateway order but persistence returns None → executor
+  currently raises `AttributeError` on `position.id`. Known limitation, deferred
+  to multi-asset / short-support epic.
 
-These are small name adjustments. Do not guess — open each file and match the actual signature. **If a name differs, update the plan file inline** so Task 8 stays accurate for future re-runs.
+All findings reconciled in app.py at commit <this Task 8 commit>.
 
 - [ ] **Step 6: Run the full suite to catch regressions**
 

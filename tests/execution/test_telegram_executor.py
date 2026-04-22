@@ -368,3 +368,36 @@ async def test_nan_fee_is_rejected_before_persistence() -> None:
     assert outcome.status == "error"
     assert "invalid fee" in outcome.reason.lower()
     assert svc.calls == []
+
+
+@pytest.mark.asyncio
+async def test_portfolio_long_only_rejection_returns_error_not_crash() -> None:
+    """PortfolioService.record_open_fill() returns None for SELL because
+    trdex is long-only today. The executor must surface that as
+    status=error with a human reason instead of crashing on
+    position.id."""
+
+    class NullPortfolioService:
+        """Mimics the real PortfolioService refusing a SELL fill."""
+        def __init__(self) -> None:
+            self.calls: list[dict] = []
+
+        async def record_open_fill(self, **kwargs: Any) -> None:
+            self.calls.append(dict(kwargs))
+            return None  # long-only rejection
+
+    gw = FakeGateway()
+    svc = NullPortfolioService()
+    executor = _make_executor(gateway=gw, portfolio_service=svc)  # type: ignore[arg-type]
+    signal = TelegramSignal(
+        source="chat-1", symbol="BTC/USDT", direction="SELL",
+        entry=90000.0, targets=[85500.0], stop_loss=92700.0, raw_text="",
+    )
+
+    outcome = await executor.execute(signal, outcome_id=99)
+
+    assert outcome.status == "error"
+    assert "long-only" in outcome.reason.lower()
+    # Gateway WAS called — the order filled, just not tracked.
+    assert len(gw.calls) == 1
+    assert len(svc.calls) == 1

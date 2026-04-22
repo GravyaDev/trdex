@@ -239,6 +239,22 @@ class TelegramSignalExecutor:
             logger.exception("[telegram-exec] persistence failed after fill")
             return ExecuteOutcome(status="error", reason=f"persistence failed: {exc}")
 
+        # 7b. PortfolioService.record_open_fill returns None for SELL fills
+        # because trdex is long-only today. The gateway still executed the
+        # order — this is an operational gap (position untracked) until
+        # multi-asset / short-support lands. Surface as error rather than
+        # AttributeError, so telemetry shows the signal + reason.
+        if position is None:
+            logger.warning(
+                "[telegram-exec] fill accepted by gateway but portfolio rejected %s %s "
+                "(long-only system, SELL signals untracked) — signal_id=%s",
+                direction, signal.symbol, outcome_id,
+            )
+            return ExecuteOutcome(
+                status="error",
+                reason=f"portfolio rejected {direction} (long-only)",
+            )
+
         logger.info("[telegram-exec] executed %s %s qty=%.6f from %s (pos=%s)",
                     direction, signal.symbol, qty, signal.source, position.id)
         return ExecuteOutcome(status="executed", reason="", position_id=position.id)
