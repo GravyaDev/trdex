@@ -230,13 +230,14 @@ def _simulate_symbol(
     entry_qty = 0.0
     entry_ts = 0
     max_seen = 0.0
+    min_seen = 0.0
     trail_sl = 0.0
     initial_sl = 0.0
 
     for i in range(1, len(bars)):
         ts, o, h, l, c, _v = bars[i]
 
-        # 1) Intra-bar exit check on open long
+        # 1) Intra-bar exit on open position
         if position_state == "long":
             tp_price = entry_price * (1 + params.tp_pct)
             if l <= trail_sl:
@@ -257,14 +258,39 @@ def _simulate_symbol(
                 )
                 position_state = "flat"
             else:
-                # 2) Trail update on new high
                 if h > max_seen:
                     max_seen = h
                     new_trail = max_seen * (1 - params.trail_pct)
                     if new_trail > trail_sl:
                         trail_sl = new_trail
 
-        # 3) Consult strategy for this bar (using data up to bar i-1)
+        elif position_state == "short":
+            tp_price = entry_price * (1 - params.tp_pct)
+            if h >= trail_sl:
+                reason = "TRAIL" if trail_sl < initial_sl else "SL"
+                _close_short(
+                    symbol=symbol, ts=ts, entry_price=entry_price,
+                    entry_qty=entry_qty, entry_ts=entry_ts,
+                    exit_price=trail_sl, reason=reason, fee_pct=params.fee_pct,
+                    equity_cell=equity_cell, trades=trades,
+                )
+                position_state = "flat"
+            elif l <= tp_price:
+                _close_short(
+                    symbol=symbol, ts=ts, entry_price=entry_price,
+                    entry_qty=entry_qty, entry_ts=entry_ts,
+                    exit_price=tp_price, reason="TP", fee_pct=params.fee_pct,
+                    equity_cell=equity_cell, trades=trades,
+                )
+                position_state = "flat"
+            else:
+                if l < min_seen or min_seen == 0.0:
+                    min_seen = l
+                    new_trail = min_seen * (1 + params.trail_pct)
+                    if new_trail < trail_sl:
+                        trail_sl = new_trail
+
+        # 2) Consult strategy
         sig = strategy.generate_signal(
             bar_index=i,
             candles=bars,
@@ -272,19 +298,38 @@ def _simulate_symbol(
             position_state=position_state,
         )
 
-        # 4) Execute signal at bar i's open
-        if sig == "BUY" and position_state == "flat":
-            equity = equity_cell[0]
-            budget = equity * params.position_size_pct
-            if budget > 0:
-                entry_price = o
-                entry_qty = (budget / entry_price) * (1 - params.fee_pct)
-                entry_ts = ts
-                max_seen = entry_price
-                initial_sl = entry_price * (1 - params.sl_pct)
-                trail_sl = initial_sl
-                equity_cell[0] = equity - budget
+        # 3) Execute — includes flip logic
+        if sig == "BUY":
+            if position_state == "short":
+                # Flip: close short at current bar open
+                _close_short(
+                    symbol=symbol, ts=ts, entry_price=entry_price,
+                    entry_qty=entry_qty, entry_ts=entry_ts,
+                    exit_price=o, reason="FLIP", fee_pct=params.fee_pct,
+                    equity_cell=equity_cell, trades=trades,
+                )
+                position_state = "flat"
+            if position_state == "flat":
+                entry_price, entry_qty, entry_ts, max_seen, initial_sl, trail_sl = _open_long(
+                    o=o, ts=ts, params=params, equity_cell=equity_cell,
+                )
                 position_state = "long"
+
+        elif sig == "SELL":
+            if position_state == "long":
+                _close_long(
+                    symbol=symbol, ts=ts, entry_price=entry_price,
+                    entry_qty=entry_qty, entry_ts=entry_ts,
+                    exit_price=o, reason="FLIP", fee_pct=params.fee_pct,
+                    equity_cell=equity_cell, trades=trades,
+                )
+                position_state = "flat"
+            if position_state == "flat":
+                entry_price, entry_qty, entry_ts, min_seen, initial_sl, trail_sl = _open_short(
+                    o=o, ts=ts, params=params, equity_cell=equity_cell,
+                )
+                position_state = "short"
+
         elif sig == "CLOSE_LONG" and position_state == "long":
             _close_long(
                 symbol=symbol, ts=ts, entry_price=entry_price,
@@ -294,9 +339,50 @@ def _simulate_symbol(
             )
             position_state = "flat"
 
-        # Mark-to-market equity for this bar
-        mtm = equity_cell[0] + (entry_qty * c if position_state == "long" else 0.0)
+        elif sig == "CLOSE_SHORT" and position_state == "short":
+            _close_short(
+                symbol=symbol, ts=ts, entry_price=entry_price,
+                entry_qty=entry_qty, entry_ts=entry_ts,
+                exit_price=o, reason="SIGNAL", fee_pct=params.fee_pct,
+                equity_cell=equity_cell, trades=trades,
+            )
+            position_state = "flat"
+
+        # Mark-to-market
+        if position_state == "long":
+            mtm = equity_cell[0] + entry_qty * c
+        elif position_state == "short":
+            # Short equity: cash held + (entry - current) × qty
+            mtm = equity_cell[0] + (entry_price - c) * entry_qty
+        else:
+            mtm = equity_cell[0]
         equity_curve.append(mtm)
+
+
+def _open_long(*, o, ts, params, equity_cell):
+    equity = equity_cell[0]
+    budget = equity * params.position_size_pct
+    entry_price = o
+    entry_qty = (budget / entry_price) * (1 - params.fee_pct)
+    entry_ts = ts
+    max_seen = entry_price
+    initial_sl = entry_price * (1 - params.sl_pct)
+    trail_sl = initial_sl
+    equity_cell[0] = equity - budget
+    return entry_price, entry_qty, entry_ts, max_seen, initial_sl, trail_sl
+
+
+def _open_short(*, o, ts, params, equity_cell):
+    equity = equity_cell[0]
+    budget = equity * params.position_size_pct
+    entry_price = o
+    entry_qty = (budget / entry_price) * (1 - params.fee_pct)
+    entry_ts = ts
+    min_seen = entry_price
+    initial_sl = entry_price * (1 + params.sl_pct)
+    trail_sl = initial_sl
+    equity_cell[0] = equity - budget
+    return entry_price, entry_qty, entry_ts, min_seen, initial_sl, trail_sl
 
 
 def _close_long(
@@ -320,6 +406,30 @@ def _close_long(
     trades.append({
         "symbol": symbol,
         "side": "long",
+        "entry_ts": entry_ts,
+        "exit_ts": ts,
+        "entry_price": entry_price,
+        "exit_price": exit_price,
+        "qty": entry_qty,
+        "net_pnl": net_pnl,
+        "reason": reason,
+    })
+
+
+def _close_short(
+    *,
+    symbol, ts, entry_price, entry_qty, entry_ts,
+    exit_price, reason, fee_pct, equity_cell, trades,
+) -> None:
+    notional = entry_qty * exit_price
+    exit_fee = notional * fee_pct
+    pnl = (entry_price - exit_price) * entry_qty
+    proceeds = (entry_qty * entry_price) + pnl - exit_fee
+    equity_cell[0] += proceeds
+    net_pnl = pnl - exit_fee
+    trades.append({
+        "symbol": symbol,
+        "side": "short",
         "entry_ts": entry_ts,
         "exit_ts": ts,
         "entry_price": entry_price,

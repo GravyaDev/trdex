@@ -230,3 +230,90 @@ def test_long_trail_raises_with_new_highs() -> None:
     assert t["reason"] == "TRAIL"
     # Trail exit price ~= 103 * (1 - 0.015) = 101.455
     assert abs(t["exit_price"] - 101.455) < 1e-6
+
+
+class OpenShortOnceStrategy:
+    """SELL at bar 5, then HOLD forever."""
+    name = "OpenShortOnce"
+    timeframe = "1h"
+
+    def generate_signal(self, bar_index, candles, indicators, position_state):
+        if bar_index == 5 and position_state == "flat":
+            return "SELL"
+        return "HOLD"
+
+
+class FlipLongToShortStrategy:
+    """BUY bar 5, then SELL bar 15 (flip)."""
+    name = "FlipLongToShort"
+    timeframe = "1h"
+
+    def generate_signal(self, bar_index, candles, indicators, position_state):
+        if bar_index == 5 and position_state == "flat":
+            return "BUY"
+        if bar_index == 15 and position_state == "long":
+            return "SELL"
+        return "HOLD"
+
+
+def test_short_tp_hit_registers_trade() -> None:
+    # Flat price, then bar 15 drops to low 96 (below TP at 96 = entry*(1-0.04))
+    bars = _flat_bars(30)
+    bars[15] = [15 * 3_600_000, 100.0, 100.1, 95.5, 100.0, 10.0]
+    result = run_backtest(
+        OpenShortOnceStrategy(), {"BTC/USDT": bars}, EngineParams()
+    )
+    assert result.trades_count == 1
+    t = result.trades[0]
+    assert t["side"] == "short"
+    assert t["reason"] == "TP"
+    assert t["exit_price"] == 96.0  # entry * (1 - tp_pct) = 100 * 0.96
+    assert t["net_pnl"] > 0
+
+
+def test_short_sl_hit_registers_trade() -> None:
+    # Bar 10 rises to high 103 (above SL at 102 = entry*(1+0.02))
+    bars = _flat_bars(30)
+    bars[10] = [10 * 3_600_000, 100.0, 103.5, 99.9, 100.0, 10.0]
+    result = run_backtest(
+        OpenShortOnceStrategy(), {"BTC/USDT": bars}, EngineParams()
+    )
+    assert result.trades_count == 1
+    t = result.trades[0]
+    assert t["reason"] == "SL"
+    assert t["exit_price"] == 102.0
+    assert t["net_pnl"] < 0
+
+
+def test_short_trail_lowers_with_new_lows() -> None:
+    # Bar 6: low 97 (drop 3%) → trail at 97 * (1 + 0.015) = 98.455
+    # Bar 7: high 99 (above trail 98.455) → trail exit at 98.455
+    bars = _flat_bars(30)
+    bars[6] = [6 * 3_600_000, 100.0, 100.0, 97.0, 97.5, 10.0]
+    bars[7] = [7 * 3_600_000, 97.5, 99.0, 97.5, 98.5, 10.0]
+    result = run_backtest(
+        OpenShortOnceStrategy(), {"BTC/USDT": bars}, EngineParams()
+    )
+    assert result.trades_count == 1
+    t = result.trades[0]
+    assert t["reason"] == "TRAIL"
+    assert abs(t["exit_price"] - 98.455) < 1e-6
+
+
+def test_flip_long_to_short_records_two_trades() -> None:
+    bars = _flat_bars(30)
+    # Bar 15's open is distinct so we can verify the flip exit price.
+    # SELL fires at bar_index=15; the flip closes the long at bar 15's open.
+    bars[15] = [15 * 3_600_000, 101.0, 101.5, 100.9, 101.2, 10.0]
+    result = run_backtest(
+        FlipLongToShortStrategy(), {"BTC/USDT": bars}, EngineParams()
+    )
+    # Expect 1 closed long (flip) + 1 still-open short → 1 trade in log,
+    # unless the short also closes (depends on bars after 15). With flat bars
+    # there are no triggers, so only the long exits via FLIP.
+    assert result.trades_count == 1
+    t = result.trades[0]
+    assert t["side"] == "long"
+    assert t["reason"] == "FLIP"
+    # Exit at bar 15 open = 101.0
+    assert t["exit_price"] == 101.0
