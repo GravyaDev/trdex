@@ -99,7 +99,13 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "-v --tb=short"
+# -m "not integration" keeps the default suite free of DB-backed tests.
+# Integration tests require docker-compose.test.yaml up (see conftest.py
+# and docs for TRDEX_TEST_DATABASE_URL).
+addopts = "-v --tb=short -m 'not integration'"
+markers = [
+    "integration: tests that need a live Postgres/TimescaleDB instance (see docker-compose.test.yaml)",
+]
 
 [tool.coverage.run]
 source = ["src/trdex"]
