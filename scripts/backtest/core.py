@@ -209,6 +209,7 @@ def _precompute_indicators(bars: list[list]) -> dict:
         "sma9": sma(closes, 9),
         "sma21": sma(closes, 21),
         "sma50": sma(closes, 50),
+        "sma20_1d": sma(closes, 20),
         "sma20_4h": sma20_4h,
         "bb_upper": bb_upper,
         "bb_mid": bb_mid,

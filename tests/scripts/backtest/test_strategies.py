@@ -270,3 +270,52 @@ def test_zanni_like_scalp_uses_tight_tp_via_attribute() -> None:
     s = ZanniLikeScalp()
     assert hasattr(s, "tp_pct_override")
     assert s.tp_pct_override == 0.008
+
+
+from scripts.backtest.strategies import SwingDailyTrend
+
+
+def test_swing_daily_trend_buys_on_cross_up_with_rsi_confirm() -> None:
+    # 60 daily bars. Artificially set SMA20 just crossing above SMA50, RSI = 60.
+    bars = [[i * 86_400_000, 100.0, 100.0, 100.0, 100.0, 10.0] for i in range(60)]
+    sma20 = [None] * 19 + [100.0 + i * 0.01 for i in range(41)]
+    sma50 = [None] * 49 + [100.0] * 11  # flat, so sma20 crosses above
+    # To force a "cross" at bar 59: sma20[57] <= sma50[57], sma20[58] > sma50[58]
+    sma20[57] = 100.0
+    sma20[58] = 100.5
+    sma50[57] = 100.2
+    sma50[58] = 100.2
+    ind = {
+        "rsi14": [None] * 58 + [60.0, None],
+        "sma9": sma20,   # placeholder, not used by this strategy
+        "sma21": sma20,  # placeholder
+        "sma50": sma50,
+        "sma20_1d": sma20,
+        "closes": [100.0] * 60,
+    }
+    sig = SwingDailyTrend().generate_signal(
+        bar_index=59, candles=bars, indicators=ind, position_state="flat"
+    )
+    assert sig == "BUY"
+
+
+def test_swing_daily_trend_sells_on_cross_down_with_rsi_confirm() -> None:
+    bars = [[i * 86_400_000, 100.0, 100.0, 100.0, 100.0, 10.0] for i in range(60)]
+    sma20 = [None] * 19 + [100.0] * 41
+    sma50 = [None] * 49 + [100.0] * 11
+    sma20[57] = 100.5
+    sma20[58] = 100.0
+    sma50[57] = 100.2
+    sma50[58] = 100.2
+    ind = {
+        "rsi14": [None] * 58 + [40.0, None],
+        "sma9": sma20,
+        "sma21": sma20,
+        "sma50": sma50,
+        "sma20_1d": sma20,
+        "closes": [100.0] * 60,
+    }
+    sig = SwingDailyTrend().generate_signal(
+        bar_index=59, candles=bars, indicators=ind, position_state="flat"
+    )
+    assert sig == "SELL"

@@ -278,3 +278,51 @@ class ZanniLikeScalp:
         if rising and 45.0 <= rsi <= 65.0 and position_state == "flat":
             return "BUY"
         return "HOLD"
+
+
+class SwingDailyTrend:
+    """Daily timeframe: SMA20/SMA50 cross + RSI confirm.
+
+    Exit params expressed via class attributes so the runner applies them
+    via EngineParams override. Bounds: SL 5%, TP 15%, trail 7%.
+    """
+    name = "SwingDailyTrend"
+    timeframe = "1d"
+    sl_pct_override = 0.05
+    tp_pct_override = 0.15
+    trail_pct_override = 0.07
+
+    def generate_signal(self, bar_index, candles, indicators, position_state):
+        if bar_index < 2:
+            return "HOLD"
+        rsi = indicators["rsi14"][bar_index - 1]
+        # Use sma9 as SMA20-equivalent? No — engine precomputes sma9/sma21 on the
+        # aggregated 1d closes, so 'sma9' and 'sma21' are actually SMA on daily.
+        # For this strategy the runner/engine passes indicators computed over
+        # the daily bars since timeframe="1d".
+        # But we need SMA20 and SMA50 on daily — add them to precompute.
+        sma20 = indicators.get("sma20_1d") or indicators.get("sma21")
+        sma50 = indicators["sma50"]
+        if rsi is None or sma20 is None or sma50 is None:
+            return "HOLD"
+        s20_prev = sma20[bar_index - 2]
+        s20_now = sma20[bar_index - 1]
+        s50_prev = sma50[bar_index - 2]
+        s50_now = sma50[bar_index - 1]
+        if None in (s20_prev, s20_now, s50_prev, s50_now):
+            return "HOLD"
+        cross_up = s20_prev <= s50_prev and s20_now > s50_now
+        cross_down = s20_prev >= s50_prev and s20_now < s50_now
+        if cross_up and rsi > 55:
+            if position_state == "flat":
+                return "BUY"
+            if position_state == "short":
+                return "BUY"
+            return "HOLD"
+        if cross_down and rsi < 45:
+            if position_state == "flat":
+                return "SELL"
+            if position_state == "long":
+                return "SELL"
+            return "HOLD"
+        return "HOLD"
