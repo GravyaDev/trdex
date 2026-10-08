@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -28,6 +28,22 @@ class BalanceRepository:
         )
         row = result.scalar_one_or_none()
         return row if row is not None else Decimal("10000")
+
+    async def balance_at(self, ts: datetime) -> Decimal | None:
+        """Return the balance as of ``ts`` (last ``balance_after`` recorded
+        strictly before it), or ``None`` if the ledger has no row before ``ts``.
+
+        ``ts`` is compared against ``recorded_at``, which is naive UTC.
+        """
+        if ts.tzinfo is not None:
+            ts = ts.astimezone(UTC).replace(tzinfo=None)
+        result = await self._session.execute(
+            select(BalanceRecord.balance_after)
+            .where(BalanceRecord.recorded_at < ts)
+            .order_by(BalanceRecord.recorded_at.desc(), BalanceRecord.id.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
 
     async def peak_balance(self) -> Decimal:
         """Return the highest balance_after ever recorded (for drawdown calc)."""

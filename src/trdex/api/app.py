@@ -448,6 +448,9 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         trailing_stop_pct=config_svc.get_typed("thresholds", "sl_trailing_stop_pct", settings.sl_trailing_stop_pct),
         daily_drawdown_pct=config_svc.get_typed("thresholds", "sl_daily_drawdown_pct", settings.sl_daily_drawdown_pct),
         max_drawdown_pct=config_svc.get_typed("thresholds", "gate_max_drawdown", settings.gate_max_drawdown),
+        open_positions_loss_pct=config_svc.get_typed(
+            "thresholds", "sl_open_positions_loss_pct", settings.sl_open_positions_loss_pct,
+        ),
     )
     risk_routes.set_monitor(sl_monitor)
     risk_routes.set_session_factory(session_factory)
@@ -461,6 +464,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             "sl_take_profit_pct": "_tp_pct",
             "sl_trailing_stop_pct": "_trailing_pct",
             "sl_daily_drawdown_pct": "_daily_dd_pct",
+            "sl_open_positions_loss_pct": "_open_loss_pct",
             "gate_max_drawdown": "_max_dd_pct",
         }
         if attr := attr_map.get(key):

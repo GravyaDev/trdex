@@ -5,13 +5,12 @@ peak equity (from the balance ledger) with mark-to-market current equity
 (``total_cost + total_unrealized``), producing a 98% false-positive
 drawdown on the first trade of a fresh deploy.
 
-The fix is to make the max-drawdown check realised-only on both sides:
-both ``peak_equity`` and ``current equity`` read from BalanceRepository.
-These tests lock that behaviour in.
-
-Daily drawdown is NOT retested here because it remains mark-to-market
-by design (``total_unrealized / total_cost``), which is a separate,
-symmetric calculation that was not affected by Bug 8.
+The original fix made max drawdown realised-only. It is now mark-to-market
+again, but on realised balance + unrealised P&L (not on the cost of the
+open positions, which was the actual Bug 8 mistake). These tests still
+lock in that a fresh deploy with an open position at entry price does
+not report a drawdown. Daily / open-positions limits and the kill-switch
+behaviour are covered in ``test_stop_loss_kill_switch.py``.
 """
 
 from __future__ import annotations
@@ -102,6 +101,8 @@ def _make_monitor(
     balance_repo_instance = MagicMock()
     balance_repo_instance.current_balance = AsyncMock(return_value=current_balance)
     balance_repo_instance.peak_balance = AsyncMock(return_value=peak_balance)
+    # Day-start baseline = current balance → the daily check stays neutral here.
+    balance_repo_instance.balance_at = AsyncMock(return_value=current_balance)
     monkeypatch.setattr(
         "trdex.storage.balance_repo.BalanceRepository",
         MagicMock(return_value=balance_repo_instance),

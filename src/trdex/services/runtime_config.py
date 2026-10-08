@@ -45,6 +45,7 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str, type]] = {
     ("thresholds", "sl_take_profit_pct"): ("sl_take_profit_pct", float),
     ("thresholds", "sl_trailing_stop_pct"): ("sl_trailing_stop_pct", float),
     ("thresholds", "sl_daily_drawdown_pct"): ("sl_daily_drawdown_pct", float),
+    ("thresholds", "sl_open_positions_loss_pct"): ("sl_open_positions_loss_pct", float),
     ("thresholds", "gate_max_drawdown"): ("gate_max_drawdown", float),
     ("thresholds", "gate_min_days"): ("gate_min_days", int),
     ("thresholds", "max_position_pct"): ("max_position_pct", float),

@@ -131,3 +131,23 @@ async def test_cancel_returns_false_when_live_not_configured():
     gw = _make_gateway(mode=TrdexMode.LIVE, live_executor=None)
     result = await gw.cancel("nonexistent-id")
     assert result is False
+
+
+# ── reduce-only orders pass the kill switch (closing must stay possible) ─────
+
+@pytest.mark.asyncio
+async def test_kill_switch_blocks_opening_orders():
+    gw = _make_gateway(kill_switch_active=True)
+    result = await gw.place("BTC/USDT", "BUY", qty=0.01, price=90_000.0)
+    assert result.status == "rejected"
+    assert "Kill switch" in result.message
+
+
+@pytest.mark.asyncio
+async def test_kill_switch_lets_reduce_only_orders_through():
+    gw = _make_gateway(kill_switch_active=True)
+    result = await gw.place(
+        "BTC/USDT", "SELL", qty=0.01, price=90_000.0,
+        idempotency_key="close:1", reduce_only=True,
+    )
+    assert result.status == "filled"
