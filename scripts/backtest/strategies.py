@@ -14,7 +14,74 @@ Conventions:
 from __future__ import annotations
 
 
+class LiveRuleEngine:
+    """The strategy that actually runs in the agent pipeline, replayed bar by bar.
+
+    - Signal: ``trdex.agents.analyst._rule_based_signal`` (RSI14 + SMA9/21),
+      imported from production code so the two cannot drift apart.
+    - Risk gate 2: confidence below ``trdex.agents.risk.MIN_CONFIDENCE`` → HOLD.
+    - Intent translation as in ``signal_to_intent``: long-only, BUY opens
+      when flat, SELL closes an open long, never opens a short.
+    - Exits as in ``StopLossMonitor``: config base (EngineParams) widened by
+      the volatility floor max(base, k x CV of the last 20 closes).
+
+    Approximations vs live (state them when reading results):
+    - no sentiment input (no point-in-time news history), so the ±0.2
+      sentiment nudge is off;
+    - one decision per closed 1h bar (live re-evaluates every scheduler
+      tick on the forming candle) and exits checked on bar high/low
+      (live checks the ticker every 30s);
+    - the adaptive floor is frozen at entry (live recomputes CV each check);
+    - the portfolio drawdown gate and per-symbol overrides are not modelled.
+    """
+    name = "LiveRuleEngine"
+    timeframe = "1h"
+
+    # Same multipliers as StopLossMonitor.check_now (src/trdex/risk/stop_loss.py).
+    _SL_CV_MULT = 2.5
+    _TP_CV_MULT = 5.0
+    _TRAIL_CV_MULT = 1.5
+
+    def generate_signal(self, bar_index, candles, indicators, position_state):
+        from trdex.agents.analyst import _rule_based_signal
+        from trdex.agents.risk import MIN_CONFIDENCE
+
+        j = bar_index - 1
+        signal, confidence, _ = _rule_based_signal(
+            indicators["rsi14"][j],
+            indicators["sma9"][j],
+            indicators["sma21"][j],
+            indicators["closes"][j],
+            None,  # sentiment: not available historically
+        )
+        if signal == "HOLD" or confidence < MIN_CONFIDENCE:
+            return "HOLD"
+        if signal == "BUY":
+            return "BUY" if position_state == "flat" else "HOLD"
+        # SELL: close an open long; long-only, so never open a short.
+        return "CLOSE_LONG" if position_state == "long" else "HOLD"
+
+    def exit_pcts(self, bar_index, indicators, params):
+        from statistics import mean, stdev
+
+        window = indicators["closes"][max(0, bar_index - 20):bar_index]
+        cv = 0.0
+        if len(window) >= 3 and mean(window) > 0:
+            cv = stdev(window) / mean(window)
+        return (
+            max(params.sl_pct, self._SL_CV_MULT * cv),
+            max(params.tp_pct, self._TP_CV_MULT * cv),
+            max(params.trail_pct, self._TRAIL_CV_MULT * cv),
+        )
+
+
 class BaselineLive:
+    """RSI(14) >= 50 long / < 50 short, always in the market.
+
+    NOT the live strategy despite the name (kept for CSV continuity): the
+    live pipeline also uses SMA9/21, is long-only and uses adaptive exits.
+    See ``LiveRuleEngine`` for the faithful replay.
+    """
     name = "BaselineLive"
     timeframe = "1h"
 
