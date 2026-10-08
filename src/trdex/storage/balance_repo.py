@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -36,7 +36,7 @@ class BalanceRepository:
         ``ts`` is compared against ``recorded_at``, which is naive UTC.
         """
         if ts.tzinfo is not None:
-            ts = ts.astimezone(timezone.utc).replace(tzinfo=None)
+            ts = ts.astimezone(UTC).replace(tzinfo=None)
         result = await self._session.execute(
             select(BalanceRecord.balance_after)
             .where(BalanceRecord.recorded_at < ts)

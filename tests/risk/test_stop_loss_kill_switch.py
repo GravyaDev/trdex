@@ -24,12 +24,20 @@ from trdex.risk.stop_loss import StopLossMonitor, StopReason, _kill_switch
 
 @pytest.fixture(autouse=True)
 def _reset_kill_switch():
-    for attr, value in (("_active", False), ("_reason", ""), ("_activated_at", None),
-                        ("_session_factory", None)):
+    for attr, value in (
+        ("_active", False),
+        ("_reason", ""),
+        ("_activated_at", None),
+        ("_session_factory", None),
+    ):
         setattr(_kill_switch, attr, value)
     yield
-    for attr, value in (("_active", False), ("_reason", ""), ("_activated_at", None),
-                        ("_session_factory", None)):
+    for attr, value in (
+        ("_active", False),
+        ("_reason", ""),
+        ("_activated_at", None),
+        ("_session_factory", None),
+    ):
         setattr(_kill_switch, attr, value)
 
 
@@ -45,8 +53,12 @@ def _factory():
 
 def _pos(pos_id=1, symbol="BTC/USDT", amount="1", entry="10000", source="agent"):
     return SimpleNamespace(
-        id=pos_id, symbol=symbol, side="BUY", amount=Decimal(amount),
-        entry_price=Decimal(entry), source=source,
+        id=pos_id,
+        symbol=symbol,
+        side="BUY",
+        amount=Decimal(amount),
+        entry_price=Decimal(entry),
+        source=source,
     )
 
 
@@ -97,9 +109,13 @@ def _monitor(
 
 def _filled_gateway():
     gw = MagicMock()
-    gw.place = AsyncMock(return_value=SimpleNamespace(
-        status="filled", filled_price=9400.0, message="ok",
-    ))
+    gw.place = AsyncMock(
+        return_value=SimpleNamespace(
+            status="filled",
+            filled_price=9400.0,
+            message="ok",
+        )
+    )
     return gw
 
 
@@ -129,7 +145,12 @@ async def test_stop_loss_still_fires_when_kill_switch_is_active(monkeypatch):
 async def test_portfolio_events_not_refired_while_kill_switch_active(monkeypatch):
     _kill_switch._active = True
     monitor = _monitor(
-        monkeypatch, positions=[], price=1.0, balance="5000", peak="10000", day_start="10000",
+        monkeypatch,
+        positions=[],
+        price=1.0,
+        balance="5000",
+        peak="10000",
+        day_start="10000",
     )
 
     events = await monitor.check_now()
@@ -146,11 +167,11 @@ async def test_daily_drawdown_counts_realised_and_unrealised_loss(monkeypatch):
     monitor = _monitor(
         monkeypatch,
         positions=[_pos(amount="0.1", entry="10000")],
-        price=7000.0,              # 0.1 x (7000 - 10000) = -300
+        price=7000.0,  # 0.1 x (7000 - 10000) = -300
         balance="9800",
         day_start="10000",
         daily_dd=0.05,
-        open_loss=0.99,            # isolate the daily check
+        open_loss=0.99,  # isolate the daily check
     )
 
     events = await monitor.check_now()
@@ -162,7 +183,12 @@ async def test_daily_drawdown_counts_realised_and_unrealised_loss(monkeypatch):
 @pytest.mark.asyncio
 async def test_daily_drawdown_below_limit_does_not_trip(monkeypatch):
     monitor = _monitor(
-        monkeypatch, positions=[], price=1.0, balance="9700", day_start="10000", daily_dd=0.05,
+        monkeypatch,
+        positions=[],
+        price=1.0,
+        balance="9700",
+        day_start="10000",
+        daily_dd=0.05,
     )
 
     events = await monitor.check_now()
@@ -175,7 +201,12 @@ async def test_daily_drawdown_below_limit_does_not_trip(monkeypatch):
 async def test_daily_drawdown_fires_with_no_open_positions(monkeypatch):
     # Losses already realised today: the old code returned early with no positions.
     monitor = _monitor(
-        monkeypatch, positions=[], price=1.0, balance="9400", day_start="10000", daily_dd=0.05,
+        monkeypatch,
+        positions=[],
+        price=1.0,
+        balance="9400",
+        day_start="10000",
+        daily_dd=0.05,
     )
 
     events = await monitor.check_now()
@@ -186,7 +217,12 @@ async def test_daily_drawdown_fires_with_no_open_positions(monkeypatch):
 @pytest.mark.asyncio
 async def test_daily_baseline_falls_back_to_current_balance_without_history(monkeypatch):
     monitor = _monitor(
-        monkeypatch, positions=[], price=1.0, balance="9000", day_start=None, daily_dd=0.05,
+        monkeypatch,
+        positions=[],
+        price=1.0,
+        balance="9000",
+        day_start=None,
+        daily_dd=0.05,
         max_dd=0.50,
     )
 
@@ -239,7 +275,7 @@ async def test_no_double_count_when_position_is_closed_in_the_same_cycle(monkeyp
     monitor = _monitor(
         monkeypatch,
         positions=[_pos(amount="0.1", entry="10000")],
-        price=9400.0,              # -6% on the position: SL fires, -60 unrealised
+        price=9400.0,  # -6% on the position: SL fires, -60 unrealised
         gateway=_filled_gateway(),
         daily_dd=0.05,
     )
