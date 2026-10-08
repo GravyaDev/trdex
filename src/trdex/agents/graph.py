@@ -108,9 +108,13 @@ async def run_agent_cycle(
     Returns:
         Final AgentState with all agent outputs populated.
     """
+    run_id = str(uuid.uuid4())
+    # Per-run copy: usage records tied to this run_id, daily spend shared.
+    if llm_caller is not None and hasattr(llm_caller, "for_run"):
+        llm_caller = llm_caller.for_run(run_id)
     initial_state = AgentState(
         symbol=symbol,
-        run_id=str(uuid.uuid4()),
+        run_id=run_id,
         market=market_snapshot,
         portfolio=portfolio_context or PortfolioContext(),
         session_factory=session_factory,
