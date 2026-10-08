@@ -1,0 +1,36 @@
+# pytest --cov=src/trdex  (Python 3.12, main @ 18d8a33) — solo errori
+# Tutti i 29 falliscono in setup con FileNotFoundError sul path Windows hardcoded:
+E   FileNotFoundError: [Errno 2] No such file or directory: 'c:/Users/Daniele/Antigravity/trdex/docker-compose.yaml'
+
+ERROR tests/test_audit_fixes.py::TestDockerComposeHealthcheck::test_all_services_have_healthchecks
+ERROR tests/test_audit_fixes.py::TestDockerComposeHealthcheck::test_app_healthcheck_has_start_period
+ERROR tests/test_audit_fixes.py::TestDockerComposeHealthcheck::test_app_healthcheck_tests_health_endpoint
+ERROR tests/test_audit_fixes.py::TestDockerComposeHealthcheck::test_app_service_has_healthcheck
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_db_url_uses_docker_service_name
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_env_example_documents_agent_scheduler
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_env_example_documents_sl_thresholds
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_redis_url_uses_docker_service_name
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[DATABASE_URL]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[REDIS_URL]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_AGENT_SCHEDULER_ENABLED]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_AGENT_SCHEDULER_INTERVAL]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_AGENT_SCHEDULER_SYMBOLS]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_ALPHAVANTAGE_API_KEY]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_CONFIG_ENCRYPTION_KEY]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_CRYPTOCOMPARE_API_KEY]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_FREECRYPTOAPI_KEY]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_GATE_MAX_DRAWDOWN]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_GATE_MIN_DAYS]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_GATE_MIN_SHARPE]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_GATE_MIN_WIN_RATE]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_INGESTION_INTERVAL]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_INGESTION_SYMBOLS]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_MAX_POSITION_PCT]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_SL_CHECK_INTERVAL]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_SL_DAILY_DRAWDOWN_PCT]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_SL_POSITION_PCT]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_SL_TAKE_PROFIT_PCT]
+ERROR tests/test_audit_fixes.py::TestEnvExample::test_var_documented_in_env_example[TRDEX_STOCKDATA_API_KEY]
+
+======================= 382 passed, 29 errors in 17.56s ========================
+# coverage TOTAL                                              7875   4528    43%
