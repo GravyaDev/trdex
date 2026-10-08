@@ -231,25 +231,44 @@ async def test_gateway_failure_is_contained() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sell_signal_computes_sl_tp_correctly() -> None:
-    """For SELL, SL is ABOVE entry and TP is BELOW entry."""
+async def test_sell_signal_is_skipped_before_any_order() -> None:
+    """trdex is long-only: a SELL (short entry) must never reach the gateway.
+
+    Regression: the order used to be placed first and only then refused by
+    PortfolioService, leaving an untracked fill.
+    """
+    gw = FakeGateway()
     svc = FakePortfolioService()
-    executor = _make_executor(portfolio_service=svc)
+    executor = _make_executor(gateway=gw, portfolio_service=svc)
     signal = TelegramSignal(
         source="chat-1", symbol="BTC/USDT", direction="SELL",
         entry=90000.0,
-        targets=[85500.0],   # -5%
-        stop_loss=92700.0,   # +3%
+        targets=[85500.0],
+        stop_loss=92700.0,
         raw_text="",
     )
 
-    await executor.execute(signal, outcome_id=1)
+    outcome = await executor.execute(signal, outcome_id=1)
 
-    call = svc.calls[0]
-    # SL and TP percentages are absolute (always positive), direction-agnostic;
-    # StopLossMonitor already interprets them by side.
-    assert call["stop_loss_pct"] == pytest.approx(0.03, rel=1e-4)
-    assert call["take_profit_pct"] == pytest.approx(0.05, rel=1e-4)
+    assert outcome.status == "skipped"
+    assert "long-only" in outcome.reason.lower()
+    assert gw.calls == []
+    assert svc.calls == []
+
+
+@pytest.mark.asyncio
+async def test_lowercase_sell_is_also_skipped() -> None:
+    gw = FakeGateway()
+    executor = _make_executor(gateway=gw)
+    signal = TelegramSignal(
+        source="chat-1", symbol="BTC/USDT", direction=" sell ",  # type: ignore[arg-type]
+        entry=90000.0, targets=[85500.0], stop_loss=92700.0, raw_text="",
+    )
+
+    outcome = await executor.execute(signal, outcome_id=1)
+
+    assert outcome.status == "skipped"
+    assert gw.calls == []
 
 
 # ── Security hardening (pre-live) regression tests ────────────────────
@@ -371,33 +390,26 @@ async def test_nan_fee_is_rejected_before_persistence() -> None:
 
 
 @pytest.mark.asyncio
-async def test_portfolio_long_only_rejection_returns_error_not_crash() -> None:
-    """PortfolioService.record_open_fill() returns None for SELL because
-    trdex is long-only today. The executor must surface that as
-    status=error with a human reason instead of crashing on
-    position.id."""
+async def test_portfolio_rejection_after_fill_returns_error_not_crash() -> None:
+    """Defence in depth: if PortfolioService refuses a fill (returns None),
+    the executor surfaces status=error with a clear reason instead of
+    crashing on position.id."""
 
     class NullPortfolioService:
-        """Mimics the real PortfolioService refusing a SELL fill."""
         def __init__(self) -> None:
             self.calls: list[dict] = []
 
         async def record_open_fill(self, **kwargs: Any) -> None:
             self.calls.append(dict(kwargs))
-            return None  # long-only rejection
+            return None
 
     gw = FakeGateway()
     svc = NullPortfolioService()
     executor = _make_executor(gateway=gw, portfolio_service=svc)  # type: ignore[arg-type]
-    signal = TelegramSignal(
-        source="chat-1", symbol="BTC/USDT", direction="SELL",
-        entry=90000.0, targets=[85500.0], stop_loss=92700.0, raw_text="",
-    )
 
-    outcome = await executor.execute(signal, outcome_id=99)
+    outcome = await executor.execute(make_signal(), outcome_id=99)
 
     assert outcome.status == "error"
-    assert "long-only" in outcome.reason.lower()
-    # Gateway WAS called — the order filled, just not tracked.
+    assert "untracked" in outcome.reason.lower()
     assert len(gw.calls) == 1
     assert len(svc.calls) == 1
