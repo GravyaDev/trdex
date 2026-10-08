@@ -167,21 +167,21 @@ async def risk_node(state: AgentState) -> AgentState:
                     portfolio.equity, position_size, trade_value)
 
     # SL/TP: use analyst LLM suggestions when available, clipped to safe range.
-    # Fallback to defaults when LLM didn't run or didn't suggest.
-    _SL_MIN, _SL_MAX, _SL_DEFAULT = 0.01, 0.10, 0.03
-    _TP_MIN, _TP_MAX, _TP_DEFAULT = 0.02, 0.20, 0.05
+    # Without a suggestion leave them unset (None): stamping a default here
+    # would override the operator's thresholds and the volatility-adaptive
+    # stop in the StopLossMonitor for every agent position.
+    _SL_MIN, _SL_MAX = 0.01, 0.10
+    _TP_MIN, _TP_MAX = 0.02, 0.20
     sl_suggestion = state.analysis.suggested_stop_loss
     tp_suggestion = state.analysis.suggested_take_profit
+    final_sl: float | None = None
+    final_tp: float | None = None
     if sl_suggestion is not None:
         final_sl = max(_SL_MIN, min(_SL_MAX, sl_suggestion))
         logger.info("[Risk] SL from LLM: %.2f%% → clipped to %.2f%%", sl_suggestion * 100, final_sl * 100)
-    else:
-        final_sl = _SL_DEFAULT
     if tp_suggestion is not None:
         final_tp = max(_TP_MIN, min(_TP_MAX, tp_suggestion))
         logger.info("[Risk] TP from LLM: %.2f%% → clipped to %.2f%%", tp_suggestion * 100, final_tp * 100)
-    else:
-        final_tp = _TP_DEFAULT
 
     # Flag trades approved above the live-mode drawdown threshold (10%).
     # These would have been blocked in live mode — useful for analysis.

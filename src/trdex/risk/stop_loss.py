@@ -165,6 +165,70 @@ def get_kill_switch() -> KillSwitch:
     return _kill_switch
 
 
+# Multipliers: how many CVs above the base threshold.
+# 2.5× CV means the adaptive SL sits at ~2.5 standard deviations
+# of recent price movement — wide enough to avoid noise, tight
+# enough to cut real drawdowns. TP uses 5× CV (let winners run
+# further on volatile coins). Trailing uses 1.5× CV (tighter
+# than SL to lock in profits once they exist).
+_SL_CV_MULT = 2.5
+_TP_CV_MULT = 5.0
+_TRAIL_CV_MULT = 1.5
+
+
+def effective_thresholds(
+    pos,
+    override,
+    cv: float,
+    *,
+    base_sl: float,
+    base_tp: float,
+    base_trail: float,
+) -> tuple[float, float, float]:
+    """Return (stop_loss, take_profit, trailing) fractions for one position.
+
+    Priority, highest first:
+
+    1. Per-symbol operator override (``symbol_config`` row) — the operator
+       always has the last word.
+    2. Per-position values stored at open:
+       - Telegram positions keep the signal's own stop as-is (it is the
+         strategy being followed; the stop-distance gate bounds it).
+       - Agent positions: the LLM-suggested stop can only WIDEN the
+         adaptive floor, never tighten it below ``max(base, 2.5×CV)``.
+       - Take-profit is used as stored.
+    3. Adaptive floor ``max(base, k×CV)`` from operator config + volatility.
+    """
+    floor_sl = max(base_sl, _SL_CV_MULT * cv)
+    floor_tp = max(base_tp, _TP_CV_MULT * cv)
+    floor_trail = max(base_trail, _TRAIL_CV_MULT * cv)
+
+    pos_sl = getattr(pos, "stop_loss_pct", None)
+    pos_tp = getattr(pos, "take_profit_pct", None)
+    is_telegram = getattr(pos, "source", None) == "telegram"
+
+    if override is not None and override.sl_pct is not None:
+        sl = override.sl_pct
+    elif pos_sl is not None:
+        sl = pos_sl if is_telegram else max(floor_sl, pos_sl)
+    else:
+        sl = floor_sl
+
+    if override is not None and override.tp_pct is not None:
+        tp = override.tp_pct
+    elif pos_tp is not None:
+        tp = pos_tp
+    else:
+        tp = floor_tp
+
+    if override is not None and override.trailing_pct is not None:
+        trail = override.trailing_pct
+    else:
+        trail = floor_trail
+
+    return sl, tp, trail
+
+
 class StopLossMonitor:
     """Background monitor: checks all open positions against stop conditions.
 
@@ -498,16 +562,6 @@ class StopLossMonitor:
         except Exception:
             logger.warning("[StopLoss] could not load volatility CV / symbol_config — using base thresholds")
 
-        # Multipliers: how many CVs above the base threshold.
-        # 2.5× CV means the adaptive SL sits at ~2.5 standard deviations
-        # of recent price movement — wide enough to avoid noise, tight
-        # enough to cut real drawdowns. TP uses 5× CV (let winners run
-        # further on volatile coins). Trailing uses 1.5× CV (tighter
-        # than SL to lock in profits once they exist).
-        _SL_CV_MULT = 2.5
-        _TP_CV_MULT = 5.0
-        _TRAIL_CV_MULT = 1.5
-
         total_unrealized = 0.0
         total_cost = 0.0
 
@@ -529,26 +583,17 @@ class StopLossMonitor:
             total_unrealized += unrealized
             total_cost += cost
 
-            # Compute effective thresholds for this position.
-            # Priority: per-position (set by Risk gate at open) > per-symbol
-            # DB override > adaptive CV > global base.
+            # Compute effective thresholds for this position (see
+            # effective_thresholds for the priority rules).
             cv = symbol_cv.get(pos.symbol, 0.0)
-            override = symbol_overrides.get(pos.symbol)
-            pos_sl = getattr(pos, "stop_loss_pct", None)
-            pos_tp = getattr(pos, "take_profit_pct", None)
-            if pos_sl is not None:
-                eff_sl = pos_sl
-            elif override and override.sl_pct is not None:
-                eff_sl = override.sl_pct
-            else:
-                eff_sl = max(self._sl_pct, _SL_CV_MULT * cv)
-            if pos_tp is not None:
-                eff_tp = pos_tp
-            elif override and override.tp_pct is not None:
-                eff_tp = override.tp_pct
-            else:
-                eff_tp = max(self._tp_pct, _TP_CV_MULT * cv)
-            eff_trail = override.trailing_pct if (override and override.trailing_pct is not None) else max(self._trailing_pct, _TRAIL_CV_MULT * cv)
+            eff_sl, eff_tp, eff_trail = effective_thresholds(
+                pos,
+                symbol_overrides.get(pos.symbol),
+                cv,
+                base_sl=self._sl_pct,
+                base_tp=self._tp_pct,
+                base_trail=self._trailing_pct,
+            )
 
             # Update trailing stop high-water mark
             pos_id = pos.id

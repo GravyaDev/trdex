@@ -162,6 +162,9 @@ async def _telegram_background(
                 entry_drift_tolerance=float(svc.get_typed(
                     "telegram", "entry_drift_tolerance", 0.005,
                 )),
+                max_stop_distance=float(svc.get_typed(
+                    "telegram", "max_stop_distance", 0.10,
+                )),
                 budget=Decimal(str(_settings.telegram_signal_budget)),
             )
             portfolio_repo = PortfolioRepository(session)
