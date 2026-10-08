@@ -1,6 +1,7 @@
 """TelegramSignalExecutor — orchestrates gate → fetch → place → persist.
 
 Zero business logic here. This file is a sequencer:
+  0. Normalise direction; reject SELL (long-only) before any I/O.
   1. Route the symbol (may raise SymbolNotRoutable → skip).
   2. Fetch current price from the routed feed.
   3. Run all gates in order. First failure → skip with reason.
@@ -95,6 +96,19 @@ class TelegramSignalExecutor:
             )
         if direction != signal.direction:
             signal = replace(signal, direction=direction)  # type: ignore[arg-type]
+
+        # 0b. Long-only. A SELL signal is a short entry, which trdex cannot
+        # track (PortfolioService.record_open_fill returns None for SELL).
+        # Reject it BEFORE any order: previously the order was placed and
+        # only then refused by the portfolio, leaving an untracked fill —
+        # in live on spot that sells coins held by other positions.
+        if direction == "SELL":
+            logger.info("[telegram-exec] skip SELL %s from %s: long-only, shorts not supported",
+                        signal.symbol, signal.source)
+            return ExecuteOutcome(
+                status="skipped",
+                reason="SELL not supported: trdex is long-only",
+            )
 
         # 1. Route
         try:
@@ -239,20 +253,18 @@ class TelegramSignalExecutor:
             logger.exception("[telegram-exec] persistence failed after fill")
             return ExecuteOutcome(status="error", reason=f"persistence failed: {exc}")
 
-        # 7b. PortfolioService.record_open_fill returns None for SELL fills
-        # because trdex is long-only today. The gateway still executed the
-        # order — this is an operational gap (position untracked) until
-        # multi-asset / short-support lands. Surface as error rather than
-        # AttributeError, so telemetry shows the signal + reason.
+        # 7b. Defence in depth: SELL is rejected at step 0b, so the portfolio
+        # should never refuse a fill here. If it does, the order has already
+        # filled and is untracked — surface it loudly for manual reconciliation.
         if position is None:
-            logger.warning(
+            logger.error(
                 "[telegram-exec] fill accepted by gateway but portfolio rejected %s %s "
-                "(long-only system, SELL signals untracked) — signal_id=%s",
+                "— UNTRACKED FILL, reconcile manually — signal_id=%s",
                 direction, signal.symbol, outcome_id,
             )
             return ExecuteOutcome(
                 status="error",
-                reason=f"portfolio rejected {direction} (long-only)",
+                reason=f"portfolio rejected {direction} after fill (untracked)",
             )
 
         logger.info("[telegram-exec] executed %s %s qty=%.6f from %s (pos=%s)",
