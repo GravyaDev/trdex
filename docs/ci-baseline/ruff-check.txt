@@ -1,0 +1,279 @@
+# ruff check src/ tests/ --output-format concise  (ruff 0.15.9, main @ 18d8a33)
+# [*] = corretto da 'ruff check --fix'
+src/trdex/agents/graph.py:121:48: UP017 [*] Use `datetime.UTC` alias
+src/trdex/agents/intent.py:19:20: RUF002 Docstring contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?
+src/trdex/agents/runner.py:3:1: I001 [*] Import block is un-sorted or un-formatted
+src/trdex/agents/runner.py:143:39: UP017 [*] Use `datetime.UTC` alias
+src/trdex/agents/runner.py:302:61: UP017 [*] Use `datetime.UTC` alias
+src/trdex/agents/scheduler.py:52:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/agents/state.py:19:73: UP017 [*] Use `datetime.UTC` alias
+src/trdex/agents/state.py:48:45: RUF003 Comment contains ambiguous `–` (EN DASH). Did you mean `-` (HYPHEN-MINUS)?
+src/trdex/agents/state.py:59:68: RUF003 Comment contains ambiguous `–` (EN DASH). Did you mean `-` (HYPHEN-MINUS)?
+src/trdex/agents/state.py:90:80: RUF003 Comment contains ambiguous `–` (EN DASH). Did you mean `-` (HYPHEN-MINUS)?
+src/trdex/api/app.py:10:1: UP035 [*] Import from `collections.abc` instead: `AsyncIterator`
+src/trdex/api/app.py:52:9: I001 [*] Import block is un-sorted or un-formatted
+src/trdex/api/app.py:66:65: UP017 [*] Use `datetime.UTC` alias
+src/trdex/api/app.py:118:5: I001 [*] Import block is un-sorted or un-formatted
+src/trdex/api/app.py:127:5: N806 Variable `DEDUP_WINDOW_S` in function should be lowercase
+src/trdex/api/app.py:262:5: I001 [*] Import block is un-sorted or un-formatted
+src/trdex/api/app.py:262:68: F401 [*] `trdex.services.runtime_config.get_config_service` imported but unused
+src/trdex/api/app.py:347:5: I001 [*] Import block is un-sorted or un-formatted
+src/trdex/api/app.py:439:5: I001 [*] Import block is un-sorted or un-formatted
+src/trdex/api/app.py:511:17: RUF006 Store a reference to the return value of `loop.create_task`
+src/trdex/api/app.py:512:17: RUF006 Store a reference to the return value of `loop.create_task`
+src/trdex/api/app.py:658:29: RUF006 Store a reference to the return value of `loop.create_task`
+src/trdex/api/app.py:729:17: RUF006 Store a reference to the return value of `loop.create_task`
+src/trdex/api/app.py:761:17: RUF006 Store a reference to the return value of `loop.create_task`
+src/trdex/api/app.py:844:5: I001 [*] Import block is un-sorted or un-formatted
+src/trdex/api/app.py:863:5: I001 [*] Import block is un-sorted or un-formatted
+src/trdex/api/app.py:882:5: I001 [*] Import block is un-sorted or un-formatted
+src/trdex/api/app.py:979:13: I001 [*] Import block is un-sorted or un-formatted
+src/trdex/api/app.py:1078:9: I001 [*] Import block is un-sorted or un-formatted
+src/trdex/api/routes/portfolio.py:7:1: UP035 [*] Import from `collections.abc` instead: `AsyncIterator`
+src/trdex/api/routes/portfolio.py:18:5: I001 [*] Import block is un-sorted or un-formatted
+src/trdex/api/routes/portfolio.py:30:22: UP037 [*] Remove quotes from type annotation
+src/trdex/api/routes/portfolio.py:31:19: UP037 [*] Remove quotes from type annotation
+src/trdex/api/routes/portfolio.py:32:14: UP037 [*] Remove quotes from type annotation
+src/trdex/api/routes/risk.py:11:1: E402 Module level import not at top of file
+src/trdex/api/routes/risk.py:12:1: E402 Module level import not at top of file
+src/trdex/api/routes/risk.py:13:1: E402 Module level import not at top of file
+src/trdex/api/routes/risk.py:15:1: E402 Module level import not at top of file
+src/trdex/api/routes/settings.py:10:5: F401 [*] `trdex.services.runtime_config.CREDENTIAL_KEYS` imported but unused
+src/trdex/backtest/indicators.py:9:52: RUF002 Docstring contains ambiguous `α` (GREEK SMALL LETTER ALPHA). Did you mean `a` (LATIN SMALL LETTER A)?
+src/trdex/backtest/indicators.py:21:25: RUF003 Comment contains ambiguous `α` (GREEK SMALL LETTER ALPHA). Did you mean `a` (LATIN SMALL LETTER A)?
+src/trdex/context/news_sources/__init__.py:7:11: RUF022 [*] `__all__` is not sorted
+src/trdex/context/news_sources/base.py:6:36: F401 [*] `dataclasses.field` imported but unused
+src/trdex/context/news_sources/cryptocompare.py:63:76: UP017 [*] Use `datetime.UTC` alias
+src/trdex/context/news_sources/perplexity.py:12:50: RUF002 Docstring contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?
+src/trdex/context/news_sources/perplexity.py:12:67: RUF002 Docstring contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?
+src/trdex/context/news_sources/perplexity.py:127:31: UP017 [*] Use `datetime.UTC` alias
+src/trdex/context/news_sources/stockdata.py:71:30: UP017 [*] Use `datetime.UTC` alias
+src/trdex/context/news_sources/stockdata.py:73:48: UP017 [*] Use `datetime.UTC` alias
+src/trdex/context/scheduler.py:62:21: RUF006 Store a reference to the return value of `asyncio.create_task`
+src/trdex/context/scheduler.py:143:42: UP017 [*] Use `datetime.UTC` alias
+src/trdex/dashboard/app.py:205:1: SIM117 [*] Use a single `with` statement with multiple contexts instead of nested `with` statements
+src/trdex/dashboard/app.py:303:15: F541 [*] f-string without any placeholders
+src/trdex/dashboard/app.py:344:9: SIM102 Use a single `if` statement instead of nested `if` statements
+src/trdex/dashboard/app.py:405:9: SIM102 Use a single `if` statement instead of nested `if` statements
+src/trdex/dashboard/app.py:424:42: RUF001 String contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?
+src/trdex/dashboard/app.py:692:24: RUF005 Consider `[*tg_channels, new_channel.strip()]` instead of concatenation
+src/trdex/dashboard/app.py:780:5: SIM102 Use a single `if` statement instead of nested `if` statements
+src/trdex/dashboard/app.py:857:28: RUF005 Consider `[*current_symbols, new_symbol.strip().upper()]` instead of concatenation
+src/trdex/execution/live_executor.py:30:51: UP017 [*] Use `datetime.UTC` alias
+src/trdex/execution/live_executor.py:30:96: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/alphavantage.py:119:95: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/alphavantage.py:128:95: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/alphavantage.py:140:71: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/alphavantage.py:142:34: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/alphavantage.py:155:36: RUF100 [*] Unused `noqa` directive (non-enabled: `ARG002`)
+src/trdex/market/feeds/alphavantage.py:177:75: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/alphavantage.py:194:84: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/alphavantage.py:223:64: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/alphavantage.py:251:64: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/base.py:56:54: RUF100 [*] Unused `noqa` directive (non-enabled: `ARG002`)
+src/trdex/market/feeds/binance.py:77:31: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/binance.py:79:50: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/binance.py:117:26: E741 Ambiguous variable name: `l`
+src/trdex/market/feeds/binance.py:120:71: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/binance_ws.py:64:62: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/binance_ws.py:66:46: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/binance_ws.py:102:36: RUF100 [*] Unused `noqa` directive (non-enabled: `ARG002`)
+src/trdex/market/feeds/binance_ws.py:122:68: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/coingecko.py:93:43: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/coingecko.py:93:84: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/coingecko.py:103:36: RUF100 [*] Unused `noqa` directive (non-enabled: `ARG002`)
+src/trdex/market/feeds/coingecko.py:115:68: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/cryptocompare.py:85:39: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/cryptocompare.py:94:36: RUF100 [*] Unused `noqa` directive (non-enabled: `ARG002`)
+src/trdex/market/feeds/cryptocompare.py:114:66: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/forex.py:56:39: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/forex.py:65:36: RUF100 [*] Unused `noqa` directive (non-enabled: `ARG002`)
+src/trdex/market/feeds/freecryptoapi.py:61:39: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/freecryptoapi.py:70:36: RUF100 [*] Unused `noqa` directive (non-enabled: `ARG002`)
+src/trdex/market/feeds/freecryptoapi.py:89:73: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/freecryptoapi.py:91:61: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/twelvedata.py:95:39: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/twelvedata.py:104:36: RUF100 [*] Unused `noqa` directive (non-enabled: `ARG002`)
+src/trdex/market/feeds/twelvedata.py:127:64: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/twelvedata.py:138:64: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/yfinance.py:115:9: I001 [*] Import block is un-sorted or un-formatted
+src/trdex/market/feeds/yfinance.py:130:16: UP041 [*] Replace aliased errors with `TimeoutError`
+src/trdex/market/feeds/yfinance.py:131:13: B904 Within an `except` clause, raise exceptions with `raise ... from err` or `raise ... from None` to distinguish them from errors in exception handling
+src/trdex/market/feeds/yfinance.py:138:39: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/yfinance.py:154:9: I001 [*] Import block is un-sorted or un-formatted
+src/trdex/market/feeds/yfinance.py:183:16: UP041 [*] Replace aliased errors with `TimeoutError`
+src/trdex/market/feeds/yfinance.py:188:13: B904 Within an `except` clause, raise exceptions with `raise ... from err` or `raise ... from None` to distinguish them from errors in exception handling
+src/trdex/market/feeds/yfinance.py:203:40: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/feeds/yfinance.py:215:64: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/hours.py:23:5: SIM103 Return the condition directly
+src/trdex/market/hours.py:37:34: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/hours.py:46:5: SIM103 Return the negated condition directly
+src/trdex/market/manager.py:102:17: RUF006 Store a reference to the return value of `asyncio.create_task`
+src/trdex/market/manager.py:209:19: RUF059 Unpacked variable `price` is never used
+src/trdex/market/manager.py:233:39: UP017 [*] Use `datetime.UTC` alias
+src/trdex/market/manager.py:306:5: SIM103 Return the condition directly
+src/trdex/memory/kb_loader.py:29:1: UP035 [*] Import from `collections.abc` instead: `Iterable`
+src/trdex/memory/kb_loader.py:172:55: UP037 [*] Remove quotes from type annotation
+src/trdex/memory/kb_loader.py:192:57: UP037 [*] Remove quotes from type annotation
+src/trdex/memory/kb_loader.py:212:35: RUF100 [*] Unused `noqa` directive (non-enabled: `A002`)
+src/trdex/memory/nominations.py:62:41: UP017 [*] Use `datetime.UTC` alias
+src/trdex/memory/nominations.py:84:9: UP012 [*] Unnecessary UTF-8 `encoding` argument to `encode`
+src/trdex/memory/nominations.py:90:27: UP017 [*] Use `datetime.UTC` alias
+src/trdex/memory/nominations.py:127:34: UP017 [*] Use `datetime.UTC` alias
+src/trdex/memory/trade_narratives.py:68:49: UP017 [*] Use `datetime.UTC` alias
+src/trdex/portfolio/service.py:20:1: I001 [*] Import block is un-sorted or un-formatted
+src/trdex/portfolio/service.py:30:34: F401 [*] `trdex.market.manager.FeedError` imported but unused
+src/trdex/portfolio/service.py:49:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/portfolio/service.py:72:28: B905 `zip()` without an explicit `strict=` parameter
+src/trdex/portfolio/service.py:242:9: SIM108 Use ternary operator `gross = (exit_price - entry) * amt if live.side == "BUY" else (entry - exit_price) * amt` instead of `if`-`else`-block
+src/trdex/risk/readiness.py:65:30: UP017 [*] Use `datetime.UTC` alias
+src/trdex/risk/readiness.py:171:27: UP017 [*] Use `datetime.UTC` alias
+src/trdex/risk/stop_loss.py:43:72: UP017 [*] Use `datetime.UTC` alias
+src/trdex/risk/stop_loss.py:120:54: UP017 [*] Use `datetime.UTC` alias
+src/trdex/risk/stop_loss.py:129:50: UP017 [*] Use `datetime.UTC` alias
+src/trdex/risk/stop_loss.py:265:52: UP017 [*] Use `datetime.UTC` alias
+src/trdex/risk/stop_loss.py:341:44: UP017 [*] Use `datetime.UTC` alias
+src/trdex/risk/stop_loss.py:453:48: UP017 [*] Use `datetime.UTC` alias
+src/trdex/risk/stop_loss.py:462:31: UP017 [*] Use `datetime.UTC` alias
+src/trdex/risk/stop_loss.py:477:55: RUF003 Comment contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?
+src/trdex/risk/stop_loss.py:502:14: RUF003 Comment contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?
+src/trdex/risk/stop_loss.py:504:50: RUF003 Comment contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?
+src/trdex/risk/stop_loss.py:505:56: RUF003 Comment contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?
+src/trdex/risk/stop_loss.py:507:9: N806 Variable `_SL_CV_MULT` in function should be lowercase
+src/trdex/risk/stop_loss.py:508:9: N806 Variable `_TP_CV_MULT` in function should be lowercase
+src/trdex/risk/stop_loss.py:509:9: N806 Variable `_TRAIL_CV_MULT` in function should be lowercase
+src/trdex/risk/stop_loss.py:523:13: SIM108 Use ternary operator `pnl_pct = (price - entry) / entry if pos.side == "BUY" else (entry - price) / entry` instead of `if`-`else`-block
+src/trdex/risk/stop_loss.py:678:44: UP017 [*] Use `datetime.UTC` alias
+src/trdex/scripts/apply_migrations.py:27:1: I001 [*] Import block is un-sorted or un-formatted
+src/trdex/scripts/inspect_runs.py:60:32: UP017 [*] Use `datetime.UTC` alias
+src/trdex/scripts/inspect_runs.py:61:29: UP017 [*] Use `datetime.UTC` alias
+src/trdex/scripts/inspect_runs.py:96:25: UP017 [*] Use `datetime.UTC` alias
+src/trdex/scripts/smoke_level1.py:79:44: UP037 [*] Remove quotes from type annotation
+src/trdex/scripts/smoke_level1.py:79:45: F821 Undefined name `AsyncEngine`
+src/trdex/scripts/smoke_level3.py:131:32: UP017 [*] Use `datetime.UTC` alias
+src/trdex/scripts/smoke_level3.py:236:22: F401 [*] `polars` imported but unused
+src/trdex/scripts/smoke_level3.py:275:32: UP017 [*] Use `datetime.UTC` alias
+src/trdex/scripts/smoke_level3.py:610:9: SIM114 [*] Combine `if` branches using logical `or` operator
+src/trdex/scripts/smoke_level3.py:826:5: SIM102 Use a single `if` statement instead of nested `if` statements
+src/trdex/scripts/smoke_level4.py:46:22: F401 [*] `datetime.datetime` imported but unused
+src/trdex/storage/agent_memory_models.py:22:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/storage/agent_memory_repo.py:18:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/storage/agent_run_models.py:17:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/storage/balance_models.py:15:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/storage/balance_repo.py:15:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/storage/entity_graph_models.py:24:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/storage/entity_graph_repo.py:18:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/storage/portfolio_models.py:23:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/storage/portfolio_repo.py:10:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/storage/portfolio_repo.py:11:1: E402 Module level import not at top of file
+src/trdex/storage/portfolio_repo.py:13:1: E402 Module level import not at top of file
+src/trdex/storage/portfolio_repo.py:14:1: E402 Module level import not at top of file
+src/trdex/storage/portfolio_repo.py:16:1: E402 Module level import not at top of file
+src/trdex/storage/runtime_config_models.py:14:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/storage/runtime_config_repo.py:14:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/storage/signal_outcome_models.py:15:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/storage/signal_outcome_repo.py:15:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/storage/stop_loss_event_models.py:20:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/storage/stop_loss_event_repo.py:21:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/storage/symbol_config_models.py:14:28: UP017 [*] Use `datetime.UTC` alias
+src/trdex/storage/symbol_config_models.py:22:64: RUF002 Docstring contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?
+src/trdex/strategy/backtest/sma_cross.py:37:64: RUF002 Docstring contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?
+src/trdex/telegram/evaluator.py:24:1: UP035 [*] Import from `collections.abc` instead: `Iterable`
+src/trdex/telegram/evaluator.py:82:5: SIM102 Use a single `if` statement instead of nested `if` statements
+src/trdex/telegram/evaluator.py:92:9: E731 Do not assign a `lambda` expression, use a `def`
+src/trdex/telegram/evaluator.py:93:9: E731 Do not assign a `lambda` expression, use a `def`
+src/trdex/telegram/evaluator.py:96:9: E731 Do not assign a `lambda` expression, use a `def`
+src/trdex/telegram/evaluator.py:97:9: E731 Do not assign a `lambda` expression, use a `def`
+src/trdex/telegram/evaluator.py:200:34: UP017 [*] Use `datetime.UTC` alias
+src/trdex/telegram/evaluator.py:212:58: UP017 [*] Use `datetime.UTC` alias
+src/trdex/telegram/monitor.py:32:73: UP017 [*] Use `datetime.UTC` alias
+src/trdex/telegram/monitor.py:77:35: UP037 [*] Remove quotes from type annotation
+src/trdex/telegram/monitor.py:173:20: UP041 [*] Replace aliased errors with `TimeoutError`
+src/trdex/telegram/monitor.py:184:44: UP017 [*] Use `datetime.UTC` alias
+src/trdex/telegram/monitor.py:190:53: UP017 [*] Use `datetime.UTC` alias
+src/trdex/telegram/monitor.py:229:20: UP041 [*] Replace aliased errors with `TimeoutError`
+src/trdex/telegram/parser.py:35:73: UP017 [*] Use `datetime.UTC` alias
+src/trdex/telegram/tracker.py:28:75: UP017 [*] Use `datetime.UTC` alias
+src/trdex/telegram/tracker.py:156:62: UP017 [*] Use `datetime.UTC` alias
+src/trdex/telegram/tracker.py:156:114: UP017 [*] Use `datetime.UTC` alias
+src/trdex/telegram/tracker.py:157:58: UP017 [*] Use `datetime.UTC` alias
+tests/agents/test_e2e_cycle.py:3:1: I001 [*] Import block is un-sorted or un-formatted
+tests/agents/test_e2e_cycle.py:18:41: UP017 [*] Use `datetime.UTC` alias
+tests/agents/test_executor_node.py:37:39: UP017 [*] Use `datetime.UTC` alias
+tests/agents/test_executor_node.py:132:60: RUF003 Comment contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?
+tests/agents/test_memory_rollout.py:52:35: UP017 [*] Use `datetime.UTC` alias
+tests/agents/test_risk_gate4.py:45:11: N802 Function name `test_gate4_allows_close_long_with_existing_agent_position_THE_FIX` should be lowercase
+tests/agents/test_runner_dispatch.py:36:38: UP017 [*] Use `datetime.UTC` alias
+tests/agents/test_runner_dispatch.py:100:11: N802 Function name `test_dispatch_close_long_aborts_when_position_vanished_D13_D14` should be lowercase
+tests/agents/test_runner_dispatch.py:122:11: N802 Function name `test_dispatch_close_long_ignores_non_agent_positions_D21` should be lowercase
+tests/agents/test_signal_to_intent.py:26:5: N802 Function name `test_sell_long_position_emits_close_long_THE_FIX` should be lowercase
+tests/backtest/test_engine.py:10:1: I001 [*] Import block is un-sorted or un-formatted
+tests/backtest/test_indicators.py:6:8: F401 [*] `pytest` imported but unused
+tests/backtest/test_indicators.py:77:21: B905 `zip()` without an explicit `strict=` parameter
+tests/execution/test_default_gateway.py:6:49: F401 [*] `unittest.mock.patch` imported but unused
+tests/execution/test_default_gateway.py:10:32: F401 [*] `trdex.agents.state.OrderResult` imported but unused
+tests/execution/test_default_gateway.py:13:53: F401 [*] `trdex.execution.models.Order` imported but unused
+tests/execution/test_default_gateway.py:13:60: F401 [*] `trdex.execution.models.OrderType` imported but unused
+tests/execution/test_default_gateway.py:27:35: UP017 [*] Use `datetime.UTC` alias
+tests/execution/test_live_executor.py:33:38: UP017 [*] Use `datetime.UTC` alias
+tests/execution/test_simulator.py:3:1: I001 [*] Import block is un-sorted or un-formatted
+tests/market/test_binance_freshness.py:33:34: UP017 [*] Use `datetime.UTC` alias
+tests/market/test_binance_freshness.py:43:27: UP017 [*] Use `datetime.UTC` alias
+tests/market/test_binance_freshness.py:53:30: UP017 [*] Use `datetime.UTC` alias
+tests/memory/test_context_loader.py:3:1: I001 [*] Import block is un-sorted or un-formatted
+tests/memory/test_kb_loader.py:9:36: F401 [*] `trdex.memory.kb_loader.KBBlock` imported but unused
+tests/memory/test_nominations.py:30:48: UP017 [*] Use `datetime.UTC` alias
+tests/memory/test_trade_narratives.py:3:1: I001 [*] Import block is un-sorted or un-formatted
+tests/memory/test_trade_narratives.py:49:35: UP037 [*] Remove quotes from type annotation
+tests/memory/test_trade_narratives.py:131:5: RUF059 Unpacked variable `args` is never used
+tests/portfolio/test_service.py:8:1: I001 [*] Import block is un-sorted or un-formatted
+tests/risk/test_readiness.py:12:1: I001 [*] Import block is un-sorted or un-formatted
+tests/risk/test_readiness.py:82:51: UP017 [*] Use `datetime.UTC` alias
+tests/risk/test_readiness.py:264:39: UP017 [*] Use `datetime.UTC` alias
+tests/risk/test_readiness.py:341:39: UP017 [*] Use `datetime.UTC` alias
+tests/risk/test_readiness.py:392:39: UP017 [*] Use `datetime.UTC` alias
+tests/risk/test_stop_loss_drawdown.py:17:1: I001 [*] Import block is un-sorted or un-formatted
+tests/scripts/backtest/test_core.py:98:1: E402 Module level import not at top of file
+tests/scripts/backtest/test_core.py:98:49: F401 [*] `scripts.backtest.core.Strategy` imported but unused
+tests/scripts/backtest/test_indicators.py:98:66: RUF003 Comment contains ambiguous `–` (EN DASH). Did you mean `-` (HYPHEN-MINUS)?
+tests/scripts/backtest/test_strategies.py:180:1: E402 Module level import not at top of file
+tests/scripts/backtest/test_strategies.py:195:35: RUF003 Comment contains ambiguous `–` (EN DASH). Did you mean `-` (HYPHEN-MINUS)?
+tests/scripts/backtest/test_strategies.py:208:36: RUF003 Comment contains ambiguous `–` (EN DASH). Did you mean `-` (HYPHEN-MINUS)?
+tests/scripts/backtest/test_strategies.py:248:34: RUF003 Comment contains ambiguous `–` (EN DASH). Did you mean `-` (HYPHEN-MINUS)?
+tests/scripts/backtest/test_strategies.py:252:9: SIM108 Use ternary operator `close = 100.0 + (i - 6) * 0.3 if i >= 6 else 100.0` instead of `if`-`else`-block
+tests/scripts/backtest/test_strategies.py:275:1: E402 Module level import not at top of file
+tests/storage/test_agent_memory_repo.py:5:32: F401 [*] `datetime.timedelta` imported but unused
+tests/storage/test_agent_memory_repo.py:5:43: F401 [*] `datetime.timezone` imported but unused
+tests/storage/test_entity_graph_repo_extensions.py:162:31: UP017 [*] Use `datetime.UTC` alias
+tests/storage/test_ohlcv_repo.py:3:1: I001 [*] Import block is un-sorted or un-formatted
+tests/storage/test_ohlcv_repo.py:7:49: F401 [*] `unittest.mock.patch` imported but unused
+tests/storage/test_ohlcv_repo.py:10:8: F401 [*] `pytest` imported but unused
+tests/storage/test_ohlcv_repo.py:18:40: UP017 [*] Use `datetime.UTC` alias
+tests/storage/test_ohlcv_repo.py:33:40: UP017 [*] Use `datetime.UTC` alias
+tests/telegram/test_parser.py:3:1: I001 [*] Import block is un-sorted or un-formatted
+tests/test_audit_fixes.py:13:1: I001 [*] Import block is un-sorted or un-formatted
+tests/test_audit_fixes.py:41:24: RUF012 Mutable default value for class attribute
+tests/test_audit_fixes.py:230:9: I001 [*] Import block is un-sorted or un-formatted
+tests/test_audit_fixes.py:249:9: I001 [*] Import block is un-sorted or un-formatted
+tests/test_audit_fixes.py:346:9: I001 [*] Import block is un-sorted or un-formatted
+tests/test_audit_fixes.py:354:9: I001 [*] Import block is un-sorted or un-formatted
+tests/test_audit_fixes.py:360:9: I001 [*] Import block is un-sorted or un-formatted
+tests/test_audit_fixes.py:366:9: I001 [*] Import block is un-sorted or un-formatted
+tests/test_audit_fixes.py:428:34: UP017 [*] Use `datetime.UTC` alias
+tests/test_audit_fixes.py:430:33: UP017 [*] Use `datetime.UTC` alias
+tests/test_audit_fixes.py:435:34: UP017 [*] Use `datetime.UTC` alias
+tests/test_audit_fixes.py:437:33: UP017 [*] Use `datetime.UTC` alias
+tests/test_audit_fixes.py:449:9: I001 [*] Import block is un-sorted or un-formatted
+tests/test_audit_fixes.py:456:9: I001 [*] Import block is un-sorted or un-formatted
+tests/test_audit_fixes.py:501:9: I001 [*] Import block is un-sorted or un-formatted
+tests/test_audit_fixes.py:509:9: I001 [*] Import block is un-sorted or un-formatted
+tests/test_audit_fixes.py:557:21: RUF012 Mutable default value for class attribute
+tests/test_credentials_crypto.py:7:1: I001 [*] Import block is un-sorted or un-formatted
+tests/test_credentials_crypto.py:53:35: UP037 [*] Remove quotes from type annotation
+tests/test_stop_loss_persistence.py:12:1: I001 [*] Import block is un-sorted or un-formatted
+tests/test_stop_loss_persistence.py:76:50: UP017 [*] Use `datetime.UTC` alias
+tests/test_stop_loss_persistence.py:134:23: RUF012 Mutable default value for class attribute
+tests/test_stop_loss_persistence.py:197:48: UP017 [*] Use `datetime.UTC` alias
+tests/test_stop_loss_persistence.py:274:38: UP017 [*] Use `datetime.UTC` alias
+Found 275 errors.
+[*] 201 fixable with the `--fix` option (15 hidden fixes can be enabled with the `--unsafe-fixes` option).
