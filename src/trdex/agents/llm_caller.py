@@ -17,7 +17,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from typing import Any
 
 from langchain_core.messages import BaseMessage
@@ -65,6 +66,32 @@ _PRICING: dict[str, tuple[float, float]] = {
 _DEFAULT_COST = (1.00, 5.00)  # fallback for unknown models
 
 
+def _utc_day() -> str:
+    return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
+
+
+@dataclass
+class _DailySpend:
+    """In-process daily spend, shared by every per-run copy of an LLMCaller.
+
+    Resets when the UTC day changes, so the "daily" budget does not turn
+    into a lifetime budget for a long-running process.
+    """
+
+    day: str = ""
+    amount: float = 0.0
+
+    def current(self) -> float:
+        today = _utc_day()
+        if self.day != today:
+            self.day, self.amount = today, 0.0
+        return self.amount
+
+    def add(self, cost: float) -> None:
+        self.current()
+        self.amount += cost
+
+
 @dataclass
 class LLMUsageRecord:
     """In-memory record of a single LLM call. Persisted by the runner."""
@@ -83,8 +110,11 @@ class LLMUsageRecord:
 
 @dataclass
 class LLMCaller:
-    """Stateful LLM call helper, one instance per agent cycle.
+    """Stateful LLM call helper.
 
+    One instance is built at startup; ``run_agent_cycle`` derives a per-run
+    copy with ``for_run(run_id)`` so usage records belong to one cycle,
+    while the daily spend counter stays shared across cycles.
     Injected into ``AgentState.llm_caller`` (non-serialized).
     """
 
@@ -94,7 +124,8 @@ class LLMCaller:
     # api_keys: {"anthropic": "sk-ant-...", "openai": "sk-...", "google": "AIza..."}
 
     daily_budget: float = 20.0
-    daily_spend: float = 0.0  # in-process accumulator (fallback if Redis unavailable)
+    # In-process daily accumulator (used when no Redis budget_tracker is set).
+    _spend: _DailySpend = field(default_factory=_DailySpend, repr=False)
 
     timeout_seconds: float = 10.0
 
@@ -103,6 +134,14 @@ class LLMCaller:
 
     # Usage records collected during this cycle, persisted by runner at the end.
     usage_records: list[LLMUsageRecord] = field(default_factory=list)
+
+    @property
+    def daily_spend(self) -> float:
+        return self._spend.current()
+
+    def for_run(self, run_id: str) -> LLMCaller:
+        """Copy for one agent cycle: own run_id and usage records, shared spend."""
+        return replace(self, run_id=run_id, usage_records=[])
 
     async def invoke(
         self,
@@ -166,9 +205,14 @@ class LLMCaller:
         except asyncio.TimeoutError:
             latency_ms = int((time.monotonic() - t0) * 1000)
             logger.warning("[LLMCaller] timeout (%ds) for %s", self.timeout_seconds, agent_name)
+            # The provider may have processed (and billed) the request.
+            input_tokens, output_tokens = self._estimate_tokens(messages, config)
+            cost = self._estimate_cost(config.model_id, input_tokens, output_tokens)
+            await self._charge(cost)
             self._record_usage(
-                agent_name, config, latency_ms=latency_ms,
-                fallback_used=True, error="timeout",
+                agent_name, config,
+                input_tokens=input_tokens, output_tokens=output_tokens, cost_usd=cost,
+                latency_ms=latency_ms, fallback_used=True, error="timeout",
             )
             return None
         except Exception as exc:
@@ -182,12 +226,31 @@ class LLMCaller:
 
         latency_ms = int((time.monotonic() - t0) * 1000)
 
-        # Extract token usage from the result metadata if available
-        input_tokens, output_tokens = self._extract_tokens(result)
+        # The chain is built with include_raw=True: {"raw", "parsed", "parsing_error"}.
+        parsed, raw, parsing_error = self._unpack(result)
+        usage = self._extract_tokens(raw)
+        if usage is None:
+            # No usage reported: charge a conservative estimate, never zero,
+            # otherwise the budget can never be reached.
+            usage = self._estimate_tokens(messages, config)
+            logger.warning(
+                "[LLMCaller] no token usage from %s/%s — charging estimate %d in / %d out",
+                config.provider, config.model_id, *usage,
+            )
+        input_tokens, output_tokens = usage
         cost = self._estimate_cost(config.model_id, input_tokens, output_tokens)
-        self.daily_spend += cost
-        if self.budget_tracker is not None:
-            await self.budget_tracker.record_spend(cost)
+        await self._charge(cost)
+
+        if parsed is None:
+            logger.warning("[LLMCaller] structured output parse failed for %s: %s",
+                           agent_name, parsing_error)
+            self._record_usage(
+                agent_name, config,
+                input_tokens=input_tokens, output_tokens=output_tokens, cost_usd=cost,
+                latency_ms=latency_ms, fallback_used=True,
+                error=f"parse error: {parsing_error}"[:500],
+            )
+            return None
 
         self._record_usage(
             agent_name, config,
@@ -202,7 +265,7 @@ class LLMCaller:
             agent_name, config.model_id,
             input_tokens, output_tokens, cost, latency_ms,
         )
-        return result
+        return parsed
 
     def _record_usage(
         self,
@@ -229,23 +292,46 @@ class LLMCaller:
             error=error,
         ))
 
-    @staticmethod
-    def _extract_tokens(result: Any) -> tuple[int, int]:
-        """Best-effort extraction of token counts from LangChain result.
+    async def _charge(self, cost: float) -> None:
+        self._spend.add(cost)
+        if self.budget_tracker is not None:
+            await self.budget_tracker.record_spend(cost)
 
-        LangChain structured output returns a Pydantic model, not an
-        AIMessage, so usage metadata may not be available. Return (0, 0)
-        if we can't extract.
+    @staticmethod
+    def _unpack(result: Any) -> tuple[Any, Any, Any]:
+        """Return (parsed, raw, parsing_error) from an include_raw=True result.
+
+        A bare Pydantic model (chains built without include_raw) is accepted
+        as (model, None, None).
         """
-        # If the result has response_metadata (AIMessage-like)
-        meta = getattr(result, "response_metadata", None)
-        if meta and isinstance(meta, dict):
-            usage = meta.get("usage", {})
-            return (
-                usage.get("input_tokens", 0) or usage.get("prompt_tokens", 0),
-                usage.get("output_tokens", 0) or usage.get("completion_tokens", 0),
-            )
-        return (0, 0)
+        if isinstance(result, dict) and "parsed" in result:
+            return result.get("parsed"), result.get("raw"), result.get("parsing_error")
+        return result, None, None
+
+    @staticmethod
+    def _extract_tokens(raw: Any) -> tuple[int, int] | None:
+        """Token usage from the raw AIMessage, or None if not reported."""
+        if raw is None:
+            return None
+        usage = getattr(raw, "usage_metadata", None)
+        if usage:
+            i, o = usage.get("input_tokens", 0) or 0, usage.get("output_tokens", 0) or 0
+            if i or o:
+                return int(i), int(o)
+        meta = getattr(raw, "response_metadata", None) or {}
+        usage = meta.get("usage") or meta.get("token_usage") or {}
+        i = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
+        o = usage.get("output_tokens") or usage.get("completion_tokens") or 0
+        if i or o:
+            return int(i), int(o)
+        return None
+
+    @staticmethod
+    def _estimate_tokens(messages: list[BaseMessage], config: Any) -> tuple[int, int]:
+        """Conservative estimate: ~4 chars per input token, output at max_tokens."""
+        chars = sum(len(m.content) if isinstance(m.content, str) else len(str(m.content))
+                    for m in messages)
+        return chars // 4, int(getattr(config, "max_tokens", 1024) or 1024)
 
     @staticmethod
     def _estimate_cost(model_id: str, input_tokens: int, output_tokens: int) -> float:
