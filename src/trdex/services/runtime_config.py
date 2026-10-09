@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Maps (category, key) → (settings_attr, python_type).
 # Used for seeding from env vars and for type coercion on reads.
 
-_KEY_REGISTRY: dict[tuple[str, str], tuple[str, type]] = {
+_KEY_REGISTRY: dict[tuple[str, str], tuple[str | None, type]] = {
     # Credentials
     ("credentials", "cryptocompare_api_key"): ("cryptocompare_api_key", str),
     ("credentials", "stockdata_api_key"): ("stockdata_api_key", str),
@@ -49,6 +49,9 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str, type]] = {
     ("thresholds", "gate_min_days"): ("gate_min_days", int),
     ("thresholds", "max_position_pct"): ("max_position_pct", float),
     ("thresholds", "max_drawdown_block"): (None, float),
+    ("thresholds", "risk_per_trade_pct"): ("risk_per_trade_pct", float),
+    ("thresholds", "regime_cv_min"): (None, float),  # from scripts/backtest/regime_range.py
+    ("thresholds", "regime_cv_max"): (None, float),
     # Scheduler
     ("scheduler", "agent_scheduler_enabled"): ("agent_scheduler_enabled", bool),
     ("scheduler", "agent_scheduler_interval"): ("agent_scheduler_interval", int),

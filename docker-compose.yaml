@@ -134,6 +134,7 @@ services:
       TRDEX_SL_DAILY_DRAWDOWN_PCT: '${TRDEX_SL_DAILY_DRAWDOWN_PCT:-0.10}'
       # Risk limits
       TRDEX_MAX_POSITION_PCT: '${TRDEX_MAX_POSITION_PCT:-0.05}'
+      TRDEX_RISK_PER_TRADE_PCT: '${TRDEX_RISK_PER_TRADE_PCT:-0.001}'
       # Simulation gate (required before switching to live)
       TRDEX_GATE_MIN_DAYS: '${TRDEX_GATE_MIN_DAYS:-20}'
       TRDEX_GATE_MIN_SHARPE: '${TRDEX_GATE_MIN_SHARPE:-1.0}'
