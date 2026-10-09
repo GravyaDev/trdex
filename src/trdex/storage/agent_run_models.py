@@ -64,3 +64,9 @@ class AgentRunRecord(Base):
     order_message: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # LLM fields (migration 011)
+    llm_used: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    suggested_sl: Mapped[float | None] = mapped_column(Numeric(10, 6), nullable=True)
+    suggested_tp: Mapped[float | None] = mapped_column(Numeric(10, 6), nullable=True)
+    risk_annotation: Mapped[str | None] = mapped_column(Text, nullable=True)

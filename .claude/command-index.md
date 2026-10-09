@@ -16,7 +16,8 @@ All system commands, their triggers, required tools, and invocation mode.
 | `/sync` | Mid-day (after 3-4 hours) | Read, Write, Edit, Bash(date), Agent | Self-execute | Refresh memory, process scratchpad, review tasks |
 | `/wrap-up` | End of work day | Read, Write, Edit, Bash(date), Agent | Self-execute | Daily audit, externalize knowledge, prep tomorrow |
 | `/standup` | Start of day (quick mode) | Read, Edit, Glob, Bash(git,date) | Self-execute | Auto-generate yesterday/today/blockers from git + tasks |
-| `/clear` | Context pressure or task completion | Read, Write, Edit, Bash(date) | Self-execute | Distill state, flush context, auto-resume |
+| `/clear` | Context pressure or task completion | Read, Write, Edit, Bash(date,bash) | Self-execute | Distill state, flush context, stop session |
+| `/resume` | After /clear, same day | Read, Edit, Bash(date,bash) | Self-execute | Lightweight resume — load handoff, restart timer, pick up work |
 | `/brainstorm-session [idea]` | End of session or between tasks — ideas to keep for later | Read, Edit, Bash(date) | Self-execute | Isolated idea mode — discuss, evaluate, promote to tomorrow's Task Board |
 
 ## Quality & Review

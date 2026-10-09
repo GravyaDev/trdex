@@ -14,7 +14,98 @@ Conventions:
 from __future__ import annotations
 
 
+class LiveRuleEngine:
+    """The strategy that actually runs in the agent pipeline, replayed bar by bar.
+
+    - Signal: ``trdex.agents.analyst._rule_based_signal`` (RSI14 + SMA9/21),
+      imported from production code so the two cannot drift apart.
+    - Risk gate 2: confidence below ``trdex.agents.risk.MIN_CONFIDENCE`` → HOLD.
+    - Intent translation as in ``signal_to_intent``: long-only, BUY opens
+      when flat, SELL closes an open long, never opens a short.
+    - Exits as in ``StopLossMonitor``: ``effective_thresholds`` from
+      production code, i.e. config base (EngineParams) widened by the
+      volatility floor max(base, k x CV of the last 20 closes).
+    - Sizing as in the Risk node: risk_per_trade_pct / stop, capped at
+      EngineParams.position_size_pct (``risk_position_fraction``).
+    - Regime gate as in Risk Gate 4c: entries outside ``regime`` bounds
+      are skipped (closes are never blocked). Off by default, like an
+      unset Runtime Config in simulation.
+
+    Approximations vs live (state them when reading results):
+    - no sentiment input (no point-in-time news history), so the ±0.2
+      sentiment nudge is off;
+    - one decision per closed 1h bar (live re-evaluates every scheduler
+      tick on the forming candle) and exits checked on bar high/low
+      (live checks the ticker every 30s);
+    - the adaptive floor is frozen at entry (live recomputes CV each check);
+    - the portfolio drawdown gate and per-symbol overrides are not modelled.
+    """
+    name = "LiveRuleEngine"
+    timeframe = "1h"
+
+    def __init__(self, regime=None, risk_per_trade_pct: float | None = 0.001):
+        """``regime``: ``trdex.risk.sizing.RegimeBounds`` (default: no bounds).
+        ``risk_per_trade_pct``: live default of thresholds.risk_per_trade_pct
+        (src/trdex/config.py); ``None`` = fixed notional sizing.
+        """
+        from trdex.risk.sizing import RegimeBounds
+
+        self.regime = regime if regime is not None else RegimeBounds()
+        self.risk_per_trade_pct_override = risk_per_trade_pct
+
+    def generate_signal(self, bar_index, candles, indicators, position_state):
+        from trdex.agents.analyst import _rule_based_signal
+        from trdex.agents.risk import MIN_CONFIDENCE
+
+        j = bar_index - 1
+        signal, confidence, _ = _rule_based_signal(
+            indicators["rsi14"][j],
+            indicators["sma9"][j],
+            indicators["sma21"][j],
+            indicators["closes"][j],
+            None,  # sentiment: not available historically
+        )
+        if signal == "HOLD" or confidence < MIN_CONFIDENCE:
+            return "HOLD"
+        if signal == "BUY":
+            if position_state != "flat":
+                return "HOLD"
+            from trdex.risk.sizing import check_regime
+
+            if check_regime(self._cv(bar_index, indicators), self.regime) is not None:
+                return "HOLD"
+            return "BUY"
+        # SELL: close an open long; long-only, so never open a short.
+        return "CLOSE_LONG" if position_state == "long" else "HOLD"
+
+    @staticmethod
+    def _cv(bar_index, indicators):
+        """CV of the closes the live Analyst would see at this decision."""
+        from trdex.risk.sizing import VOL_WINDOW, recent_cv
+
+        return recent_cv(indicators["closes"][max(0, bar_index - VOL_WINDOW):bar_index])
+
+    def exit_pcts(self, bar_index, indicators, params):
+        from trdex.risk.stop_loss import effective_thresholds
+
+        cv = self._cv(bar_index, indicators)
+        return effective_thresholds(
+            None,
+            None,
+            cv if cv is not None else 0.0,
+            base_sl=params.sl_pct,
+            base_tp=params.tp_pct,
+            base_trail=params.trail_pct,
+        )
+
+
 class BaselineLive:
+    """RSI(14) >= 50 long / < 50 short, always in the market.
+
+    NOT the live strategy despite the name (kept for CSV continuity): the
+    live pipeline also uses SMA9/21, is long-only and uses adaptive exits.
+    See ``LiveRuleEngine`` for the faithful replay.
+    """
     name = "BaselineLive"
     timeframe = "1h"
 

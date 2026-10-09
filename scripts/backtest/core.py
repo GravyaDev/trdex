@@ -12,6 +12,8 @@ from math import sqrt
 from statistics import mean, pstdev
 from typing import Any
 
+from trdex.risk.sizing import risk_position_fraction
+
 
 @dataclass
 class BacktestResult:
@@ -28,6 +30,7 @@ class BacktestResult:
     trades: list[dict[str, Any]]
     per_symbol: dict[str, dict[str, Any]]
     per_quarter: dict[str, dict[str, Any]]
+    equity_curve: list[float] = field(default_factory=list)
 
 
 def max_drawdown(equity_curve: list[float]) -> float:
@@ -103,18 +106,24 @@ def _daily_bar(group: list[list], day_start_ts: int) -> list:
 
 
 def split_trades_by_quarter(trades: list[dict]) -> dict[str, list[dict]]:
-    """Split trades into 4 buckets of ~91 days anchored to oldest entry_ts.
+    """Split trades into four equal sub-periods ("quarters" of the sample).
+
+    The buckets span oldest → newest entry_ts, so every bucket covers a
+    quarter of the tested period whatever its length. (The previous
+    version used fixed 91-day buckets and put everything after day 273
+    into Q4 — on 5 years of data Q4 held ~85% of the trades.)
 
     Returns empty dict for empty input. Trades missing 'entry_ts' are skipped.
     """
-    if not trades:
+    dated = [t for t in trades if "entry_ts" in t]
+    if not dated:
         return {}
-    sorted_trades = sorted(trades, key=lambda t: t["entry_ts"])
+    sorted_trades = sorted(dated, key=lambda t: t["entry_ts"])
     first_ts = sorted_trades[0]["entry_ts"]
-    quarter_ms = 91 * 86_400_000
+    span = sorted_trades[-1]["entry_ts"] - first_ts + 1
     buckets: dict[str, list[dict]] = {f"Q{i + 1}": [] for i in range(4)}
     for t in sorted_trades:
-        q = min(3, (t["entry_ts"] - first_ts) // quarter_ms)
+        q = min(3, (t["entry_ts"] - first_ts) * 4 // span)
         buckets[f"Q{int(q) + 1}"].append(t)
     return buckets
 
@@ -153,6 +162,39 @@ class EngineParams:
     sl_pct: float = 0.02
     tp_pct: float = 0.04
     trail_pct: float = 0.015
+    # Risk-based sizing (same rule as the live Risk node): commit
+    # risk_per_trade_pct / stop of equity, capped at position_size_pct.
+    # None = fixed notional sizing at position_size_pct.
+    risk_per_trade_pct: float | None = None
+
+
+_BARS_PER_YEAR = {"1h": 8760, "1d": 365}
+
+
+@dataclass
+class _Account:
+    """Shared cash account. ``committed`` is the budget locked in open positions."""
+
+    cash: float
+    committed: float = 0.0
+
+
+@dataclass
+class _SymbolState:
+    symbol: str
+    bars: list[list]
+    indicators: dict
+    position_state: str = "flat"
+    entry_price: float = 0.0
+    entry_qty: float = 0.0
+    entry_ts: int = 0
+    budget: float = 0.0
+    extreme: float = 0.0        # best price seen since entry (high for long, low for short)
+    stop: float = 0.0           # current stop (initial, then trailed)
+    initial_stop: float = 0.0
+    tp_pct: float = 0.0
+    trail_pct: float = 0.0
+    last_close: float | None = None
 
 
 def run_backtest(
@@ -160,12 +202,21 @@ def run_backtest(
     ohlcv_by_symbol: dict[str, list[list]],
     params: EngineParams,
 ) -> BacktestResult:
-    """Run the given strategy across all symbols with shared equity.
+    """Run the strategy across all symbols on ONE shared timeline.
 
-    Iteration order: symbols are processed sequentially. Within each symbol
-    we loop bar-by-bar. Equity withdrawn at open is restored at close.
+    Bars of every symbol are merged by timestamp and processed in time
+    order (symbols in dict order within a timestamp), so positions on
+    different symbols are open at the same time and share one account.
+    One equity point is recorded per timestamp. Positions still open at
+    the end of the data are closed at the last close (reason ``"EOD"``).
+
+    Optional strategy hooks:
+      - ``sl_pct_override`` / ``tp_pct_override`` / ``trail_pct_override``
+        class attributes (static exit params);
+      - ``exit_pcts(bar_index, indicators, params) -> (sl, tp, trail)``
+        evaluated at entry, for exits that depend on market state.
+    A trail of 0 disables the trailing stop.
     """
-    # Apply strategy-level overrides
     effective = EngineParams(
         initial_equity=params.initial_equity,
         position_size_pct=params.position_size_pct,
@@ -173,30 +224,52 @@ def run_backtest(
         sl_pct=getattr(strategy, "sl_pct_override", params.sl_pct),
         tp_pct=getattr(strategy, "tp_pct_override", params.tp_pct),
         trail_pct=getattr(strategy, "trail_pct_override", params.trail_pct),
+        risk_per_trade_pct=getattr(strategy, "risk_per_trade_pct_override", params.risk_per_trade_pct),
     )
-    equity = [effective.initial_equity]
+    account = _Account(cash=effective.initial_equity)
     trades: list[dict[str, Any]] = []
-    equity_curve = [effective.initial_equity]
 
+    states: list[_SymbolState] = []
     for symbol, bars in ohlcv_by_symbol.items():
-        if strategy.timeframe == "1d":
-            working_bars = aggregate_1h_to_1d(bars)
-        else:
-            working_bars = bars
+        working = aggregate_1h_to_1d(bars) if strategy.timeframe == "1d" else bars
+        states.append(_SymbolState(
+            symbol=symbol, bars=working, indicators=_precompute_indicators(working),
+        ))
 
-        indicators = _precompute_indicators(working_bars)
-        _simulate_symbol(
-            symbol=symbol,
-            bars=working_bars,
-            indicators=indicators,
-            strategy=strategy,
-            params=effective,
-            equity_cell=equity,
-            trades=trades,
-            equity_curve=equity_curve,
-        )
+    timeline = sorted(
+        (bar[0], k, i) for k, st in enumerate(states) for i, bar in enumerate(st.bars)
+    )
+    equity_curve = [effective.initial_equity]
+    current_ts: int | None = None
+    stepped = False
+    for ts, k, i in timeline:
+        if ts != current_ts:
+            if stepped:
+                equity_curve.append(_mark_to_market(account, states))
+            current_ts, stepped = ts, False
+        st = states[k]
+        if i >= 1:  # bar 0 has no previous bar to read a signal from
+            _step(st, i, strategy, effective, account, trades)
+            stepped = True
+        st.last_close = st.bars[i][4]
+    if stepped:
+        equity_curve.append(_mark_to_market(account, states))
 
-    return _build_result(strategy.name, trades, equity_curve, effective)
+    # Close whatever is still open at the last available close, so its
+    # budget is not silently lost from the final equity.
+    closed_any = False
+    for st in states:
+        if st.position_state != "flat" and st.last_close is not None:
+            _close(st, ts=st.bars[-1][0], exit_price=st.last_close, reason="EOD",
+                   params=effective, account=account, trades=trades)
+            closed_any = True
+    if closed_any:
+        equity_curve[-1] = account.cash  # same timestamp, exit fees deducted
+
+    return _build_result(
+        strategy.name, trades, equity_curve, effective,
+        bars_per_year=_BARS_PER_YEAR.get(strategy.timeframe, 8760),
+    )
 
 
 def _precompute_indicators(bars: list[list]) -> dict:
@@ -256,230 +329,157 @@ def _compute_4h_sma_broadcast(bars: list[list], period: int) -> list[float | Non
     return out
 
 
-def _simulate_symbol(
-    *,
-    symbol: str,
-    bars: list[list],
-    indicators: dict,
+def _step(
+    st: _SymbolState,
+    i: int,
     strategy: Strategy,
     params: EngineParams,
-    equity_cell: list[float],
+    account: _Account,
     trades: list,
-    equity_curve: list[float],
 ) -> None:
-    position_state: str = "flat"
-    entry_price = 0.0
-    entry_qty = 0.0
-    entry_ts = 0
-    max_seen = 0.0
-    min_seen = 0.0
-    trail_sl = 0.0
-    initial_sl = 0.0
+    ts, o, h, l, _c, _v = st.bars[i]
 
-    for i in range(1, len(bars)):
-        ts, o, h, l, c, _v = bars[i]
+    # 1) Exits for a position carried into this bar (gap-aware).
+    exited_intrabar = False
+    if st.position_state != "flat":
+        exited_intrabar = _check_exits(st, ts, o, h, l, params, account, trades)
 
-        # 1) Intra-bar exit on open position
-        if position_state == "long":
-            tp_price = entry_price * (1 + params.tp_pct)
-            if l <= trail_sl:
-                reason = "TRAIL" if trail_sl > initial_sl else "SL"
-                _close_long(
-                    symbol=symbol, ts=ts, entry_price=entry_price,
-                    entry_qty=entry_qty, entry_ts=entry_ts,
-                    exit_price=trail_sl, reason=reason, fee_pct=params.fee_pct,
-                    equity_cell=equity_cell, trades=trades,
-                )
-                position_state = "flat"
-            elif h >= tp_price:
-                _close_long(
-                    symbol=symbol, ts=ts, entry_price=entry_price,
-                    entry_qty=entry_qty, entry_ts=entry_ts,
-                    exit_price=tp_price, reason="TP", fee_pct=params.fee_pct,
-                    equity_cell=equity_cell, trades=trades,
-                )
-                position_state = "flat"
-            else:
-                if h > max_seen:
-                    max_seen = h
-                    new_trail = max_seen * (1 - params.trail_pct)
-                    if new_trail > trail_sl:
-                        trail_sl = new_trail
+    # 2) Strategy reads data up to bar i-1 and acts at bar i's open.
+    sig = strategy.generate_signal(
+        bar_index=i,
+        candles=st.bars,
+        indicators=st.indicators,
+        position_state=st.position_state,
+    )
 
-        elif position_state == "short":
-            tp_price = entry_price * (1 - params.tp_pct)
-            if h >= trail_sl:
-                reason = "TRAIL" if trail_sl < initial_sl else "SL"
-                _close_short(
-                    symbol=symbol, ts=ts, entry_price=entry_price,
-                    entry_qty=entry_qty, entry_ts=entry_ts,
-                    exit_price=trail_sl, reason=reason, fee_pct=params.fee_pct,
-                    equity_cell=equity_cell, trades=trades,
-                )
-                position_state = "flat"
-            elif l <= tp_price:
-                _close_short(
-                    symbol=symbol, ts=ts, entry_price=entry_price,
-                    entry_qty=entry_qty, entry_ts=entry_ts,
-                    exit_price=tp_price, reason="TP", fee_pct=params.fee_pct,
-                    equity_cell=equity_cell, trades=trades,
-                )
-                position_state = "flat"
-            else:
-                if l < min_seen or min_seen == 0.0:
-                    min_seen = l
-                    new_trail = min_seen * (1 + params.trail_pct)
-                    if new_trail < trail_sl:
-                        trail_sl = new_trail
+    # 3) Execute at the open. No re-entry on a bar where a stop/target
+    # already closed the position intrabar: the open precedes that exit.
+    opened = False
+    if sig == "BUY":
+        if st.position_state == "short":
+            _close(st, ts, o, "FLIP", params, account, trades)
+        if st.position_state == "flat" and not exited_intrabar:
+            _open(st, "long", o, ts, strategy, i, params, account)
+            opened = True
+    elif sig == "SELL":
+        if st.position_state == "long":
+            _close(st, ts, o, "FLIP", params, account, trades)
+        if st.position_state == "flat" and not exited_intrabar:
+            _open(st, "short", o, ts, strategy, i, params, account)
+            opened = True
+    elif sig == "CLOSE_LONG" and st.position_state == "long":
+        _close(st, ts, o, "SIGNAL", params, account, trades)
+    elif sig == "CLOSE_SHORT" and st.position_state == "short":
+        _close(st, ts, o, "SIGNAL", params, account, trades)
 
-        # 2) Consult strategy
-        sig = strategy.generate_signal(
-            bar_index=i,
-            candles=bars,
-            indicators=indicators,
-            position_state=position_state,
+    # 4) A position opened at the open lives through the rest of this bar.
+    if opened:
+        _check_exits(st, ts, o, h, l, params, account, trades)
+
+
+def _check_exits(st, ts, o, h, l, params, account, trades) -> bool:
+    """Stop (initial or trailed) first, then take-profit, then trail update.
+
+    Returns True if the position was closed. A gap through the stop fills
+    at the open, not at the stop price.
+    """
+    if st.position_state == "long":
+        if l <= st.stop:
+            reason = "TRAIL" if st.stop > st.initial_stop else "SL"
+            _close(st, ts, min(o, st.stop), reason, params, account, trades)
+            return True
+        tp_price = st.entry_price * (1 + st.tp_pct)
+        if h >= tp_price:
+            _close(st, ts, tp_price, "TP", params, account, trades)
+            return True
+        if st.trail_pct > 0 and h > st.extreme:
+            st.extreme = h
+            st.stop = max(st.stop, h * (1 - st.trail_pct))
+        return False
+
+    if st.position_state == "short":
+        if h >= st.stop:
+            reason = "TRAIL" if st.stop < st.initial_stop else "SL"
+            _close(st, ts, max(o, st.stop), reason, params, account, trades)
+            return True
+        tp_price = st.entry_price * (1 - st.tp_pct)
+        if l <= tp_price:
+            _close(st, ts, tp_price, "TP", params, account, trades)
+            return True
+        if st.trail_pct > 0 and l < st.extreme:
+            st.extreme = l
+            st.stop = min(st.stop, l * (1 + st.trail_pct))
+        return False
+
+    return False
+
+
+def _open(st, side, o, ts, strategy, i, params, account) -> None:
+    sl, tp, trail = params.sl_pct, params.tp_pct, params.trail_pct
+    hook = getattr(strategy, "exit_pcts", None)
+    if hook is not None:
+        sl, tp, trail = hook(bar_index=i, indicators=st.indicators, params=params)
+    fraction = params.position_size_pct
+    if params.risk_per_trade_pct is not None:
+        fraction = risk_position_fraction(
+            risk_per_trade=params.risk_per_trade_pct,
+            stop_pct=sl,
+            max_fraction=params.position_size_pct,
         )
-
-        # 3) Execute — includes flip logic
-        if sig == "BUY":
-            if position_state == "short":
-                # Flip: close short at current bar open
-                _close_short(
-                    symbol=symbol, ts=ts, entry_price=entry_price,
-                    entry_qty=entry_qty, entry_ts=entry_ts,
-                    exit_price=o, reason="FLIP", fee_pct=params.fee_pct,
-                    equity_cell=equity_cell, trades=trades,
-                )
-                position_state = "flat"
-            if position_state == "flat":
-                entry_price, entry_qty, entry_ts, max_seen, initial_sl, trail_sl = _open_long(
-                    o=o, ts=ts, params=params, equity_cell=equity_cell,
-                )
-                position_state = "long"
-
-        elif sig == "SELL":
-            if position_state == "long":
-                _close_long(
-                    symbol=symbol, ts=ts, entry_price=entry_price,
-                    entry_qty=entry_qty, entry_ts=entry_ts,
-                    exit_price=o, reason="FLIP", fee_pct=params.fee_pct,
-                    equity_cell=equity_cell, trades=trades,
-                )
-                position_state = "flat"
-            if position_state == "flat":
-                entry_price, entry_qty, entry_ts, min_seen, initial_sl, trail_sl = _open_short(
-                    o=o, ts=ts, params=params, equity_cell=equity_cell,
-                )
-                position_state = "short"
-
-        elif sig == "CLOSE_LONG" and position_state == "long":
-            _close_long(
-                symbol=symbol, ts=ts, entry_price=entry_price,
-                entry_qty=entry_qty, entry_ts=entry_ts,
-                exit_price=o, reason="SIGNAL", fee_pct=params.fee_pct,
-                equity_cell=equity_cell, trades=trades,
-            )
-            position_state = "flat"
-
-        elif sig == "CLOSE_SHORT" and position_state == "short":
-            _close_short(
-                symbol=symbol, ts=ts, entry_price=entry_price,
-                entry_qty=entry_qty, entry_ts=entry_ts,
-                exit_price=o, reason="SIGNAL", fee_pct=params.fee_pct,
-                equity_cell=equity_cell, trades=trades,
-            )
-            position_state = "flat"
-
-        # Mark-to-market
-        if position_state == "long":
-            mtm = equity_cell[0] + entry_qty * c
-        elif position_state == "short":
-            # Short equity: cash held + (entry - current) × qty
-            mtm = equity_cell[0] + (entry_price - c) * entry_qty
-        else:
-            mtm = equity_cell[0]
-        equity_curve.append(mtm)
+    # Size on realised equity (cash + budget locked in open positions),
+    # like the live executor sizes on portfolio equity.
+    budget = (account.cash + account.committed) * fraction
+    account.cash -= budget
+    account.committed += budget
+    st.position_state = side
+    st.entry_price = o
+    st.entry_qty = (budget / o) * (1 - params.fee_pct)
+    st.entry_ts = ts
+    st.budget = budget
+    st.tp_pct = tp
+    st.trail_pct = trail
+    st.extreme = o
+    st.initial_stop = o * (1 - sl) if side == "long" else o * (1 + sl)
+    st.stop = st.initial_stop
 
 
-def _open_long(*, o, ts, params, equity_cell):
-    equity = equity_cell[0]
-    budget = equity * params.position_size_pct
-    entry_price = o
-    entry_qty = (budget / entry_price) * (1 - params.fee_pct)
-    entry_ts = ts
-    max_seen = entry_price
-    initial_sl = entry_price * (1 - params.sl_pct)
-    trail_sl = initial_sl
-    equity_cell[0] = equity - budget
-    return entry_price, entry_qty, entry_ts, max_seen, initial_sl, trail_sl
-
-
-def _open_short(*, o, ts, params, equity_cell):
-    equity = equity_cell[0]
-    budget = equity * params.position_size_pct
-    entry_price = o
-    entry_qty = (budget / entry_price) * (1 - params.fee_pct)
-    entry_ts = ts
-    min_seen = entry_price
-    initial_sl = entry_price * (1 + params.sl_pct)
-    trail_sl = initial_sl
-    equity_cell[0] = equity - budget
-    return entry_price, entry_qty, entry_ts, min_seen, initial_sl, trail_sl
-
-
-def _close_long(
-    *,
-    symbol: str,
-    ts: int,
-    entry_price: float,
-    entry_qty: float,
-    entry_ts: int,
-    exit_price: float,
-    reason: str,
-    fee_pct: float,
-    equity_cell: list[float],
-    trades: list,
-) -> None:
-    gross_value = entry_qty * exit_price
-    exit_fee = gross_value * fee_pct
-    proceeds = gross_value - exit_fee
-    equity_cell[0] += proceeds
-    net_pnl = (exit_price - entry_price) * entry_qty - exit_fee
+def _close(st, ts, exit_price, reason, params, account, trades) -> None:
+    qty, entry = st.entry_qty, st.entry_price
+    exit_fee = qty * exit_price * params.fee_pct
+    if st.position_state == "long":
+        proceeds = qty * exit_price - exit_fee
+    else:
+        proceeds = qty * entry + (entry - exit_price) * qty - exit_fee
+    account.cash += proceeds
+    account.committed -= st.budget
     trades.append({
-        "symbol": symbol,
-        "side": "long",
-        "entry_ts": entry_ts,
+        "symbol": st.symbol,
+        "side": st.position_state,
+        "entry_ts": st.entry_ts,
         "exit_ts": ts,
-        "entry_price": entry_price,
+        "entry_price": entry,
         "exit_price": exit_price,
-        "qty": entry_qty,
-        "net_pnl": net_pnl,
+        "qty": qty,
+        # Cash P&L of the round trip: includes BOTH fees (the entry fee is
+        # the budget not converted into qty), so per-symbol/quarter sums
+        # and win rate match the change in equity.
+        "net_pnl": proceeds - st.budget,
         "reason": reason,
     })
+    st.position_state = "flat"
+    st.budget = 0.0
 
 
-def _close_short(
-    *,
-    symbol, ts, entry_price, entry_qty, entry_ts,
-    exit_price, reason, fee_pct, equity_cell, trades,
-) -> None:
-    notional = entry_qty * exit_price
-    exit_fee = notional * fee_pct
-    pnl = (entry_price - exit_price) * entry_qty
-    proceeds = (entry_qty * entry_price) + pnl - exit_fee
-    equity_cell[0] += proceeds
-    net_pnl = pnl - exit_fee
-    trades.append({
-        "symbol": symbol,
-        "side": "short",
-        "entry_ts": entry_ts,
-        "exit_ts": ts,
-        "entry_price": entry_price,
-        "exit_price": exit_price,
-        "qty": entry_qty,
-        "net_pnl": net_pnl,
-        "reason": reason,
-    })
+def _mark_to_market(account: _Account, states: list[_SymbolState]) -> float:
+    equity = account.cash
+    for st in states:
+        if st.position_state == "flat" or st.last_close is None:
+            continue
+        if st.position_state == "long":
+            equity += st.entry_qty * st.last_close
+        else:  # short: collateral returned + P&L (the old curve forgot the collateral)
+            equity += st.entry_qty * st.entry_price + (st.entry_price - st.last_close) * st.entry_qty
+    return equity
 
 
 def _build_result(
@@ -487,6 +487,7 @@ def _build_result(
     trades: list[dict],
     equity_curve: list[float],
     params: EngineParams,
+    bars_per_year: int = 8760,
 ) -> BacktestResult:
     final_equity = equity_curve[-1] if equity_curve else params.initial_equity
     total_pnl = final_equity - params.initial_equity
@@ -526,10 +527,11 @@ def _build_result(
         trades_count=len(trades),
         wins=wins,
         win_rate=win_rate,
-        sharpe=sharpe_ratio(equity_curve),
+        sharpe=sharpe_ratio(equity_curve, bars_per_year=bars_per_year),
         max_drawdown_pct=max_drawdown(equity_curve),
         exit_reasons=reasons,
         trades=trades,
         per_symbol=per_sym,
         per_quarter=per_q,
+        equity_curve=equity_curve,
     )

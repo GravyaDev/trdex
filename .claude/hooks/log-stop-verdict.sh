@@ -1,71 +1,58 @@
 #!/bin/bash
-# Stop hook — logs the quality verdict from the haiku review prompt.
-# Writes structured JSONL for trend analysis across sessions.
-# Tracks session blocks and activates quality gate at >=2 blocks.
+# Stop hook — pure deterministic observer. Zero LLM calls.
+#
+# Called by Claude Code as a type:command hook at turn end.
+# Logs a structured verdict to verdicts.jsonl for trend analysis.
+# All fields derived from local state (git, failure log) — no LLM.
+#
+# Quality gate activation has been moved to stuck-detector.sh,
+# which fires on real tool failures (3+ of the same category),
+# a more reliable signal than an LLM's opinion of "task completion".
+#
+# Key property: NO output is written to stdout. Anything printed
+# here would be surfaced to the main model by Claude Code.
 
 LOG_DIR="$CLAUDE_PROJECT_DIR/.claude/logs"
 VERDICT_LOG="$LOG_DIR/verdicts.jsonl"
-INCIDENT_LOG="$LOG_DIR/incident-log.md"
-NOMINATIONS="$CLAUDE_PROJECT_DIR/.claude/knowledge-nominations.md"
 TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
-SESSION_DATE=$(date +"%Y-%m-%d-%H")
-BLOCK_FILE="$LOG_DIR/.session-blocks-$SESSION_DATE"
 
 mkdir -p "$LOG_DIR"
 
-# Read the verdict from stdin (piped from the Stop prompt)
-RAW_VERDICT=$(cat)
+# ═══════════════════════════════════════════════════════
+# Derive task_type from the most recent git commit message
+# in the current session (if any). Falls back to "other".
+# ═══════════════════════════════════════════════════════
+TASK_TYPE="other"
+LAST_COMMIT_MSG=$(git -C "$CLAUDE_PROJECT_DIR" log -1 --format=%s 2>/dev/null || echo "")
 
-# Strip markdown code fences and prose that Haiku sometimes adds
-VERDICT=$(echo "$RAW_VERDICT" | sed -n '/^{/,/^}/p' | head -1)
-# Fallback: try the raw input if sed extraction failed
-if [ -z "$VERDICT" ]; then
-  VERDICT="$RAW_VERDICT"
+if [ -n "$LAST_COMMIT_MSG" ]; then
+  case "$LAST_COMMIT_MSG" in
+    fix*)     TASK_TYPE="debug" ;;
+    feat*)    TASK_TYPE="build" ;;
+    test*)    TASK_TYPE="test" ;;
+    refactor*) TASK_TYPE="refactor" ;;
+    docs*)    TASK_TYPE="docs" ;;
+    chore*)   TASK_TYPE="admin" ;;
+    ci*)      TASK_TYPE="deploy" ;;
+    style*)   TASK_TYPE="refactor" ;;
+    perf*)    TASK_TYPE="build" ;;
+  esac
 fi
 
-# Try to parse as JSON
-DECISION=$(echo "$VERDICT" | jq -r '.decision // empty' 2>/dev/null)
-LEARNING=$(echo "$VERDICT" | jq -r '.learning // empty' 2>/dev/null)
-TASK_TYPE=$(echo "$VERDICT" | jq -r '.task_type // "other"' 2>/dev/null)
-REASON=$(echo "$VERDICT" | jq -r '.reason // empty' 2>/dev/null)
-
-# Default if not parseable
-if [ -z "$DECISION" ]; then
-  DECISION="unknown"
-  TASK_TYPE="other"
-fi
-
-# Write JSONL verdict
+# ═══════════════════════════════════════════════════════
+# Write JSONL verdict — decision is always "allow".
+#
+# Rationale for removing "block":
+# - block was never actionable (the turn is already over)
+# - block caused re-injection loops when used with type:prompt
+# - block-based quality gate is replaced by stuck-detector.sh
+#   which uses real tool failure data, not LLM opinion
+# ═══════════════════════════════════════════════════════
 jq -n \
   --arg ts "$TIMESTAMP" \
-  --arg decision "$DECISION" \
-  --arg learning "$LEARNING" \
   --arg task_type "$TASK_TYPE" \
-  --arg reason "$REASON" \
-  '{timestamp: $ts, decision: $decision, learning: $learning, task_type: $task_type, reason: $reason}' \
+  '{timestamp: $ts, decision: "allow", learning: null, task_type: $task_type, reason: null}' \
   >> "$VERDICT_LOG"
 
-# Track blocks
-if [ "$DECISION" = "block" ]; then
-  BLOCK_COUNT=1
-  if [ -f "$BLOCK_FILE" ]; then
-    BLOCK_COUNT=$(( $(cat "$BLOCK_FILE") + 1 ))
-  fi
-  echo "$BLOCK_COUNT" > "$BLOCK_FILE"
-
-  echo "- \`$TIMESTAMP\` | VERDICT | BLOCK | $REASON" >> "$INCIDENT_LOG"
-
-  # Activate quality gate at >=2 blocks in same session
-  if [ "$BLOCK_COUNT" -ge 2 ]; then
-    touch "$LOG_DIR/.quality-gate-active"
-    echo "- \`$TIMESTAMP\` | VERDICT | WARN | Quality gate activated — $BLOCK_COUNT blocks this session" >> "$INCIDENT_LOG"
-  fi
-fi
-
-# Nominate learning if present
-if [ -n "$LEARNING" ] && [ "$LEARNING" != "null" ]; then
-  NOMINATION_DATE=$(date +"%Y-%m-%d")
-  echo "- [$NOMINATION_DATE] stop-hook: $LEARNING | Evidence: session verdict ($TASK_TYPE)" >> "$NOMINATIONS"
-fi
-
+# CRITICAL: exit silently. No stdout.
 exit 0

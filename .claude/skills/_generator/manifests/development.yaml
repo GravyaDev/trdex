@@ -464,8 +464,6 @@ skills:
     title: "GraphQL"
   - slug: graphql-architect
     title: "GraphQL Architect"
-  - slug: gravya-platform-dev
-    title: "Gravya Platform Dev"
   - slug: grpc-golang
     title: "gRPC Golang"
   - slug: i18n-localization

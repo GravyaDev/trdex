@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "WebFetch(domain:developers.facebook.com)",
-      "Bash(xargs grep:*)"
-    ]
-  }
-}

@@ -72,11 +72,23 @@ async def open_positions(_key: str = Depends(verify_api_key)) -> dict:
     async with _service() as svc:
         positions = await svc.mark_to_market()
         raw_records = await svc._repo.get_open_positions()
-    id_by_key = {(r.symbol, r.side, r.opened_at): r.id for r in raw_records}
+    # Join by (symbol, side, opened_at). Carry both `id` and `source` so
+    # the dashboard can render the provenance chip ("telegram", "agent",
+    # "manual"). Source lives on PositionRecord; mark_to_market drops it
+    # because Position (pydantic) does not model it — but the tuple key
+    # is stable enough for a cheap lookup.
+    meta_by_key = {
+        (r.symbol, r.side, r.opened_at): (r.id, r.source) for r in raw_records
+    }
     return {
         "positions": [
             {
-                "id": id_by_key.get((p.symbol, "BUY" if p.side == "long" else "SELL", p.opened_at)),
+                "id": meta_by_key.get(
+                    (p.symbol, "BUY" if p.side == "long" else "SELL", p.opened_at), (None, "")
+                )[0],
+                "source": meta_by_key.get(
+                    (p.symbol, "BUY" if p.side == "long" else "SELL", p.opened_at), (None, "")
+                )[1],
                 "symbol": p.symbol,
                 "side": p.side,
                 "entry_price": str(p.entry_price),
@@ -211,6 +223,7 @@ async def manual_close(
         qty=float(pos.amount),
         price=float(price),
         idempotency_key=f"manual_close:{pos.id}",
+        reduce_only=True,  # closing must stay possible with the kill switch active
     )
     if result.status != "filled":
         raise HTTPException(422, f"Close order rejected: {result.message}")

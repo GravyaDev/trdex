@@ -12,9 +12,10 @@ Two layers:
 from __future__ import annotations
 
 import math
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
+from typing import ClassVar
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -35,6 +36,34 @@ from trdex.storage.balance_models import BalanceRecord
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
+
+class _FreshRegimeCfg:
+    """Runtime Config with valid, fresh regime bounds set long ago.
+
+    The regime criteria have their own tests (test_readiness_regime.py);
+    here they must pass so each test isolates the criterion it targets.
+    """
+
+    _T: ClassVar[dict[str, str]] = {
+        "regime_cv_min": "0.002",
+        "regime_cv_max": "0.045",
+        "regime_data_end": datetime.now(tz=UTC).date().isoformat(),
+        "regime_set_at": "2020-01-01T00:00:00+00:00",
+    }
+
+    def get(self, category, key, default=""):
+        return self._T.get(key, default) if category == "thresholds" else default
+
+    def get_typed(self, category, key, default=None):
+        return default
+
+
+@pytest.fixture(autouse=True)
+def _fresh_regime_bounds(monkeypatch):
+    monkeypatch.setattr(
+        "trdex.services.runtime_config.get_config_service", lambda: _FreshRegimeCfg()
+    )
 
 
 def _balance_row(

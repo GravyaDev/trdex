@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
 
 from trdex.services import credentials_crypto
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Maps (category, key) → (settings_attr, python_type).
 # Used for seeding from env vars and for type coercion on reads.
 
-_KEY_REGISTRY: dict[tuple[str, str], tuple[str, type]] = {
+_KEY_REGISTRY: dict[tuple[str, str], tuple[str | None, type]] = {
     # Credentials
     ("credentials", "cryptocompare_api_key"): ("cryptocompare_api_key", str),
     ("credentials", "stockdata_api_key"): ("stockdata_api_key", str),
@@ -45,10 +46,17 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str, type]] = {
     ("thresholds", "sl_take_profit_pct"): ("sl_take_profit_pct", float),
     ("thresholds", "sl_trailing_stop_pct"): ("sl_trailing_stop_pct", float),
     ("thresholds", "sl_daily_drawdown_pct"): ("sl_daily_drawdown_pct", float),
+    ("thresholds", "sl_open_positions_loss_pct"): ("sl_open_positions_loss_pct", float),
     ("thresholds", "gate_max_drawdown"): ("gate_max_drawdown", float),
     ("thresholds", "gate_min_days"): ("gate_min_days", int),
     ("thresholds", "max_position_pct"): ("max_position_pct", float),
     ("thresholds", "max_drawdown_block"): (None, float),
+    ("thresholds", "risk_per_trade_pct"): ("risk_per_trade_pct", float),
+    ("thresholds", "regime_cv_min"): (None, float),  # from scripts/backtest/regime_range.py
+    ("thresholds", "regime_cv_max"): (None, float),
+    ("thresholds", "regime_data_end"): (None, str),  # YYYY-MM-DD, from regime_range.py
+    ("thresholds", "regime_max_age_days"): (None, int),  # readiness fails past this age
+    ("thresholds", "regime_set_at"): (None, str),  # stamped by the service on change
     # Scheduler
     ("scheduler", "agent_scheduler_enabled"): ("agent_scheduler_enabled", bool),
     ("scheduler", "agent_scheduler_interval"): ("agent_scheduler_interval", int),
@@ -60,6 +68,10 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str, type]] = {
     ("telegram", "telegram_channels"): ("telegram_channels", str),
     ("telegram", "telegram_enabled"): (None, bool),
     ("telegram", "telegram_channel_titles"): (None, str),  # JSON map {chat_id: title}
+    ("telegram", "entry_drift_tolerance"): (None, float),
+    ("telegram", "max_stop_distance"): (None, float),
+    ("telegram", "reliability_min_samples"): (None, int),
+    ("telegram", "reliability_win_rate_min"): (None, float),
     # Feeds
     ("feeds", "selected_feeds"): (None, str),  # No env var equivalent
     # Integration toggles — each one enables/disables a component at
@@ -80,9 +92,25 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str, type]] = {
     ("integrations", "perplexity_news_enabled"): (None, bool),
     ("integrations", "telegram_monitor_enabled"): (None, bool),
     ("integrations", "qdrant_embeddings_enabled"): (None, bool),
+    ("integrations", "telegram_executor_enabled"): (None, bool),
 }
 
 CREDENTIAL_KEYS = {k for (cat, k), _ in _KEY_REGISTRY.items() if cat == "credentials"}
+
+# Changing either regime bound stamps thresholds.regime_set_at, so the
+# readiness gate can tell whether the simulation it judges ran with the
+# current bounds. Stamped here because every write path goes through
+# put()/put_category().
+_REGIME_BOUND_KEYS = ("regime_cv_min", "regime_cv_max")
+
+
+def _bound_value(raw: str | None) -> float | None:
+    """Regime bound as the Risk node reads it: blank / <= 0 / invalid -> unset."""
+    try:
+        v = float(raw) if raw else 0.0
+    except ValueError:
+        return None
+    return v if v > 0 else None
 
 
 def _coerce(value: str, target_type: type) -> Any:
@@ -120,7 +148,7 @@ class RuntimeConfigService:
         self._cache: dict[str, dict[str, str]] = {}
         self._listeners: dict[str, list[Callable]] = {}
 
-    async def load(self) -> None:
+    async def load(self, *, categories: set[str] | None = None) -> None:
         """Load all config from DB into the in-memory cache.
 
         Credential values are decrypted here so the rest of the
@@ -128,6 +156,9 @@ class RuntimeConfigService:
         Legacy plaintext credentials (pre-encryption) are loaded
         as-is and get upgraded on the next write or on the
         explicit `migrate_plaintext_credentials()` pass.
+
+        ``categories`` restricts the load (e.g. CLIs that only need
+        ``thresholds`` and must not need the credentials key).
         """
         from trdex.storage.runtime_config_repo import RuntimeConfigRepository
         async with self._sf() as session:
@@ -136,6 +167,8 @@ class RuntimeConfigService:
 
         cache: dict[str, dict[str, str]] = {}
         for category, pairs in raw.items():
+            if categories is not None and category not in categories:
+                continue
             if category == "credentials":
                 cache[category] = {
                     k: credentials_crypto.decrypt(v) for k, v in pairs.items()
@@ -294,6 +327,9 @@ class RuntimeConfigService:
         Cache holds plaintext. DB holds ciphertext for credentials.
         Listeners receive plaintext (they mirror user-facing values).
         """
+        if self._regime_bounds_changed(category, {key: value}):
+            await self.put_category(category, {key: value})
+            return
         stored = (
             credentials_crypto.encrypt(value)
             if category == "credentials" and value
@@ -308,6 +344,8 @@ class RuntimeConfigService:
 
     async def put_category(self, category: str, pairs: dict[str, str]) -> None:
         """Bulk upsert. Same encryption rules as `put()`."""
+        if self._regime_bounds_changed(category, pairs):
+            pairs = {**pairs, "regime_set_at": datetime.now(tz=UTC).isoformat(timespec="seconds")}
         if category == "credentials":
             stored_pairs = {
                 k: (credentials_crypto.encrypt(v) if v else v)
@@ -322,6 +360,16 @@ class RuntimeConfigService:
         for key, value in pairs.items():
             self._cache.setdefault(category, {})[key] = value
             self._fire_listeners(category, key, value)
+
+    def _regime_bounds_changed(self, category: str, pairs: dict[str, str]) -> bool:
+        """True if ``pairs`` changes the effective value of a regime bound."""
+        if category != "thresholds":
+            return False
+        current = self._cache.get("thresholds", {})
+        return any(
+            k in pairs and _bound_value(pairs[k]) != _bound_value(current.get(k))
+            for k in _REGIME_BOUND_KEYS
+        )
 
     # ── hot-reload listeners ─────────────────────────────────────────────
 

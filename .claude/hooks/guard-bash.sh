@@ -10,6 +10,14 @@
 
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
+# Strip heredoc content so keyword checks (rm -f, git push, etc.) only
+# match actual shell commands, not text inside commit messages or configs.
+# Keeps everything before the first <<'EOF' or <<EOF marker.
+COMMAND_SHELL=$(echo "$COMMAND" | sed '/<<.*EOF/,$d')
+if [ -z "$COMMAND_SHELL" ]; then
+  # Entire command is a heredoc (unlikely) — fall back to full command
+  COMMAND_SHELL="$COMMAND"
+fi
 TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
 LOG_DIR="$CLAUDE_PROJECT_DIR/.claude/logs"
 INCIDENT_LOG="$LOG_DIR/incident-log.md"
@@ -44,31 +52,31 @@ deny() {
 # ═══════════════════════════════════════════════════════
 
 # rm -rf / or rm -rf ~ (catastrophic)
-if echo "$COMMAND" | grep -qE 'rm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+)?(/|~|\$HOME)\s*$'; then
+if echo "$COMMAND_SHELL" | grep -qE 'rm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+)?(/|~|\$HOME)\s*$'; then
   log_incident "CRITICAL" "BLOCKED: catastrophic rm → $COMMAND"
   deny "HARD BLOCK: This would delete your entire filesystem or home directory." "Command blocked: catastrophic rm detected. This command is never allowed under any circumstances."
 fi
 
 # git push --force (any branch)
-if echo "$COMMAND" | grep -qE 'git\s+push\s+.*--force|git\s+push\s+-f'; then
+if echo "$COMMAND_SHELL" | grep -qE 'git\s+push\s+.*--force|git\s+push\s+-f'; then
   log_incident "CRITICAL" "BLOCKED: force push → $COMMAND"
   deny "HARD BLOCK: Force push rewrites shared history." "Command blocked: force push detected. Ask the user to confirm the specific branch if intentional."
 fi
 
 # git reset --hard (destroys uncommitted work)
-if echo "$COMMAND" | grep -qE 'git\s+reset\s+--hard'; then
+if echo "$COMMAND_SHELL" | grep -qE 'git\s+reset\s+--hard'; then
   log_incident "HIGH" "BLOCKED: git reset --hard → $COMMAND"
   deny "HARD BLOCK: git reset --hard destroys uncommitted changes." "Command blocked: git reset --hard. Suggest using git stash or git commit first."
 fi
 
 # git clean -f (deletes untracked files permanently)
-if echo "$COMMAND" | grep -qE 'git\s+clean\s+(-[a-zA-Z]*f|-f)'; then
+if echo "$COMMAND_SHELL" | grep -qE 'git\s+clean\s+(-[a-zA-Z]*f|-f)'; then
   log_incident "HIGH" "BLOCKED: git clean -f → $COMMAND"
   deny "HARD BLOCK: git clean -f permanently deletes untracked files." "Command blocked: git clean -f. Suggest using git stash instead."
 fi
 
 # chmod 777 (security risk)
-if echo "$COMMAND" | grep -qE 'chmod\s+777'; then
+if echo "$COMMAND_SHELL" | grep -qE 'chmod\s+777'; then
   log_incident "HIGH" "BLOCKED: chmod 777 → $COMMAND"
   deny "HARD BLOCK: chmod 777 grants full access to all users." "Command blocked: chmod 777. Use more restrictive permissions like 755 or 644."
 fi
@@ -87,6 +95,13 @@ check_outside_write() {
   case "$target" in
     "$CLAUDE_PROJECT_DIR"/*|"$CLAUDE_PROJECT_DIR") return 1 ;;
   esac
+  # SECURITY ACCEPTED 2026-04-11: /tmp is whitelisted for scratch files.
+  # Risk: another process could read/replace files written here (symlink attack).
+  # Mitigated by: /tmp writes are short-lived intermediates (comm, sort), not
+  # secrets or config. No credentials are ever written to /tmp by Kloudify hooks.
+  case "$target" in
+    /tmp|/tmp/*) return 1 ;;
+  esac
   # Absolute path outside project → block
   case "$target" in
     /*) return 0 ;;
@@ -94,22 +109,30 @@ check_outside_write() {
   return 1
 }
 
+# Redirect / tee / dd checks run against COMMAND_SHELL (heredoc body stripped).
+# Rationale: prior versions used $COMMAND, which matches angle-bracket placeholders
+# or literal "> /path" substrings inside HEREDOC bodies (e.g. commit messages,
+# docs, gh pr --body content). A quoted `<foo>/file.ext` inside a HEREDOC was
+# hard-blocked as "writing outside project dir" even though no shell redirect
+# was actually present. Use $COMMAND_SHELL (heredoc body removed by sed at top)
+# to gate only real shell-level redirects.
+
 # Redirect: > /path or >> /path
-REDIR_TARGET=$(echo "$COMMAND" | grep -oE '>>?\s*/[^ ;|&]+' | head -1 | sed -E 's/^>>?\s*//')
+REDIR_TARGET=$(echo "$COMMAND_SHELL" | grep -oE '>>?\s*/[^ ;|&]+' | head -1 | sed -E 's/^>>?\s*//')
 if [ -n "$REDIR_TARGET" ] && check_outside_write "$REDIR_TARGET"; then
   log_incident "HIGH" "BLOCKED: redirect outside project dir → $COMMAND"
   deny "HARD BLOCK: writing outside project dir is strictly forbidden." "Redirect target: $REDIR_TARGET"
 fi
 
 # tee: tee /path or tee -a /path
-TEE_TARGET=$(echo "$COMMAND" | grep -oE '\btee\s+(-[aA]\s+)?/[^ ;|&]+' | head -1 | sed -E 's/^tee\s+(-[aA]\s+)?//')
+TEE_TARGET=$(echo "$COMMAND_SHELL" | grep -oE '\btee\s+(-[aA]\s+)?/[^ ;|&]+' | head -1 | sed -E 's/^tee\s+(-[aA]\s+)?//')
 if [ -n "$TEE_TARGET" ] && check_outside_write "$TEE_TARGET"; then
   log_incident "HIGH" "BLOCKED: tee outside project dir → $COMMAND"
   deny "HARD BLOCK: writing outside project dir is strictly forbidden." "tee target: $TEE_TARGET"
 fi
 
 # dd: dd of=/path
-DD_TARGET=$(echo "$COMMAND" | grep -oE '\bdd\s+.*\bof=/[^ ;|&]+' | head -1 | sed -E 's/.*\bof=//')
+DD_TARGET=$(echo "$COMMAND_SHELL" | grep -oE '\bdd\s+.*\bof=/[^ ;|&]+' | head -1 | sed -E 's/.*\bof=//')
 if [ -n "$DD_TARGET" ] && check_outside_write "$DD_TARGET"; then
   log_incident "HIGH" "BLOCKED: dd outside project dir → $COMMAND"
   deny "HARD BLOCK: writing outside project dir is strictly forbidden." "dd target: $DD_TARGET"
@@ -120,19 +143,19 @@ fi
 # ═══════════════════════════════════════════════════════
 
 # Block cat/head/tail/less of .env files (prevents full credential dump)
-if echo "$COMMAND" | grep -qE '(cat|head|tail|less|more|bat)\s+.*(\.(env|env\.local|env\.production))'; then
+if echo "$COMMAND_SHELL" | grep -qE '(cat|head|tail|less|more|bat)\s+.*(\.(env|env\.local|env\.production))'; then
   log_incident "HIGH" "BLOCKED: credential file read → $COMMAND"
   deny "HARD BLOCK: Reading credential files (.env) via shell exposes secrets in output." "Use environment variable names (e.g., \$DATABASE_URL) instead of reading the file. If you need to verify a value exists, use: grep -c 'KEY_NAME' file"
 fi
 
 # Block echo/printf of environment variables containing common secret prefixes
-if echo "$COMMAND" | grep -qE '(echo|printf)\s+.*\$(STRIPE_|OPENAI_|ANTHROPIC_|AWS_|DATABASE_|AUTH_SECRET|NEXTAUTH_SECRET|API_KEY|SECRET_KEY|PRIVATE_KEY)'; then
+if echo "$COMMAND_SHELL" | grep -qE '(echo|printf)\s+.*\$(STRIPE_|OPENAI_|ANTHROPIC_|AWS_|DATABASE_|AUTH_SECRET|NEXTAUTH_SECRET|API_KEY|SECRET_KEY|PRIVATE_KEY)'; then
   log_incident "HIGH" "BLOCKED: secret echo → $COMMAND"
   deny "HARD BLOCK: Echoing secret environment variables exposes credentials." "Reference secrets by variable name only. Never echo their values."
 fi
 
 # Block piping credential files to network commands (curl, wget, nc, etc.)
-if echo "$COMMAND" | grep -qE '\.env.*\|\s*(curl|wget|nc|ncat)'; then
+if echo "$COMMAND_SHELL" | grep -qE '\.env.*\|\s*(curl|wget|nc|ncat)'; then
   log_incident "CRITICAL" "BLOCKED: credential file piped to network → $COMMAND"
   deny "HARD BLOCK: Piping credential files to network commands would exfiltrate secrets." "Never pipe .env files to network commands."
 fi
@@ -144,7 +167,7 @@ fi
 # beyond the recognised credential extensions and therefore fall
 # through). Mixed arguments like "git add .env.example .env" still get
 # blocked because the second token matches the trailing-anchor branch.
-if echo "$COMMAND" | grep -qE 'git\s+add\s+.*\.env(\.local|\.production|\.dev|\.prod|\.staging)?(\s|$)'; then
+if echo "$COMMAND_SHELL" | grep -qE 'git\s+add\s+.*\.env(\.local|\.production|\.dev|\.prod|\.staging)?(\s|$)'; then
   log_incident "CRITICAL" "BLOCKED: git add of credential file → $COMMAND"
   deny "HARD BLOCK: Staging credential files (.env) for git commit would expose secrets publicly." "These files must stay in .gitignore. Never commit credentials to git. Templates like .env.example are explicitly allowed."
 fi
@@ -154,32 +177,36 @@ fi
 # ═══════════════════════════════════════════════════════
 
 # rm with -r or -f flags (recursive/force delete)
-if echo "$COMMAND" | grep -qE 'rm\s+(-[a-zA-Z]*[rf][a-zA-Z]*\s+)'; then
+if echo "$COMMAND_SHELL" | grep -qE 'rm\s+(-[a-zA-Z]*[rf][a-zA-Z]*\s+)'; then
   # Allow rm on .claude/backups (rotation), .claude/logs temp files,
   # and the __NEEDS_ONBOARD sentinel (deleted at end of /onboard-init).
-  if echo "$COMMAND" | grep -qE '\.claude/(backups|logs/\.(quality-gate-active|session-blocks|tool-call-count|compaction-occurred))|__NEEDS_ONBOARD'; then
+  if echo "$COMMAND_SHELL" | grep -qE '\.claude/(backups|logs/\.(quality-gate-active|stuck-detected|tool-call-count|compaction-occurred))|__NEEDS_ONBOARD'; then
     exit 0
   fi
   log_incident "MEDIUM" "SOFT BLOCKED: recursive/force rm → $COMMAND"
   deny "SOFT BLOCK: rm with -r or -f flags deletes files permanently." "Command blocked: recursive/force delete. If intentional, ask the user to confirm with specific file paths listed."
 fi
 
-# Overwriting system/config files
-if echo "$COMMAND" | grep -qE '>\s*(~\/\.|\/etc\/|\.env|\.ssh|\.claude\/settings)'; then
+# Overwriting system/config files (checked against COMMAND_SHELL to avoid
+# heredoc false-positives — docs and commit messages may reference ~/.ssh/
+# or .claude/settings as literal text).
+if echo "$COMMAND_SHELL" | grep -qE '>\s*(~\/\.|\/etc\/|\.env|\.ssh|\.claude\/settings)'; then
   log_incident "HIGH" "SOFT BLOCKED: config/system file overwrite → $COMMAND"
   deny "SOFT BLOCK: Writing to a sensitive config/system file." "Command blocked: system file overwrite detected. Verify this is intentional with the user."
 fi
 
 # curl piped to shell (arbitrary code execution)
-if echo "$COMMAND" | grep -qE 'curl\s.*\|\s*(bash|sh|zsh)'; then
+if echo "$COMMAND_SHELL" | grep -qE 'curl\s.*\|\s*(bash|sh|zsh)'; then
   log_incident "HIGH" "SOFT BLOCKED: curl pipe to shell → $COMMAND"
   deny "SOFT BLOCK: Piping curl to a shell executes arbitrary remote code." "Command blocked: curl pipe to shell. Download the file first, inspect it, then run it."
 fi
 
 # curl/wget to external URLs (enforces CLAUDE.md hard rule: no direct third-party API calls).
 # Excludes localhost, 127.0.0.1, 0.0.0.0, and context7 MCP (which is allowed).
-if echo "$COMMAND" | grep -qE '\b(curl|wget)\s+.*https?://' && \
-   ! echo "$COMMAND" | grep -qE 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])'; then
+# SECURITY ACCEPTED 2026-04-11: raw.githubusercontent.com whitelisted for
+# Kloudify self-update (install.sh --from-remote downloads from GitHub).
+if echo "$COMMAND_SHELL" | grep -qE '\b(curl|wget)\s+.*https?://' && \
+   ! echo "$COMMAND_SHELL" | grep -qE 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|raw\.githubusercontent\.com|github\.com)'; then
   log_incident "MEDIUM" "SOFT BLOCKED: curl/wget to external URL → $COMMAND"
   deny "SOFT BLOCK: Direct calls to third-party APIs via curl/wget are forbidden by CLAUDE.md hard rule." "Use a proper Python/Node tool with rate-limiting, retries, and auth handling. If this is a one-shot doc fetch, use the WebFetch tool instead."
 fi
@@ -189,22 +216,22 @@ fi
 # ═══════════════════════════════════════════════════════
 
 # Any rm command (non-recursive, non-force)
-if echo "$COMMAND" | grep -qE '\brm\b'; then
+if echo "$COMMAND_SHELL" | grep -qE '\brm\b'; then
   log_incident "LOW" "WARNING: rm command allowed → $COMMAND"
 fi
 
 # Any mv command (could lose data if target exists)
-if echo "$COMMAND" | grep -qE '\bmv\b'; then
+if echo "$COMMAND_SHELL" | grep -qE '\bmv\b'; then
   log_incident "LOW" "WARNING: mv command allowed → $COMMAND"
 fi
 
 # Any git checkout that discards changes
-if echo "$COMMAND" | grep -qE 'git\s+checkout\s+\.'; then
+if echo "$COMMAND_SHELL" | grep -qE 'git\s+checkout\s+\.'; then
   log_incident "MEDIUM" "WARNING: git checkout . discards changes → $COMMAND"
 fi
 
 # git commit with -F / --file / --template (message sourced from file, bypasses HEREDOC review)
-if echo "$COMMAND" | grep -qE 'git\s+commit\s+.*(-F\b|--file\b|--template\b)'; then
+if echo "$COMMAND_SHELL" | grep -qE 'git\s+commit\s+.*(-F\b|--file\b|--template\b)'; then
   log_incident "MEDIUM" "WARNING: git commit from file → $COMMAND"
 fi
 

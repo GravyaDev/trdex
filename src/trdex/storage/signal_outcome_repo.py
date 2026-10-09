@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from trdex.storage.signal_outcome_models import SignalOutcomeRecord
@@ -71,6 +71,49 @@ class SignalOutcomeRepository:
             .order_by(SignalOutcomeRecord.executed_at.asc())
         )
         return list(result.scalars().all())
+
+    async def win_rate_by_source(self, source: str) -> tuple[int, float]:
+        """Return (sample_count, win_rate) for closed signals from `source`.
+
+        A "win" is a closed outcome where the direction matched the price
+        move: BUY with exit_price >= entry_price OR SELL with exit_price
+        <= entry_price. Rows with exit_price IS NULL (still open) are
+        excluded from both numerator and denominator.
+
+        Returns (0, 0.0) when no closed outcomes exist.
+        """
+        stmt = (
+            select(
+                func.count().label("n"),
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                SignalOutcomeRecord.direction == "BUY",
+                                SignalOutcomeRecord.exit_price >= SignalOutcomeRecord.entry_price,
+                            ),
+                            1,
+                        ),
+                        (
+                            and_(
+                                SignalOutcomeRecord.direction == "SELL",
+                                SignalOutcomeRecord.exit_price <= SignalOutcomeRecord.entry_price,
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ).label("wins"),
+            )
+            .where(SignalOutcomeRecord.source == source)
+            .where(SignalOutcomeRecord.exit_price.is_not(None))
+        )
+        row = (await self._session.execute(stmt)).one()
+        n = int(row.n or 0)
+        wins = int(row.wins or 0)
+        if n == 0:
+            return 0, 0.0
+        return n, wins / n
 
     async def open_outcomes(self, limit: int = 1_000) -> list[SignalOutcomeRecord]:
         """Return outcomes not yet resolved (exit_price IS NULL).
