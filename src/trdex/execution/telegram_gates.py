@@ -47,6 +47,7 @@ class GateConfig:
     reliability_min_samples: int = 20
     reliability_win_rate_min: float = 0.5
     entry_drift_tolerance: float = 0.005
+    max_stop_distance: float = 0.10
     budget: Decimal = Decimal("100")
 
     def __post_init__(self) -> None:
@@ -67,6 +68,10 @@ class GateConfig:
         if self.entry_drift_tolerance < 0.0:
             raise ValueError(
                 f"entry_drift_tolerance must be >= 0, got {self.entry_drift_tolerance}"
+            )
+        if not (0.0 < self.max_stop_distance <= 1.0):
+            raise ValueError(
+                f"max_stop_distance must be in (0, 1], got {self.max_stop_distance}"
             )
         if self.budget <= 0:
             raise ValueError(f"budget must be > 0, got {self.budget}")
@@ -186,6 +191,45 @@ async def gate_entry_drift(
     return GateResult(passed=True, reason="")
 
 
+async def gate_stop_loss(
+    signal: TelegramSignal,
+    *,
+    current_price: float,
+    config: GateConfig,
+) -> GateResult:
+    """The signal's stop becomes the position's stop, so sanity-check it.
+
+    No stop: pass (the StopLossMonitor's adaptive floor applies).
+    Otherwise the stop must sit on the loss side of the reference price
+    (entry, or current price for at-market signals) and no further than
+    ``max_stop_distance`` from it.
+    """
+    if signal.stop_loss is None:
+        return GateResult(passed=True, reason="")
+    reference = signal.entry if signal.entry is not None else current_price
+    if reference <= 0:
+        return GateResult(passed=False, reason=f"invalid reference price {reference}")
+    wrong_side = (
+        signal.stop_loss >= reference if signal.direction == "BUY"
+        else signal.stop_loss <= reference
+    )
+    if wrong_side:
+        return GateResult(
+            passed=False,
+            reason=(
+                f"stop on wrong side ({signal.direction} stop {signal.stop_loss}"
+                f" vs reference {reference})"
+            ),
+        )
+    distance = abs(signal.stop_loss - reference) / reference
+    if distance > config.max_stop_distance:
+        return GateResult(
+            passed=False,
+            reason=f"stop distance {distance:.4f} > max {config.max_stop_distance}",
+        )
+    return GateResult(passed=True, reason="")
+
+
 # ── Composition ─────────────────────────────────────────────────────────
 
 async def run_all_gates(
@@ -220,6 +264,10 @@ async def run_all_gates(
         return result
 
     result = await gate_entry_drift(signal, current_price=current_price, config=config)
+    if not result.passed:
+        return result
+
+    result = await gate_stop_loss(signal, current_price=current_price, config=config)
     if not result.passed:
         return result
 
