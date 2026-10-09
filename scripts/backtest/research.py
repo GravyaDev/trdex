@@ -61,6 +61,18 @@ def dev_period(
     return dev, cutoff
 
 
+def data_end(ohlcv_by_symbol: dict[str, list[list]]) -> int:
+    """Timestamp (ms) of the most recent bar across all symbols.
+
+    This is what ``regime_data_end`` records: the readiness gate rejects
+    regime bounds whose data set ends more than regime_max_age_days ago.
+    """
+    stamps = [bars[-1][0] for bars in ohlcv_by_symbol.values() if bars]
+    if not stamps:
+        raise ValueError("no bars")
+    return max(stamps)
+
+
 # ── seasonality ───────────────────────────────────────────────────────────
 
 

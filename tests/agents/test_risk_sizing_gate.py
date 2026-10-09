@@ -192,6 +192,46 @@ async def test_inverted_bounds_fail_closed():
     assert "invalid regime bounds" in result.risk.reason
 
 
+# ── Gate 5: live readiness applies to entries only ───────────────────────
+
+
+def _not_ready():
+    return SimpleNamespace(ready=False, failures=["Regime bounds: derived from stale data"])
+
+
+@asynccontextmanager
+async def _dummy_factory():
+    yield MagicMock()
+
+
+@pytest.mark.asyncio
+async def test_live_readiness_failure_blocks_an_entry(monkeypatch):
+    monkeypatch.setattr(
+        "trdex.risk.readiness.evaluate_readiness", AsyncMock(return_value=_not_ready())
+    )
+    calm = [100.0 + (i % 2) for i in range(30)]
+    result = await _run(
+        _state(calm, session_factory=_dummy_factory),
+        cfg=_Cfg(regime_cv_min=0.001, regime_cv_max=0.04),
+        mode="live",
+    )
+    assert result.risk.approved is False
+    assert "simulation criteria not met" in result.risk.reason
+    assert "stale data" in result.risk.reason
+
+
+@pytest.mark.asyncio
+async def test_live_readiness_failure_never_blocks_a_close(monkeypatch):
+    readiness = AsyncMock(return_value=_not_ready())
+    monkeypatch.setattr("trdex.risk.readiness.evaluate_readiness", readiness)
+    result = await _run(
+        _state(FLAT, Intent.CLOSE_LONG, session_factory=_dummy_factory, positions=["ENJ/USDT"]),
+        mode="live",
+    )
+    assert result.risk.approved is True
+    readiness.assert_not_awaited()
+
+
 # ── parity with the Analyst (the monitor reads the Analyst's CV) ──────────
 
 

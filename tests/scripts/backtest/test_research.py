@@ -11,6 +11,7 @@ from scripts.backtest.research import (
     benjamini_hochberg,
     bucket_of,
     cv_series,
+    data_end,
     dev_period,
     holm,
     regime_range,
@@ -47,6 +48,13 @@ def test_dev_period_never_returns_holdout_bars():
     assert cutoff == T0 + int((end - T0) * 0.7)
     assert all(b[0] < cutoff for bars in dev.values() for b in bars)
     assert max(b[0] for b in dev["A"]) < cutoff <= min(b[0] for b in data["A"] if b[0] >= cutoff)
+
+
+def test_data_end_is_the_latest_bar_across_symbols_holdout_included():
+    data = {"A": _walk(1000, seed=1), "B": _walk(800, seed=2), "C": []}
+    assert data_end(data) == T0 + 999 * H
+    with pytest.raises(ValueError):
+        data_end({"A": []})
 
 
 @pytest.mark.parametrize("h", [0.0, 1.0, -0.1])
