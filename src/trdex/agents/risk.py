@@ -53,9 +53,19 @@ def _cfg_float(cfg: Any, key: str, default: float | None) -> float | None:
     return None if value is None else float(value)
 
 
-async def _entry_stop_pct(state: AgentState, cv: float | None, cfg: Any, settings: Any) -> float:
+async def _entry_stop_pct(
+    state: AgentState,
+    cv: float | None,
+    cfg: Any,
+    settings: Any,
+    position: Any = None,
+) -> float:
     """Stop-loss fraction the StopLossMonitor will apply to a new position on
     ``state.symbol``: per-symbol override, else ``max(base, 2.5 x CV)``.
+
+    ``position`` carries per-position values stored at open (on main there
+    are none: always ``None``; on llm-agents the LLM-suggested stop, which
+    ``effective_thresholds`` can only use to widen the adaptive floor).
 
     Uses the monitor's own ``effective_thresholds`` and the same Runtime
     Config keys the monitor is built from, so sizing and exits agree.
@@ -72,7 +82,7 @@ async def _entry_stop_pct(state: AgentState, cv: float | None, cfg: Any, setting
         async with state.session_factory() as session:
             override = await SymbolConfigRepository(session).get(state.symbol)
     stop_pct, _, _ = effective_thresholds(
-        None,
+        position,
         override,
         cv if cv is not None else 0.0,
         base_sl=base_sl or 0.0,
