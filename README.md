@@ -139,17 +139,23 @@ Per-symbol overrides are available via the `/v1/risk/symbol-config` API and the 
 
 **Position size** is risk-based: `size = min(max_position_pct, risk_per_trade_pct / effective_sl)`, so a wider adaptive stop means a smaller position, not more risk per trade.
 
-**Volatility-regime gate** (Risk Gate 4c): new entries are blocked when the CV of the last 20 closes is outside `thresholds.regime_cv_min` / `regime_cv_max`, the range the strategy was backtested on (`scripts/backtest/regime_range.py`). In simulation unset bounds disable the gate; in live they block every entry. Telegram signal entries go through the same gate (last of the executor gates); in live they also require the bounds to be fresh, as the readiness gate does for agent entries.
+**Volatility-regime gate** (Risk Gate 4c): new entries are blocked when the CV of the last 20 closes is outside `thresholds.regime_cv_min` / `regime_cv_max`, the range on which the live rules were last validated. In simulation unset bounds disable the gate; in live they block every entry. Telegram signal entries go through the same gate (last of the executor gates); in live they also require the bounds to be fresh, as the readiness gate does for agent entries.
+
+**Regime refresher** (`trdex.research.regime_refresh`, always on): an hourly watchdog inside the app. Every `scheduler.regime_refresh_interval_days` (default 7) it syncs closed 1h OHLCV of the agent symbols into the DB (5 years on the first run), backtests the live rules on the development period (the most recent 30% stays sealed, net of fees) and writes new bounds and `regime_data_end` **only if** the backtest clears the same bar the simulation must clear (≥ 20 trades, net return > 0, win rate, max drawdown, Sharpe, ≥ 365 days). Otherwise the old bounds stay until they expire (`regime_max_age_days`, default 90) and live entries stop. Validation covers the rules the agent falls back to; LLM decisions cannot be replayed historically. `scripts/backtest/regime_range.py` remains as a manual tool.
+
+## Notifications
+
+Telegram bot and/or email, chosen per event in dashboard → 🔔 Notifications (with a test button): kill switch activated, live readiness changed, regime bounds refreshed, revalidation failed, refresh job error (at most daily), bounds expiring (daily in the last 14 days) or expired.
 
 ## Go-live checklist
 
-Live mode is enforced by the readiness gate (`GET /v1/system/readiness`, dashboard banner, Risk Gate 5 on every live entry). Each step below is a readiness criterion unless marked otherwise.
+Live mode is enforced by the readiness gate (`GET /v1/system/readiness`, dashboard banner, Risk Gate 5 on every live entry). Nothing below has to be remembered except step 1, once.
 
-1. **Refresh data and derive regime bounds — at the start of the simulation that will be judged.** `python scripts/backtest/fetch_ohlcv.py`, then `python -m scripts.backtest.regime_range`; enter `regime_cv_min`, `regime_cv_max` and `regime_data_end` in dashboard → Risk Thresholds. The change date (`regime_set_at`) is stamped automatically; if it is more recent than `gate_min_days` the readiness report shows a warning (the simulation did not run with these bounds).
-2. **Run the simulation** for `gate_min_days` with the bounds in place: ≥ 20 trades, win rate, Sharpe and max drawdown within the configured limits.
-3. **Check the readiness banner**: READY and no warnings.
-4. **Switch `TRDEX_MODE=live`** (not a readiness criterion: operator decision).
-5. **Keep the bounds fresh**: readiness fails once `regime_data_end` is older than `regime_max_age_days` (default 90). In live that blocks new entries (exits and the StopLossMonitor keep working) until step 1 is repeated.
+1. **Once: set up notifications** (dashboard → 🔔 Notifications → Send test). This is the only manual setup; everything else tells you when it needs you.
+2. *Automatic*: the regime refresher sets the bounds on its first run if the live rules pass revalidation, and renews them weekly. A failed revalidation or job error is notified.
+3. *Automatic*: the simulation runs with the gate; readiness requires `gate_min_days`, ≥ 20 trades, win rate, Sharpe, max drawdown within limits, and fresh bounds. A warning is shown while the gate has been on for less than `gate_min_days`.
+4. **When notified "Live readiness: READY"**: switch `TRDEX_MODE=live` — the one operator decision.
+5. *Automatic*: if bounds are not renewed you are warned 14 days before expiry; at expiry new live entries stop (exits and the StopLossMonitor keep working) and readiness flips to NOT READY, which is notified too.
 
 ## Observability
 

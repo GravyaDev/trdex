@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 import polars as pl
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -86,6 +86,16 @@ class OHLCVRepository:
 
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
+
+    async def time_range(
+        self, symbol: str, timeframe: str
+    ) -> tuple[datetime | None, datetime | None]:
+        """(first, last) stored candle timestamp, (None, None) if none."""
+        stmt = select(func.min(OHLCVRecord.timestamp), func.max(OHLCVRecord.timestamp)).where(
+            OHLCVRecord.symbol == symbol, OHLCVRecord.timeframe == timeframe
+        )
+        row = (await self._session.execute(stmt)).one()
+        return row[0], row[1]
 
     async def fetch_polars(
         self,

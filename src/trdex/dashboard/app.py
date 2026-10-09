@@ -1223,9 +1223,9 @@ with st.expander("Risk Thresholds"):
             ("gate_max_drawdown", "Max Drawdown Limit %", "0.20"),
             ("max_position_pct", "Max Position Size %", "0.02"),
             ("risk_per_trade_pct", "Risk per Trade % (size = risk / stop)", "0.001"),
-            ("regime_cv_min", "Regime CV min (from regime_range.py)", ""),
-            ("regime_cv_max", "Regime CV max (from regime_range.py)", ""),
-            ("regime_data_end", "Regime data end YYYY-MM-DD (from regime_range.py)", ""),
+            ("regime_cv_min", "Regime CV min (set by the weekly refresher)", ""),
+            ("regime_cv_max", "Regime CV max (set by the weekly refresher)", ""),
+            ("regime_data_end", "Regime data end YYYY-MM-DD (set by the weekly refresher)", ""),
             ("regime_max_age_days", "Regime bounds max age (days, readiness)", "90"),
             ("gate_min_days", "Gate Min Simulation Days", "20"),
         ]:
@@ -1235,8 +1235,11 @@ with st.expander("Risk Thresholds"):
                 key=f"thr_{thr_key}",
             )
         st.caption(
-            "Regime bounds last changed: "
-            f"{_thr.get('regime_set_at') or 'unknown'} (stamped automatically)"
+            "Regime gate on since: "
+            f"{_thr.get('regime_set_at') or 'never'} (stamped automatically). "
+            f"Last refresh: {_thr.get('regime_last_refresh_at') or 'never'} — "
+            f"{_thr.get('regime_last_refresh_status') or 'no run yet'}. "
+            "Manual edits of the regime fields are overwritten at the next refresh."
         )
         if st.form_submit_button("Save Thresholds"):
             pairs = {k: v for k, v in _thr_inputs.items() if v}
@@ -1349,6 +1352,17 @@ with st.expander("Scheduler"):
             value=_sch.get("ingestion_interval", "300"),
             key="cfg_ingest_interval",
         )
+        sch_regime_enabled = st.selectbox(
+            "Regime refresher (weekly revalidation + bounds)",
+            ["true", "false"],
+            index=1 if _sch.get("regime_refresh_enabled", "true").lower() in ("false", "0") else 0,
+            key="cfg_regime_enabled",
+        )
+        sch_regime_days = st.text_input(
+            "Regime refresh interval (days)",
+            value=_sch.get("regime_refresh_interval_days", "7"),
+            key="cfg_regime_days",
+        )
         if st.form_submit_button("Save Scheduler Settings"):
             pairs = {
                 "agent_scheduler_enabled": sch_enabled,
@@ -1356,6 +1370,8 @@ with st.expander("Scheduler"):
                 "agent_scheduler_active_hours": sch_hours,
                 "sl_check_interval": sch_sl_interval,
                 "ingestion_interval": sch_ingest_interval,
+                "regime_refresh_enabled": sch_regime_enabled,
+                "regime_refresh_interval_days": sch_regime_days,
             }
             result = put("/v1/settings/scheduler", {"values": {k: v for k, v in pairs.items() if v}})
             if result:

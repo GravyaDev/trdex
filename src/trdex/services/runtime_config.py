@@ -59,6 +59,8 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str | None, type]] = {
     ("thresholds", "regime_data_end"): (None, str),  # YYYY-MM-DD, from regime_range.py
     ("thresholds", "regime_max_age_days"): (None, int),  # readiness fails past this age
     ("thresholds", "regime_set_at"): (None, str),  # stamped when the regime gate turns on
+    ("thresholds", "regime_last_refresh_at"): (None, str),  # regime refresher
+    ("thresholds", "regime_last_refresh_status"): (None, str),
     # Scheduler
     ("scheduler", "agent_scheduler_enabled"): ("agent_scheduler_enabled", bool),
     ("scheduler", "agent_scheduler_interval"): ("agent_scheduler_interval", int),
@@ -66,6 +68,9 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str | None, type]] = {
     ("scheduler", "sl_check_interval"): ("sl_check_interval", float),
     ("scheduler", "ingestion_interval"): ("ingestion_interval", int),
     ("scheduler", "telegram_eval_interval"): (None, int),
+    ("scheduler", "regime_refresh_enabled"): (None, bool),
+    ("scheduler", "regime_refresh_interval_days"): (None, int),
+    ("scheduler", "regime_lookback_days"): (None, int),
     # Telegram
     ("telegram", "telegram_channels"): ("telegram_channels", str),
     ("telegram", "telegram_enabled"): (None, bool),

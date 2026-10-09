@@ -1,5 +1,9 @@
 """CV range of the development period -> bounds for the live regime gate.
 
+Manual tool: inside the app the regime refresher
+(``trdex.research.regime_refresh``) does this every week, after
+revalidating the live rules, and writes the values itself.
+
 The Risk node blocks entries whose CV (stdev/mean of the last 20 closes)
 is outside thresholds.regime_cv_min / regime_cv_max (Risk Gate 4c). In
 live mode the gate fails closed until both are set. This script measures
