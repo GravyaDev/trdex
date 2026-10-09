@@ -22,8 +22,14 @@ class LiveRuleEngine:
     - Risk gate 2: confidence below ``trdex.agents.risk.MIN_CONFIDENCE`` → HOLD.
     - Intent translation as in ``signal_to_intent``: long-only, BUY opens
       when flat, SELL closes an open long, never opens a short.
-    - Exits as in ``StopLossMonitor``: config base (EngineParams) widened by
-      the volatility floor max(base, k x CV of the last 20 closes).
+    - Exits as in ``StopLossMonitor``: ``effective_thresholds`` from
+      production code, i.e. config base (EngineParams) widened by the
+      volatility floor max(base, k x CV of the last 20 closes).
+    - Sizing as in the Risk node: risk_per_trade_pct / stop, capped at
+      EngineParams.position_size_pct (``risk_position_fraction``).
+    - Regime gate as in Risk Gate 4c: entries outside ``regime`` bounds
+      are skipped (closes are never blocked). Off by default, like an
+      unset Runtime Config in simulation.
 
     Approximations vs live (state them when reading results):
     - no sentiment input (no point-in-time news history), so the ±0.2
@@ -37,10 +43,15 @@ class LiveRuleEngine:
     name = "LiveRuleEngine"
     timeframe = "1h"
 
-    # Same multipliers as StopLossMonitor.check_now (src/trdex/risk/stop_loss.py).
-    _SL_CV_MULT = 2.5
-    _TP_CV_MULT = 5.0
-    _TRAIL_CV_MULT = 1.5
+    def __init__(self, regime=None, risk_per_trade_pct: float | None = 0.001):
+        """``regime``: ``trdex.risk.sizing.RegimeBounds`` (default: no bounds).
+        ``risk_per_trade_pct``: live default of thresholds.risk_per_trade_pct
+        (src/trdex/config.py); ``None`` = fixed notional sizing.
+        """
+        from trdex.risk.sizing import RegimeBounds
+
+        self.regime = regime if regime is not None else RegimeBounds()
+        self.risk_per_trade_pct_override = risk_per_trade_pct
 
     def generate_signal(self, bar_index, candles, indicators, position_state):
         from trdex.agents.analyst import _rule_based_signal
@@ -57,21 +68,34 @@ class LiveRuleEngine:
         if signal == "HOLD" or confidence < MIN_CONFIDENCE:
             return "HOLD"
         if signal == "BUY":
-            return "BUY" if position_state == "flat" else "HOLD"
+            if position_state != "flat":
+                return "HOLD"
+            from trdex.risk.sizing import check_regime
+
+            if check_regime(self._cv(bar_index, indicators), self.regime) is not None:
+                return "HOLD"
+            return "BUY"
         # SELL: close an open long; long-only, so never open a short.
         return "CLOSE_LONG" if position_state == "long" else "HOLD"
 
-    def exit_pcts(self, bar_index, indicators, params):
-        from statistics import mean, stdev
+    @staticmethod
+    def _cv(bar_index, indicators):
+        """CV of the closes the live Analyst would see at this decision."""
+        from trdex.risk.sizing import VOL_WINDOW, recent_cv
 
-        window = indicators["closes"][max(0, bar_index - 20):bar_index]
-        cv = 0.0
-        if len(window) >= 3 and mean(window) > 0:
-            cv = stdev(window) / mean(window)
-        return (
-            max(params.sl_pct, self._SL_CV_MULT * cv),
-            max(params.tp_pct, self._TP_CV_MULT * cv),
-            max(params.trail_pct, self._TRAIL_CV_MULT * cv),
+        return recent_cv(indicators["closes"][max(0, bar_index - VOL_WINDOW):bar_index])
+
+    def exit_pcts(self, bar_index, indicators, params):
+        from trdex.risk.stop_loss import effective_thresholds
+
+        cv = self._cv(bar_index, indicators)
+        return effective_thresholds(
+            None,
+            None,
+            cv if cv is not None else 0.0,
+            base_sl=params.sl_pct,
+            base_tp=params.tp_pct,
+            base_trail=params.trail_pct,
         )
 
 

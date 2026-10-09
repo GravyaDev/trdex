@@ -12,6 +12,8 @@ from math import sqrt
 from statistics import mean, pstdev
 from typing import Any
 
+from trdex.risk.sizing import risk_position_fraction
+
 
 @dataclass
 class BacktestResult:
@@ -160,6 +162,10 @@ class EngineParams:
     sl_pct: float = 0.02
     tp_pct: float = 0.04
     trail_pct: float = 0.015
+    # Risk-based sizing (same rule as the live Risk node): commit
+    # risk_per_trade_pct / stop of equity, capped at position_size_pct.
+    # None = fixed notional sizing at position_size_pct.
+    risk_per_trade_pct: float | None = None
 
 
 _BARS_PER_YEAR = {"1h": 8760, "1d": 365}
@@ -218,6 +224,7 @@ def run_backtest(
         sl_pct=getattr(strategy, "sl_pct_override", params.sl_pct),
         tp_pct=getattr(strategy, "tp_pct_override", params.tp_pct),
         trail_pct=getattr(strategy, "trail_pct_override", params.trail_pct),
+        risk_per_trade_pct=getattr(strategy, "risk_per_trade_pct_override", params.risk_per_trade_pct),
     )
     account = _Account(cash=effective.initial_equity)
     trades: list[dict[str, Any]] = []
@@ -408,13 +415,20 @@ def _check_exits(st, ts, o, h, l, params, account, trades) -> bool:
 
 
 def _open(st, side, o, ts, strategy, i, params, account) -> None:
-    # Size on realised equity (cash + budget locked in open positions),
-    # like the live executor sizes on portfolio equity.
-    budget = (account.cash + account.committed) * params.position_size_pct
     sl, tp, trail = params.sl_pct, params.tp_pct, params.trail_pct
     hook = getattr(strategy, "exit_pcts", None)
     if hook is not None:
         sl, tp, trail = hook(bar_index=i, indicators=st.indicators, params=params)
+    fraction = params.position_size_pct
+    if params.risk_per_trade_pct is not None:
+        fraction = risk_position_fraction(
+            risk_per_trade=params.risk_per_trade_pct,
+            stop_pct=sl,
+            max_fraction=params.position_size_pct,
+        )
+    # Size on realised equity (cash + budget locked in open positions),
+    # like the live executor sizes on portfolio equity.
+    budget = (account.cash + account.committed) * fraction
     account.cash -= budget
     account.committed += budget
     st.position_state = side
