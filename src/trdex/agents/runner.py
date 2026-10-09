@@ -163,13 +163,15 @@ class AgentRunner:
         # 5. Persist the agent run row (audit trail)
         await self._persist(state)
 
-        # 6. Persist LLM usage records (if any)
-        await self._persist_llm_usage(state)
-
-        # 7. Dispatch the fill side effect to the portfolio persistence
+        # 6. Dispatch the fill side effect to the portfolio persistence
         # layer. OPEN intents create a new position row; CLOSE intents
         # update the existing one and write a trade_fill ledger entry.
+        # Runs BEFORE usage persistence: a fill must never depend on
+        # telemetry succeeding.
         await self._dispatch_fill(state)
+
+        # 7. Persist LLM usage records (if any)
+        await self._persist_llm_usage(state)
 
         return state
 
@@ -352,7 +354,7 @@ class AgentRunner:
         try:
             for rec in records:
                 row = AgentLLMUsageRecord(
-                    run_id=rec.run_id,
+                    run_id=state.run_id,  # UUID column; records belong to this cycle
                     agent_name=rec.agent_name,
                     provider=rec.provider,
                     model_id=rec.model_id,
@@ -368,3 +370,8 @@ class AgentRunner:
             logger.info("[runner] persisted %d LLM usage records", len(records))
         except Exception:
             logger.exception("[runner] failed to persist LLM usage records")
+            # Leave the shared session usable for whatever runs next.
+            try:
+                await self._session.rollback()
+            except Exception:
+                logger.exception("[runner] rollback after usage persistence failure failed")

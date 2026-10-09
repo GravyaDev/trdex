@@ -165,7 +165,7 @@ def get_structured_chain(
     api_key: str = "",
     base_url: str = "",
 ) -> Runnable:
-    """Return a chain that produces structured output (Pydantic model).
+    """Return a chain that produces structured output (Pydantic model) plus the raw message.
 
     Wraps provider-specific differences:
     - Anthropic/OpenAI: ``llm.with_structured_output(schema)``
@@ -186,4 +186,7 @@ def get_structured_chain(
     )
     # langchain-google-genai >=2.0 supports with_structured_output natively.
     # If a future version breaks this, add a Google-specific path here.
-    return llm.with_structured_output(schema)
+    # include_raw=True returns {"raw": AIMessage, "parsed": model,
+    # "parsing_error": ...}: the raw message carries usage_metadata, which
+    # LLMCaller needs to charge the budget (a bare model carries no usage).
+    return llm.with_structured_output(schema, include_raw=True)
