@@ -55,7 +55,7 @@ trdex runs a continuous trading loop that monitors multiple symbols on Binance, 
 ## Stack
 
 - **Runtime**: Python 3.12+, asyncio
-- **AI framework**: LangGraph + LangChain Core (today: deterministic rule engine; branch `llm-agents`: real LLM agents)
+- **AI framework**: LangGraph + LangChain Core — LLM agents (Analyst, Risk annotation) with the deterministic rule engine as fallback when the LLM is disabled, over budget or failing
 - **Database**: PostgreSQL + TimescaleDB 2.17 (via asyncpg + SQLAlchemy 2.x async)
 - **Vector store**: Qdrant 1.13 (news/sentiment context for agent decisions)
 - **Embeddings**: Jina v3 (1024-dim, via httpx — no SDK dependency)
@@ -163,7 +163,7 @@ Live mode is enforced by the readiness gate (`GET /v1/system/readiness`, dashboa
 |---|---|---|
 | Phase 1 | ✅ Done | Core scaffold, data layer, market feeds |
 | Phase 2 | 🟡 Active | Production observation in simulation mode |
-| Phase 2 LLM | 📝 Design | Real LLM agents (branch `llm-agents`) |
+| Phase 2 LLM | 🟡 Active | LLM agents unified into the main app (former `llm-agents` branch); rule engine is the fallback |
 | Phase 3 | ⏳ Pending | Strategy iteration (multi-SMA, RSI, MACD) |
 | Phase 4 | ⏳ Pending | Live mode with real capital |
 
