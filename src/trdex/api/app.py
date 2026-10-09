@@ -1087,11 +1087,13 @@ def create_app() -> FastAPI:
     from trdex.api.routes.agent import router as agent_router
     from trdex.api.routes.risk import router as risk_router
     from trdex.api.routes.settings import router as settings_router
+    from trdex.api.routes.notifications import router as notifications_router
     app.include_router(portfolio_router)
     app.include_router(context_router)
     app.include_router(agent_router)
     app.include_router(risk_router)
     app.include_router(settings_router)
+    app.include_router(notifications_router)
 
     app.add_middleware(
         CORSMiddleware,

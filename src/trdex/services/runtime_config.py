@@ -38,6 +38,8 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str | None, type]] = {
     ("credentials", "telegram_phone"): ("telegram_phone", str),
     ("credentials", "twelve_data_api_key"): (None, str),
     ("credentials", "forex_api_key"): ("forex_api_key", str),
+    ("credentials", "telegram_bot_token"): (None, str),  # notifications bot
+    ("credentials", "smtp_password"): (None, str),
     # Symbols
     ("symbols", "agent_scheduler_symbols"): ("agent_scheduler_symbols", str),
     ("symbols", "ingestion_symbols"): ("ingestion_symbols", str),
@@ -74,6 +76,20 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str | None, type]] = {
     ("telegram", "reliability_win_rate_min"): (None, float),
     # Feeds
     ("feeds", "selected_feeds"): (None, str),  # No env var equivalent
+    # Notifications (trdex.notify): channel settings + route per event
+    ("notifications", "telegram_bot_chat_id"): (None, str),
+    ("notifications", "smtp_host"): (None, str),
+    ("notifications", "smtp_port"): (None, int),
+    ("notifications", "smtp_security"): (None, str),  # starttls | ssl | none
+    ("notifications", "smtp_username"): (None, str),
+    ("notifications", "email_from"): (None, str),
+    ("notifications", "email_to"): (None, str),  # comma-separated
+    ("notifications", "route_kill_switch"): (None, str),  # telegram|email|both|none
+    ("notifications", "route_readiness_changed"): (None, str),
+    ("notifications", "route_regime_refreshed"): (None, str),
+    ("notifications", "route_regime_validation_failed"): (None, str),
+    ("notifications", "route_regime_refresh_error"): (None, str),
+    ("notifications", "route_regime_expiring"): (None, str),
     # Integration toggles — each one enables/disables a component at
     # boot independently of whether its API key is set. Changing any
     # toggle requires a container restart (no hot-reload yet: feed

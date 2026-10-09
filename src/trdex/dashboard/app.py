@@ -1247,6 +1247,79 @@ with st.expander("Risk Thresholds"):
                     st.cache_data.clear()
                     st.rerun()
 
+with st.expander("🔔 Notifications"):
+    from trdex.notify.events import DEFAULT_ROUTES, LABELS, ROUTES, Event, route_key
+
+    _ntf = _all_cfg.get("notifications", {})
+    _ntf_creds = _all_cfg.get("credentials", {})
+    st.caption(
+        "Telegram: create a bot with @BotFather, send it any message, then enter its token "
+        "and your chat id. Email: any SMTP server. Each event goes to the channels you pick."
+    )
+    with st.form("settings_notifications", clear_on_submit=False):
+        ntf_token = st.text_input(
+            "Telegram bot token", value="", type="password",
+            placeholder=_ntf_creds.get("telegram_bot_token") or "(not set)", key="ntf_token",
+        )
+        ntf_chat = st.text_input(
+            "Telegram chat id", value=_ntf.get("telegram_bot_chat_id", ""), key="ntf_chat"
+        )
+        c1, c2, c3 = st.columns(3)
+        ntf_host = c1.text_input("SMTP host", value=_ntf.get("smtp_host", ""), key="ntf_host")
+        ntf_port = c2.text_input("SMTP port", value=_ntf.get("smtp_port", ""), key="ntf_port")
+        _sec_opts = ["starttls", "ssl", "none"]
+        ntf_sec = c3.selectbox(
+            "SMTP security", _sec_opts,
+            index=_sec_opts.index(_ntf.get("smtp_security") or "starttls")
+            if (_ntf.get("smtp_security") or "starttls") in _sec_opts else 0,
+            key="ntf_sec",
+        )
+        ntf_user = st.text_input("SMTP username", value=_ntf.get("smtp_username", ""), key="ntf_user")
+        ntf_pw = st.text_input(
+            "SMTP password", value="", type="password",
+            placeholder=_ntf_creds.get("smtp_password") or "(not set)", key="ntf_pw",
+        )
+        ntf_from = st.text_input("Email from", value=_ntf.get("email_from", ""), key="ntf_from")
+        ntf_to = st.text_input(
+            "Email to (comma-separated)", value=_ntf.get("email_to", ""), key="ntf_to"
+        )
+        st.markdown("**Channels per event**")
+        _ntf_routes = {}
+        for _ev in Event:
+            _cur = _ntf.get(route_key(_ev)) or DEFAULT_ROUTES[_ev]
+            _ntf_routes[route_key(_ev)] = st.selectbox(
+                LABELS[_ev], list(ROUTES),
+                index=list(ROUTES).index(_cur) if _cur in ROUTES else 0,
+                key=f"ntf_route_{_ev.value}",
+            )
+        if st.form_submit_button("Save Notifications"):
+            pairs = {
+                "telegram_bot_chat_id": ntf_chat.strip(),
+                "smtp_host": ntf_host.strip(),
+                "smtp_port": ntf_port.strip(),
+                "smtp_security": ntf_sec,
+                "smtp_username": ntf_user.strip(),
+                "email_from": ntf_from.strip(),
+                "email_to": ntf_to.strip(),
+                **_ntf_routes,
+            }
+            ok = put("/v1/settings/notifications", {"values": {k: v for k, v in pairs.items() if v}})
+            secrets = {k: v for k, v in {"telegram_bot_token": ntf_token, "smtp_password": ntf_pw}.items() if v}
+            if secrets:
+                ok = put("/v1/settings/credentials", {"values": secrets}) and ok
+            if ok:
+                st.success("Notification settings saved")
+                st.cache_data.clear()
+                st.rerun()
+    t1, t2 = st.columns(2)
+    for _col, _chan in ((t1, "telegram"), (t2, "email")):
+        if _col.button(f"Send test via {_chan}", key=f"ntf_test_{_chan}"):
+            _res = post("/v1/notifications/test", json_body={"channel": _chan}, timeout=60)
+            if _res:
+                (st.success if _res.get("result") == "sent" else st.warning)(
+                    f"{_chan}: {_res.get('result')}"
+                )
+
 with st.expander("Scheduler"):
     _sch = _all_cfg.get("scheduler", {})
     with st.form("settings_scheduler", clear_on_submit=False):
