@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts.backtest.strategies import (
+from trdex.research.strategies import (
     BaselineInverse,
     BaselineLive,
     BollingerSqueezeBreakout,
@@ -177,7 +177,7 @@ def test_bollinger_squeeze_fires_on_squeeze_release_up() -> None:
     assert sig == "BUY"
 
 
-from scripts.backtest.strategies import (
+from trdex.research.strategies import (
     PullbackInUptrend,
     TimeFilterLive,
     ZanniLikeScalp,
@@ -272,7 +272,7 @@ def test_zanni_like_scalp_uses_tight_tp_via_attribute() -> None:
     assert s.tp_pct_override == 0.008
 
 
-from scripts.backtest.strategies import SwingDailyTrend
+from trdex.research.strategies import SwingDailyTrend
 
 
 def test_swing_daily_trend_buys_on_cross_up_with_rsi_confirm() -> None:

@@ -26,7 +26,7 @@ from __future__ import annotations
 import argparse
 from datetime import UTC, datetime
 
-from scripts.backtest.research import data_end, dev_period, regime_range
+from trdex.research.stats import data_end, dev_period, regime_range
 from scripts.backtest.seasonality import _load_available
 
 from trdex.risk.readiness import REGIME_MAX_AGE_DAYS

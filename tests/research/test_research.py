@@ -6,7 +6,7 @@ from __future__ import annotations
 import random
 
 import pytest
-from scripts.backtest.research import (
+from trdex.research.stats import (
     basket_returns,
     benjamini_hochberg,
     bucket_of,

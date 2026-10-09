@@ -23,7 +23,7 @@ from __future__ import annotations
 import argparse
 from datetime import UTC, datetime
 
-from scripts.backtest.research import (
+from trdex.research.stats import (
     PRIOR_TIME_WINDOW_TESTS,
     basket_returns,
     dev_period,
