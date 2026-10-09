@@ -26,8 +26,8 @@ def _override(sl=None, tp=None, trail=None):
 
 def test_no_position_values_uses_adaptive_floor():
     sl, tp, trail = effective_thresholds(_pos(), None, cv=0.10, **BASE)
-    assert sl == pytest.approx(0.25)   # 2.5 x CV
-    assert tp == pytest.approx(0.50)   # 5 x CV
+    assert sl == pytest.approx(0.25)  # 2.5 x CV
+    assert tp == pytest.approx(0.50)  # 5 x CV
     assert trail == pytest.approx(0.15)
 
 
@@ -49,7 +49,10 @@ def test_agent_sl_cannot_go_below_operator_base():
 
 def test_symbol_override_beats_position_values():
     sl, tp, trail = effective_thresholds(
-        _pos(sl=0.08, tp=0.15), _override(sl=0.04, tp=0.06, trail=0.02), cv=0.05, **BASE,
+        _pos(sl=0.08, tp=0.15),
+        _override(sl=0.04, tp=0.06, trail=0.02),
+        cv=0.05,
+        **BASE,
     )
     assert (sl, tp, trail) == (0.04, 0.06, 0.02)
 
