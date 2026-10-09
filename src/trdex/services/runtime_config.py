@@ -58,7 +58,7 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str | None, type]] = {
     ("thresholds", "regime_cv_max"): (None, float),
     ("thresholds", "regime_data_end"): (None, str),  # YYYY-MM-DD, from regime_range.py
     ("thresholds", "regime_max_age_days"): (None, int),  # readiness fails past this age
-    ("thresholds", "regime_set_at"): (None, str),  # stamped by the service on change
+    ("thresholds", "regime_set_at"): (None, str),  # stamped when the regime gate turns on
     # Scheduler
     ("scheduler", "agent_scheduler_enabled"): ("agent_scheduler_enabled", bool),
     ("scheduler", "agent_scheduler_interval"): ("agent_scheduler_interval", int),
@@ -113,10 +113,10 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str | None, type]] = {
 
 CREDENTIAL_KEYS = {k for (cat, k), _ in _KEY_REGISTRY.items() if cat == "credentials"}
 
-# Changing either regime bound stamps thresholds.regime_set_at, so the
-# readiness gate can tell whether the simulation it judges ran with the
-# current bounds. Stamped here because every write path goes through
-# put()/put_category().
+# Switching the regime gate on (both bounds set) stamps
+# thresholds.regime_set_at, so the readiness gate can tell whether the
+# simulation it judges ran with the gate. Stamped here because every
+# write path goes through put()/put_category().
 _REGIME_BOUND_KEYS = ("regime_cv_min", "regime_cv_max")
 
 
@@ -343,7 +343,7 @@ class RuntimeConfigService:
         Cache holds plaintext. DB holds ciphertext for credentials.
         Listeners receive plaintext (they mirror user-facing values).
         """
-        if self._regime_bounds_changed(category, {key: value}):
+        if self._regime_activation_stamp(category, {key: value}) is not None:
             await self.put_category(category, {key: value})
             return
         stored = (
@@ -360,8 +360,9 @@ class RuntimeConfigService:
 
     async def put_category(self, category: str, pairs: dict[str, str]) -> None:
         """Bulk upsert. Same encryption rules as `put()`."""
-        if self._regime_bounds_changed(category, pairs):
-            pairs = {**pairs, "regime_set_at": datetime.now(tz=UTC).isoformat(timespec="seconds")}
+        stamp = self._regime_activation_stamp(category, pairs)
+        if stamp is not None:
+            pairs = {**pairs, "regime_set_at": stamp}
         if category == "credentials":
             stored_pairs = {
                 k: (credentials_crypto.encrypt(v) if v else v)
@@ -377,15 +378,26 @@ class RuntimeConfigService:
             self._cache.setdefault(category, {})[key] = value
             self._fire_listeners(category, key, value)
 
-    def _regime_bounds_changed(self, category: str, pairs: dict[str, str]) -> bool:
-        """True if ``pairs`` changes the effective value of a regime bound."""
-        if category != "thresholds":
-            return False
+    def _regime_activation_stamp(self, category: str, pairs: dict[str, str]) -> str | None:
+        """New ``regime_set_at`` if ``pairs`` switches the regime gate on or off.
+
+        The gate is "on" when both bounds are set (> 0). Off -> on stamps
+        now, on -> off clears the stamp, and value changes while on keep
+        it: the regime refresher moves the bounds every week, and the
+        readiness question is whether the simulation ran *with the gate*,
+        not with these exact values. None = no change to write.
+        """
+        if category != "thresholds" or not any(k in pairs for k in _REGIME_BOUND_KEYS):
+            return None
         current = self._cache.get("thresholds", {})
-        return any(
-            k in pairs and _bound_value(pairs[k]) != _bound_value(current.get(k))
-            for k in _REGIME_BOUND_KEYS
-        )
+        merged = {k: pairs.get(k, current.get(k)) for k in _REGIME_BOUND_KEYS}
+        was_on = all(_bound_value(current.get(k)) is not None for k in _REGIME_BOUND_KEYS)
+        now_on = all(_bound_value(merged[k]) is not None for k in _REGIME_BOUND_KEYS)
+        if now_on and not was_on:
+            return datetime.now(tz=UTC).isoformat(timespec="seconds")
+        if was_on and not now_on:
+            return ""
+        return None
 
     # ── hot-reload listeners ─────────────────────────────────────────────
 
