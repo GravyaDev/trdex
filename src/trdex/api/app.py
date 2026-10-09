@@ -40,6 +40,7 @@ _telegram_task: asyncio.Task[None] | None = None
 _telegram_eval_task: asyncio.Task[None] | None = None
 _scheduler: IngestionScheduler | None = None
 _agent_task: asyncio.Task[None] | None = None
+_regime_watchdog_task: asyncio.Task[None] | None = None
 
 
 async def _ingest_signal_to_qdrant(signal) -> None:
@@ -341,7 +342,7 @@ async def _telegram_background(
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    global _telegram_task, _telegram_eval_task, _scheduler, _agent_task
+    global _telegram_task, _telegram_eval_task, _scheduler, _agent_task, _regime_watchdog_task
 
     # --- Apply DB migrations (idempotent, self-healing on fresh deploys) ---
     # Must run before anything else touches the database. The migration
@@ -540,6 +541,41 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logger.info(
         "[tg-eval] scheduled — interval=%ds", _tg_eval_interval,
     )
+
+    # Always-on regime watchdog: refreshes and revalidates the volatility-
+    # regime bounds weekly, warns before they expire, reports readiness
+    # flips (trdex.research.regime_refresh). No human step required.
+    from trdex.notify import notify as _notify
+    from trdex.research.regime_refresh import RegimeWatchdog, watchdog_loop
+    from trdex.services.runtime_config import get_config_service as _get_cfg
+
+    from trdex.market.models import OHLCV as _OHLCV
+
+    async def _fetch_1h_page(symbol: str, since_ms: int) -> list[_OHLCV]:
+        # Binance only: other feeds ignore ``since`` or return other
+        # granularities under "1h" (CoinGecko). No silent fallback.
+        if "binance" not in feed_manager.feeds:
+            raise RuntimeError(
+                "regime refresher needs the Binance feed "
+                "(integrations.binance_feed_enabled)"
+            )
+        return await feed_manager.get_ohlcv(
+            symbol, timeframe="1h", limit=1000, since=since_ms, source="binance"
+        )
+
+    _regime_watchdog_task = asyncio.create_task(
+        watchdog_loop(
+            RegimeWatchdog(
+                session_factory=session_factory,
+                fetch_page=_fetch_1h_page,
+                cfg_provider=_get_cfg,
+                settings_provider=lambda: settings,
+                notify=_notify,
+            )
+        ),
+        name="regime-watchdog",
+    )
+    logger.info("[regime-watchdog] scheduled — hourly tick, weekly refresh")
 
     # --- News ingestion scheduler ---
     # Read API keys and symbols from RuntimeConfig (DB-backed, dashboard-editable)
@@ -1018,6 +1054,9 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     if _telegram_eval_task:
         _telegram_eval_task.cancel()
         await asyncio.gather(_telegram_eval_task, return_exceptions=True)
+    if _regime_watchdog_task:
+        _regime_watchdog_task.cancel()
+        await asyncio.gather(_regime_watchdog_task, return_exceptions=True)
     if monitor:
         await monitor.stop()
     await feed_manager.close_all()
@@ -1087,11 +1126,13 @@ def create_app() -> FastAPI:
     from trdex.api.routes.agent import router as agent_router
     from trdex.api.routes.risk import router as risk_router
     from trdex.api.routes.settings import router as settings_router
+    from trdex.api.routes.notifications import router as notifications_router
     app.include_router(portfolio_router)
     app.include_router(context_router)
     app.include_router(agent_router)
     app.include_router(risk_router)
     app.include_router(settings_router)
+    app.include_router(notifications_router)
 
     app.add_middleware(
         CORSMiddleware,
@@ -1161,6 +1202,9 @@ def create_app() -> FastAPI:
                     _telegram_eval_task is not None
                     and not _telegram_eval_task.done()
                 ),
+            },
+            "regime_watchdog": {
+                "running": _regime_watchdog_task is not None and not _regime_watchdog_task.done(),
             },
         }
 

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+import re
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,14 +14,36 @@ from trdex.agents.intent import Intent
 from trdex.agents.state import AgentState, MarketSnapshot, PortfolioContext
 from trdex.market.manager import PriceFeedManager
 from trdex.storage.agent_run_models import AgentRunRecord
-from trdex.storage.ohlcv_repo import OHLCVRepository
 from trdex.storage.balance_repo import BalanceRepository
+from trdex.storage.ohlcv_repo import OHLCVRepository
 from trdex.storage.portfolio_repo import PortfolioRepository
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEFRAME = "1h"
 _DEFAULT_CANDLES = 100
+_TF_UNITS = {"m": timedelta(minutes=1), "h": timedelta(hours=1), "d": timedelta(days=1)}
+
+
+def _timeframe_delta(timeframe: str) -> timedelta | None:
+    m = re.fullmatch(r"(\d+)([mhd])", timeframe)
+    return int(m.group(1)) * _TF_UNITS[m.group(2)] if m else None
+
+
+def _db_candles_fresh(records: list[Any], timeframe: str, now: datetime) -> bool:
+    """DB candles are usable only if the newest one is at most 2 bars old.
+
+    The table also holds the regime refresher's history (forward-filled
+    weekly), which must not replace the live feed for the agent's
+    decisions: a stale tail would mean analysing last week's market.
+    """
+    delta = _timeframe_delta(timeframe)
+    if not records or delta is None:
+        return False
+    last: datetime = records[-1].timestamp
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=UTC)
+    return bool(now - last <= 2 * delta)
 
 
 class AgentRunner:
@@ -116,8 +140,8 @@ class AgentRunner:
         # 2. Fetch OHLCV — prefer DB, fallback to live feed
         candles_raw: list[tuple[datetime, float, float, float, float, float]] = []
         try:
-            records = await self._ohlcv_repo.fetch(symbol, timeframe, limit=candle_limit)
-            if records:
+            records = await self._ohlcv_repo.fetch_latest(symbol, timeframe, limit=candle_limit)
+            if _db_candles_fresh(records, timeframe, datetime.now(tz=UTC)):
                 candles_raw = [
                     (r.timestamp, float(r.open), float(r.high), float(r.low),
                      float(r.close), float(r.volume))
@@ -142,7 +166,7 @@ class AgentRunner:
         snapshot = MarketSnapshot(
             symbol=symbol,
             price=current_price,
-            timestamp=datetime.now(tz=timezone.utc),
+            timestamp=datetime.now(tz=UTC),
             candles=candles_raw,
         )
 
@@ -309,7 +333,7 @@ class AgentRunner:
         3-row dataset. See brainstorm-2026-04-07-intent-enum.md.
         """
         try:
-            ran_at = (state.completed_at or datetime.now(tz=timezone.utc)).replace(tzinfo=None)
+            ran_at = (state.completed_at or datetime.now(tz=UTC)).replace(tzinfo=None)
             intent_value = state.analysis.intent.value
             record = AgentRunRecord(
                 run_id=state.run_id,

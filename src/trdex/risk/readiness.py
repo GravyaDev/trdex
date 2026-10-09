@@ -20,11 +20,14 @@ finance convention. With <2 days of activity the Sharpe is left as
 Volatility-regime bounds
 ------------------------
 Live entries are gated on thresholds.regime_cv_min / regime_cv_max
-(Risk Gate 4c), produced by ``scripts/backtest/regime_range.py``. The
-gate is not ready until those bounds are set, coherent, and derived from
-data ending no more than ``regime_max_age_days`` ago (regime_data_end).
-If they changed within the last ``gate_min_days`` the report carries a
-warning: the simulation being judged did not run with them.
+(Risk Gate 4c). The in-app regime refresher (``trdex.research.
+regime_refresh``) sets them every week once the live rules pass
+revalidation; ``scripts/backtest/regime_range.py`` is the manual
+fallback. The gate is not ready until the bounds are set, coherent, and
+derived from data ending no more than ``regime_max_age_days`` ago
+(regime_data_end). If the regime gate has been on for less than
+``gate_min_days`` the report carries a warning: most of the simulation
+being judged ran without it.
 
 Fail-closed: any data gap or computation error returns ``ready=False``.
 """
@@ -50,8 +53,9 @@ TRADING_DAYS_PER_YEAR = 252      # Standard equity-market annualisation factor
 REGIME_MAX_AGE_DAYS = 90         # default for thresholds.regime_max_age_days
 
 _REGIME_HOWTO = (
-    "run `python -m scripts.backtest.regime_range` and enter regime_cv_min, "
-    "regime_cv_max and regime_data_end in Risk Thresholds"
+    "the weekly regime refresher sets them once the live rules pass revalidation "
+    "(see its status in the dashboard); manual fallback: "
+    "`python -m scripts.backtest.regime_range`"
 )
 
 
@@ -195,8 +199,8 @@ def regime_criteria(
 
     Failures: bounds unset, not numbers, min >= max; regime_data_end
     missing, malformed, in the future, or older than ``max_age_days``.
-    Warnings: regime_set_at unknown, or more recent than ``min_days``
-    (the simulation being judged did not run with the current bounds).
+    Warnings: regime_set_at (when the gate turned on) unknown, or more
+    recent than ``min_days`` (the judged simulation mostly ran without it).
     """
     failures: list[str] = []
     warnings: list[str] = []
@@ -227,22 +231,22 @@ def regime_criteria(
             elif age > max_age:
                 failures.append(
                     f"Regime bounds: derived from data ending {end.date()} "
-                    f"({age} days ago > {max_age}) — refresh the OHLCV cache and re-run "
-                    "scripts/backtest/regime_range.py"
+                    f"({age} days ago > {max_age}) — the regime refresher has not renewed "
+                    "them: check its status (or re-run scripts/backtest/regime_range.py)"
                 )
 
     changed = _parse_timestamp(set_at)
     if changed is None:
         warnings.append(
-            "Regime bounds: change date unknown — cannot verify that the "
-            "simulation ran with them"
+            "Regime gate: activation date unknown — cannot verify that the "
+            "simulation ran with it"
         )
     else:
         days_with = (now - changed).days
         if days_with < min_days:
             warnings.append(
-                f"Regime bounds changed {days_with} days ago (< {min_days} gate days): "
-                "the simulation being judged did not run with the current bounds"
+                f"Regime gate on for {days_with} days (< {min_days} gate days): "
+                "most of the simulation being judged ran without it"
             )
     return failures, warnings
 

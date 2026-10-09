@@ -151,7 +151,7 @@ if readiness:
             f" to {criteria.get('regime_cv_max') or 'unset'}, "
             f"data end {criteria.get('regime_data_end') or 'unset'} "
             f"(max age {criteria.get('regime_max_age_days', '?')} days), "
-            f"changed {criteria.get('regime_set_at') or 'unknown'}"
+            f"gate on since {criteria.get('regime_set_at') or 'never'}"
         )
 
 # ── Portfolio snapshot ──────────────────────────────────────────��─────────────
@@ -1223,9 +1223,6 @@ with st.expander("Risk Thresholds"):
             ("gate_max_drawdown", "Max Drawdown Limit %", "0.20"),
             ("max_position_pct", "Max Position Size %", "0.02"),
             ("risk_per_trade_pct", "Risk per Trade % (size = risk / stop)", "0.001"),
-            ("regime_cv_min", "Regime CV min (from regime_range.py)", ""),
-            ("regime_cv_max", "Regime CV max (from regime_range.py)", ""),
-            ("regime_data_end", "Regime data end YYYY-MM-DD (from regime_range.py)", ""),
             ("regime_max_age_days", "Regime bounds max age (days, readiness)", "90"),
             ("gate_min_days", "Gate Min Simulation Days", "20"),
         ]:
@@ -1235,8 +1232,12 @@ with st.expander("Risk Thresholds"):
                 key=f"thr_{thr_key}",
             )
         st.caption(
-            "Regime bounds last changed: "
-            f"{_thr.get('regime_set_at') or 'unknown'} (stamped automatically)"
+            "Regime bounds (read-only, written by the weekly refresher after revalidation): "
+            f"CV {_thr.get('regime_cv_min') or 'unset'} to {_thr.get('regime_cv_max') or 'unset'}, "
+            f"data to {_thr.get('regime_data_end') or 'unset'}; gate on since "
+            f"{_thr.get('regime_set_at') or 'never'}. "
+            f"Last refresh: {_thr.get('regime_last_refresh_at') or 'never'} — "
+            f"{_thr.get('regime_last_refresh_status') or 'no run yet'}."
         )
         if st.form_submit_button("Save Thresholds"):
             pairs = {k: v for k, v in _thr_inputs.items() if v}
@@ -1246,6 +1247,79 @@ with st.expander("Risk Thresholds"):
                     st.success("Thresholds updated — active immediately")
                     st.cache_data.clear()
                     st.rerun()
+
+with st.expander("🔔 Notifications"):
+    from trdex.notify.events import DEFAULT_ROUTES, LABELS, ROUTES, Event, route_key
+
+    _ntf = _all_cfg.get("notifications", {})
+    _ntf_creds = _all_cfg.get("credentials", {})
+    st.caption(
+        "Telegram: create a bot with @BotFather, send it any message, then enter its token "
+        "and your chat id. Email: any SMTP server. Each event goes to the channels you pick."
+    )
+    with st.form("settings_notifications", clear_on_submit=False):
+        ntf_token = st.text_input(
+            "Telegram bot token", value="", type="password",
+            placeholder=_ntf_creds.get("telegram_bot_token") or "(not set)", key="ntf_token",
+        )
+        ntf_chat = st.text_input(
+            "Telegram chat id", value=_ntf.get("telegram_bot_chat_id", ""), key="ntf_chat"
+        )
+        c1, c2, c3 = st.columns(3)
+        ntf_host = c1.text_input("SMTP host", value=_ntf.get("smtp_host", ""), key="ntf_host")
+        ntf_port = c2.text_input("SMTP port", value=_ntf.get("smtp_port", ""), key="ntf_port")
+        _sec_opts = ["starttls", "ssl", "none"]
+        ntf_sec = c3.selectbox(
+            "SMTP security", _sec_opts,
+            index=_sec_opts.index(_ntf.get("smtp_security") or "starttls")
+            if (_ntf.get("smtp_security") or "starttls") in _sec_opts else 0,
+            key="ntf_sec",
+        )
+        ntf_user = st.text_input("SMTP username", value=_ntf.get("smtp_username", ""), key="ntf_user")
+        ntf_pw = st.text_input(
+            "SMTP password", value="", type="password",
+            placeholder=_ntf_creds.get("smtp_password") or "(not set)", key="ntf_pw",
+        )
+        ntf_from = st.text_input("Email from", value=_ntf.get("email_from", ""), key="ntf_from")
+        ntf_to = st.text_input(
+            "Email to (comma-separated)", value=_ntf.get("email_to", ""), key="ntf_to"
+        )
+        st.markdown("**Channels per event**")
+        _ntf_routes = {}
+        for _ev in Event:
+            _cur = _ntf.get(route_key(_ev)) or DEFAULT_ROUTES[_ev]
+            _ntf_routes[route_key(_ev)] = st.selectbox(
+                LABELS[_ev], list(ROUTES),
+                index=list(ROUTES).index(_cur) if _cur in ROUTES else 0,
+                key=f"ntf_route_{_ev.value}",
+            )
+        if st.form_submit_button("Save Notifications"):
+            pairs = {
+                "telegram_bot_chat_id": ntf_chat.strip(),
+                "smtp_host": ntf_host.strip(),
+                "smtp_port": ntf_port.strip(),
+                "smtp_security": ntf_sec,
+                "smtp_username": ntf_user.strip(),
+                "email_from": ntf_from.strip(),
+                "email_to": ntf_to.strip(),
+                **_ntf_routes,
+            }
+            ok = put("/v1/settings/notifications", {"values": {k: v for k, v in pairs.items() if v}})
+            secrets = {k: v for k, v in {"telegram_bot_token": ntf_token, "smtp_password": ntf_pw}.items() if v}
+            if secrets:
+                ok = put("/v1/settings/credentials", {"values": secrets}) and ok
+            if ok:
+                st.success("Notification settings saved")
+                st.cache_data.clear()
+                st.rerun()
+    t1, t2 = st.columns(2)
+    for _col, _chan in ((t1, "telegram"), (t2, "email")):
+        if _col.button(f"Send test via {_chan}", key=f"ntf_test_{_chan}"):
+            _res = post("/v1/notifications/test", json_body={"channel": _chan}, timeout=60)
+            if _res:
+                (st.success if _res.get("result") == "sent" else st.warning)(
+                    f"{_chan}: {_res.get('result')}"
+                )
 
 with st.expander("Scheduler"):
     _sch = _all_cfg.get("scheduler", {})
@@ -1276,6 +1350,17 @@ with st.expander("Scheduler"):
             value=_sch.get("ingestion_interval", "300"),
             key="cfg_ingest_interval",
         )
+        sch_regime_enabled = st.selectbox(
+            "Regime refresher (weekly revalidation + bounds)",
+            ["true", "false"],
+            index=1 if _sch.get("regime_refresh_enabled", "true").lower() in ("false", "0") else 0,
+            key="cfg_regime_enabled",
+        )
+        sch_regime_days = st.text_input(
+            "Regime refresh interval (days)",
+            value=_sch.get("regime_refresh_interval_days", "7"),
+            key="cfg_regime_days",
+        )
         if st.form_submit_button("Save Scheduler Settings"):
             pairs = {
                 "agent_scheduler_enabled": sch_enabled,
@@ -1283,6 +1368,8 @@ with st.expander("Scheduler"):
                 "agent_scheduler_active_hours": sch_hours,
                 "sl_check_interval": sch_sl_interval,
                 "ingestion_interval": sch_ingest_interval,
+                "regime_refresh_enabled": sch_regime_enabled,
+                "regime_refresh_interval_days": sch_regime_days,
             }
             result = put("/v1/settings/scheduler", {"values": {k: v for k, v in pairs.items() if v}})
             if result:

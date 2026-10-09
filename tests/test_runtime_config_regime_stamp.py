@@ -1,9 +1,10 @@
-"""RuntimeConfigService stamps thresholds.regime_set_at when a regime bound changes.
+"""RuntimeConfigService stamps thresholds.regime_set_at when the regime gate turns on.
 
 The readiness gate uses the stamp to tell whether the simulation it
-judges ran with the current bounds, so it must move on every effective
-change (from any write path) and stay put when the dashboard re-saves
-the same values.
+judges ran with the regime gate. The gate is on when both bounds are
+set; the stamp moves when it switches on (from any write path), is
+cleared when it switches off, and stays put when the bounds only move
+(the weekly regime refresher does that) or are re-saved unchanged.
 """
 
 from __future__ import annotations
@@ -45,8 +46,11 @@ def svc(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_changing_a_bound_stamps_the_change_in_the_same_write(svc):
-    await svc.put_category("thresholds", {"regime_cv_max": "0.05", "sl_position_pct": "0.02"})
+async def test_switching_the_gate_on_stamps_in_the_same_write(svc):
+    svc._cache = {"thresholds": {}}
+    await svc.put_category("thresholds", {"regime_cv_min": "0.002", "sl_position_pct": "0.02"})
+    assert "regime_set_at" not in _FakeRepo.writes[-1][1]  # one bound: still off
+    await svc.put_category("thresholds", {"regime_cv_max": "0.05"})
     category, pairs = _FakeRepo.writes[-1]
     assert category == "thresholds"
     stamp = datetime.fromisoformat(pairs["regime_set_at"])
@@ -55,20 +59,22 @@ async def test_changing_a_bound_stamps_the_change_in_the_same_write(svc):
 
 
 @pytest.mark.asyncio
-async def test_resaving_the_same_values_does_not_move_the_stamp(svc):
-    await svc.put_category(
-        "thresholds",
-        {"regime_cv_min": "0.0020", "regime_cv_max": "0.045", "sl_position_pct": "0.03"},
-    )
+async def test_moving_or_resaving_bounds_while_on_keeps_the_stamp(svc):
+    await svc.put_category("thresholds", {"regime_cv_min": "0.0020", "regime_cv_max": "0.045"})
     assert "regime_set_at" not in _FakeRepo.writes[-1][1]
-    assert svc.get("thresholds", "regime_set_at") == ""
+    await svc.put_category("thresholds", {"regime_cv_min": "0.003", "regime_cv_max": "0.05"})
+    assert "regime_set_at" not in _FakeRepo.writes[-1][1]
+    await svc.put("thresholds", "regime_cv_min", "0.001")
+    assert "regime_set_at" not in _FakeRepo.writes[-1][1]
+    assert svc.get("thresholds", "regime_cv_min") == "0.001"
 
 
 @pytest.mark.asyncio
-async def test_single_key_put_also_stamps(svc):
-    await svc.put("thresholds", "regime_cv_min", "0.001")
-    assert "regime_set_at" in _FakeRepo.writes[-1][1]
-    assert svc.get("thresholds", "regime_cv_min") == "0.001"
+async def test_switching_the_gate_off_clears_the_stamp_via_put(svc):
+    svc._cache["thresholds"]["regime_set_at"] = "2026-09-01T00:00:00+00:00"
+    await svc.put("thresholds", "regime_cv_max", "0")
+    assert _FakeRepo.writes[-1][1]["regime_set_at"] == ""
+    assert svc.get("thresholds", "regime_set_at") == ""
 
 
 @pytest.mark.asyncio

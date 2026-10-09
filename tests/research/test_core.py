@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts.backtest.core import (
+from trdex.research.engine import (
     BacktestResult,
     aggregate_1h_to_1d,
     max_drawdown,
@@ -95,7 +95,7 @@ def test_split_trades_empty_returns_empty() -> None:
     assert split_trades_by_quarter([]) == {}
 
 
-from scripts.backtest.core import EngineParams, Strategy, run_backtest
+from trdex.research.engine import EngineParams, Strategy, run_backtest
 
 
 class NoopStrategy:
@@ -327,7 +327,7 @@ def test_flip_long_to_short_records_two_trades() -> None:
 
 def test_precompute_indicators_includes_sma20_4h() -> None:
     # 4h SMA(20) needs 80 bars of 1h data. Use 150 bars to have valid tail.
-    from scripts.backtest.core import _precompute_indicators
+    from trdex.research.engine import _precompute_indicators
     bars = [[i * 3_600_000, 100.0, 100.1, 99.9, 100.0 + i * 0.01, 10.0] for i in range(150)]
     ind = _precompute_indicators(bars)
     assert ind["sma20_4h"] is not None

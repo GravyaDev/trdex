@@ -1,11 +1,16 @@
 """CV range of the development period -> bounds for the live regime gate.
 
+Manual tool: inside the app the regime refresher
+(``trdex.research.regime_refresh``) does this every week, after
+revalidating the live rules, and writes the values itself.
+
 The Risk node blocks entries whose CV (stdev/mean of the last 20 closes)
 is outside thresholds.regime_cv_min / regime_cv_max (Risk Gate 4c). In
 live mode the gate fails closed until both are set. This script measures
 the CV distribution on the development period of the cached data (the
 sealed holdout is excluded) and prints the values to enter in Runtime
-Config (dashboard -> Risk Thresholds), including regime_data_end: the
+Config (PUT /v1/settings/thresholds; the dashboard shows them read-only),
+including regime_data_end: the
 readiness gate (sim -> live) fails until all three are set, and again
 once regime_data_end is older than regime_max_age_days (default 90).
 
@@ -26,9 +31,9 @@ from __future__ import annotations
 import argparse
 from datetime import UTC, datetime
 
-from scripts.backtest.research import data_end, dev_period, regime_range
 from scripts.backtest.seasonality import _load_available
 
+from trdex.research.stats import data_end, dev_period, regime_range
 from trdex.risk.readiness import REGIME_MAX_AGE_DAYS
 
 
@@ -57,7 +62,7 @@ def main() -> None:
         lo, _, hi, _ = ranges["*"]
         end = datetime.fromtimestamp(data_end(data) / 1000, tz=UTC).date()
         age = (datetime.now(tz=UTC).date() - end).days
-        print("\nRuntime Config (dashboard -> Risk Thresholds):")
+        print("\nRuntime Config thresholds (PUT /v1/settings/thresholds):")
         print(f"  regime_cv_min   = {lo:.5f}")
         print(f"  regime_cv_max   = {hi:.5f}")
         print(f"  regime_data_end = {end.isoformat()}")

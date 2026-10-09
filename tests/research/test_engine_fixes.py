@@ -7,15 +7,15 @@ different) than what the strategy would have done.
 from __future__ import annotations
 
 import pytest
-from scripts.backtest.core import (
+
+from trdex.agents.analyst import _rule_based_signal
+from trdex.research.engine import (
     EngineParams,
     run_backtest,
     sharpe_ratio,
     split_trades_by_quarter,
 )
-from scripts.backtest.strategies import LiveRuleEngine
-
-from trdex.agents.analyst import _rule_based_signal
+from trdex.research.strategies import LiveRuleEngine
 
 H = 3_600_000
 DAY = 24 * H

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from scripts.backtest.indicators import (
+from trdex.research.indicators import (
     bollinger_bands,
     is_squeezing,
     sma,
