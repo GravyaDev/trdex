@@ -18,7 +18,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any
 
 from langchain_core.messages import BaseMessage
@@ -67,7 +67,7 @@ _DEFAULT_COST = (1.00, 5.00)  # fallback for unknown models
 
 
 def _utc_day() -> str:
-    return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
+    return datetime.now(tz=UTC).strftime("%Y-%m-%d")
 
 
 @dataclass
