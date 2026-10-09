@@ -250,7 +250,7 @@ class Recorder:
 @pytest.mark.asyncio
 async def test_both_route_delivers_on_each_configured_channel(monkeypatch):
     chans = {"telegram": Recorder("telegram"), "email": Recorder("email")}
-    monkeypatch.setattr("trdex.notify.service.build_channel", lambda cfg, n: chans[n])
+    monkeypatch.setattr("trdex.notify.service.build_channel", lambda cfg, n, **k: chans[n])
     out = await Notifier(lambda: Cfg()).notify(Event.KILL_SWITCH, "s", "b")
     assert out == {"telegram": "sent", "email": "sent"}
     assert chans["telegram"].sent == chans["email"].sent == [("s", "b")]
@@ -259,7 +259,7 @@ async def test_both_route_delivers_on_each_configured_channel(monkeypatch):
 @pytest.mark.asyncio
 async def test_one_channel_down_does_not_stop_the_other_nor_raise(monkeypatch):
     chans = {"telegram": Recorder("telegram", fail=True), "email": Recorder("email")}
-    monkeypatch.setattr("trdex.notify.service.build_channel", lambda cfg, n: chans[n])
+    monkeypatch.setattr("trdex.notify.service.build_channel", lambda cfg, n, **k: chans[n])
     out = await Notifier(lambda: Cfg()).notify(Event.READINESS_CHANGED, "s", "b")
     assert out["telegram"].startswith("error") and out["email"] == "sent"
 
@@ -328,3 +328,10 @@ async def test_long_retry_after_is_honoured_up_to_five_minutes():
     ch, sleeps = _telegram(lambda req: next(calls))
     await ch.send("s", "b")
     assert sleeps == [90.0, 300.0]
+
+
+def test_test_button_sends_once_without_waiting():
+    tg = build_channel(Cfg(**TG), "telegram", quick=True)
+    mail = build_channel(Cfg(**MAIL), "email", quick=True)
+    assert tg._max_attempts == 1 and mail._max_attempts == 1
+    assert build_channel(Cfg(**TG), "telegram")._max_attempts == 3

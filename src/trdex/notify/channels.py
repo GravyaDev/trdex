@@ -76,6 +76,7 @@ class TelegramBotChannel:
         max_attempts: int = 3,
         base_delay: float = 1.0,
         max_delay: float = 30.0,
+        max_retry_after: float = MAX_RETRY_AFTER,
         client_factory: Callable[..., httpx.AsyncClient] = httpx.AsyncClient,
         sleep: Callable[[float], Awaitable[Any]] = asyncio.sleep,
     ) -> None:
@@ -86,6 +87,7 @@ class TelegramBotChannel:
         self._max_attempts = max_attempts
         self._base_delay = base_delay
         self._max_delay = max_delay
+        self._max_retry_after = max_retry_after
         self._client_factory = client_factory
         self._sleep = sleep
 
@@ -112,7 +114,7 @@ class TelegramBotChannel:
                 if resp.status_code == 429:
                     retry_after = (data.get("parameters") or {}).get("retry_after")
                     if isinstance(retry_after, (int, float)) and attempt < self._max_attempts - 1:
-                        await self._sleep(min(float(retry_after), MAX_RETRY_AFTER))
+                        await self._sleep(min(float(retry_after), self._max_retry_after))
                         continue
                 elif 400 <= resp.status_code < 500:
                     raise NotificationError(_redact(f"telegram: {last}", self._token))

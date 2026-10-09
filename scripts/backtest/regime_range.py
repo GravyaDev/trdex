@@ -9,7 +9,8 @@ is outside thresholds.regime_cv_min / regime_cv_max (Risk Gate 4c). In
 live mode the gate fails closed until both are set. This script measures
 the CV distribution on the development period of the cached data (the
 sealed holdout is excluded) and prints the values to enter in Runtime
-Config (dashboard -> Risk Thresholds), including regime_data_end: the
+Config (PUT /v1/settings/thresholds; the dashboard shows them read-only),
+including regime_data_end: the
 readiness gate (sim -> live) fails until all three are set, and again
 once regime_data_end is older than regime_max_age_days (default 90).
 
@@ -61,7 +62,7 @@ def main() -> None:
         lo, _, hi, _ = ranges["*"]
         end = datetime.fromtimestamp(data_end(data) / 1000, tz=UTC).date()
         age = (datetime.now(tz=UTC).date() - end).days
-        print("\nRuntime Config (dashboard -> Risk Thresholds):")
+        print("\nRuntime Config thresholds (PUT /v1/settings/thresholds):")
         print(f"  regime_cv_min   = {lo:.5f}")
         print(f"  regime_cv_max   = {hi:.5f}")
         print(f"  regime_data_end = {end.isoformat()}")

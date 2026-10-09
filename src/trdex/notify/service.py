@@ -33,14 +33,23 @@ def _default_cfg() -> Any:
     return get_config_service()
 
 
-def build_channel(cfg: Any, name: str) -> Channel | None:
-    """The configured channel ``name``, or None if its settings are incomplete."""
+def build_channel(cfg: Any, name: str, *, quick: bool = False) -> Channel | None:
+    """The configured channel ``name``, or None if its settings are incomplete.
+
+    ``quick``: one attempt, no waiting (the dashboard test button).
+    """
     if cfg is None:
         return None
     if name == "telegram":
         token = cfg.get("credentials", "telegram_bot_token", "")
         chat_id = cfg.get("notifications", "telegram_bot_chat_id", "")
-        return TelegramBotChannel(token, chat_id) if token and chat_id else None
+        if not (token and chat_id):
+            return None
+        return (
+            TelegramBotChannel(token, chat_id, max_attempts=1)
+            if quick
+            else TelegramBotChannel(token, chat_id)
+        )
     if name == "email":
         host = cfg.get("notifications", "smtp_host", "")
         sender = cfg.get("notifications", "email_from", "")
@@ -61,6 +70,7 @@ def build_channel(cfg: Any, name: str) -> Channel | None:
                 username=cfg.get("notifications", "smtp_username", ""),
                 password=cfg.get("credentials", "smtp_password", ""),
                 security=security,
+                max_attempts=1 if quick else 2,
             )
         except ValueError as exc:
             logger.error("[notify] email settings invalid: %s", exc)
@@ -100,10 +110,12 @@ class Notifier:
             )
         return outcome
 
-    async def send_via(self, name: str, subject: str, body: str, *, cfg: Any = None) -> str:
+    async def send_via(
+        self, name: str, subject: str, body: str, *, cfg: Any = None, quick: bool = False
+    ) -> str:
         cfg = cfg if cfg is not None else self._cfg_provider()
         try:
-            channel = build_channel(cfg, name)
+            channel = build_channel(cfg, name, quick=quick)
         except ValueError as exc:
             return f"error: {exc}"
         if channel is None:

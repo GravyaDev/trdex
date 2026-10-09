@@ -671,3 +671,37 @@ async def test_cancelling_the_subprocess_terminates_the_worker():
 
     await asyncio.sleep(0.5)
     assert not [p for p in multiprocessing.active_children() if p.is_alive()]
+
+
+@pytest.mark.asyncio
+async def test_one_broken_channel_does_not_repeat_the_message_on_the_working_one(cfg, monkeypatch):
+    cfg._cache["scheduler"] = {"regime_refresh_enabled": "false"}
+    cfg._cache["thresholds"] = {"regime_data_end": (NOW - timedelta(days=80)).date().isoformat()}
+    h = Harness(cfg, monkeypatch)
+    sent = []
+
+    async def half_broken(event, subject, body):
+        sent.append(event)
+        return {"telegram": "sent", "email": "error: auth"}
+
+    h.wd._notify = half_broken
+    for i in range(6):
+        h.now = NOW + timedelta(hours=i)
+        await h.wd.tick()
+    assert sent.count(Event.REGIME_EXPIRING) == 1
+    assert sent.count(Event.READINESS_CHANGED) == 1
+
+
+@pytest.mark.asyncio
+async def test_db_outage_does_not_turn_errors_into_hourly_spam(cfg, monkeypatch):
+    h = Harness(cfg, monkeypatch, outcome=RuntimeError("db down"))
+
+    async def broken_put(category, pairs):
+        raise ConnectionError("db down")
+
+    monkeypatch.setattr(cfg, "put_category", broken_put)
+    for i in range(5):
+        h.now = NOW + timedelta(hours=i)
+        await h.wd.tick()
+    assert h.cpu_runs == 1  # 6h backoff held in memory
+    assert h.events().count(Event.REGIME_REFRESH_ERROR) == 1

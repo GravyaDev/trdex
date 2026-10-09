@@ -365,14 +365,16 @@ def _iso(now: datetime) -> str:
 
 
 def _delivered(outcome: Any) -> bool:
-    """True unless a channel errored: then the caller retries next tick.
+    """Done if any channel delivered, or none errored ("not configured").
 
-    "not configured" counts as done: nothing to retry until the operator
-    sets a channel up (the Notifier logs the undelivered message).
+    Only an outcome where every attempted channel errored is retried next
+    tick: retrying because one of two channels is broken would repeat the
+    message hourly on the working one.
     """
     if not isinstance(outcome, dict):
         return True
-    return not any(str(v).startswith("error") for v in outcome.values())
+    values = [str(v) for v in outcome.values()]
+    return any(v == "sent" for v in values) or not any(v.startswith("error") for v in values)
 
 
 class RegimeWatchdog:
@@ -396,6 +398,16 @@ class RegimeWatchdog:
         self._notify = notify
         self._clock = clock
         self._run_cpu = run_cpu
+        # Watchdog state also kept in memory: if the DB is what is down,
+        # backoff and "already notified" must still hold between ticks.
+        self._state: dict[str, str] = {}
+
+    def _get(self, cfg: Any, key: str) -> str:
+        return self._state.get(key) or cfg.get("watchdog", key, "")
+
+    async def _put(self, cfg: Any, pairs: dict[str, str]) -> None:
+        self._state.update(pairs)
+        await cfg.put_category("watchdog", pairs)
 
     async def tick(self) -> None:
         cfg = self._cfg()
@@ -418,7 +430,7 @@ class RegimeWatchdog:
         last = _parse(cfg.get("thresholds", "regime_last_refresh_at", ""))
         if last is not None and _naive_utc(now) - last < timedelta(days=interval):
             return False
-        last_err = _parse(cfg.get("watchdog", "last_error_at", ""))
+        last_err = _parse(self._get(cfg, "last_error_at"))
         return not (last_err is not None and _naive_utc(now) - last_err < ERROR_RETRY)
 
     async def _collect(
@@ -472,7 +484,7 @@ class RegimeWatchdog:
                 "regime_data_end": outcome.data_end.isoformat(),
             }
         await cfg.put_category("thresholds", pairs)
-        await cfg.put_category("watchdog", {"last_error_at": ""})
+        await self._put(cfg, {"last_error_at": ""})
         logger.info("[regime-watchdog] %s", outcome.summary())
         if outcome.status == "refreshed":
             await self._notify(
@@ -493,7 +505,7 @@ class RegimeWatchdog:
         try:
             notify_now = self._should_notify(cfg, "last_error_notified_at", now, NOTIFY_EVERY)
         except Exception:
-            notify_now = True
+            notify_now = "last_error_notified_at" not in self._state
         if notify_now:
             await self._notify(
                 Event.REGIME_REFRESH_ERROR,
@@ -505,7 +517,7 @@ class RegimeWatchdog:
             state = {"last_error_at": _iso(now)}
             if notify_now:
                 state["last_error_notified_at"] = _iso(now)
-            await cfg.put_category("watchdog", state)
+            await self._put(cfg, state)
         except Exception:
             logger.exception("[regime-watchdog] could not record the refresh error")
 
@@ -535,7 +547,7 @@ class RegimeWatchdog:
             body = f"Expired {-days_left} days ago (data end {end.date()}). Last refresh: {last}"
         outcome = await self._notify(Event.REGIME_EXPIRING, subject, body)
         if _delivered(outcome):
-            await cfg.put_category("watchdog", {"last_expiry_notified_at": _iso(now)})
+            await self._put(cfg, {"last_expiry_notified_at": _iso(now)})
 
     # -- readiness --
 
@@ -548,12 +560,12 @@ class RegimeWatchdog:
         async with self._sf() as session:
             report = await evaluate_readiness(session, settings, cfg)
         state = "READY" if report.ready else "NOT READY"
-        if cfg.get("watchdog", "last_readiness", "") == state:
-            if cfg.get("watchdog", "pending_readiness", ""):
-                await cfg.put_category("watchdog", {"pending_readiness": ""})
+        if self._get(cfg, "last_readiness") == state:
+            if self._get(cfg, "pending_readiness"):
+                await self._put(cfg, {"pending_readiness": ""})
             return
-        if cfg.get("watchdog", "pending_readiness", "") != state:
-            await cfg.put_category("watchdog", {"pending_readiness": state})
+        if self._get(cfg, "pending_readiness") != state:
+            await self._put(cfg, {"pending_readiness": state})
             return
         lines = [f"Mode: {getattr(settings.mode, 'value', settings.mode)}"]
         lines += [f"- {f}" for f in report.failures] or ["All criteria met."]
@@ -562,11 +574,10 @@ class RegimeWatchdog:
             Event.READINESS_CHANGED, f"Live readiness: {state}", "\n".join(lines)
         )
         if _delivered(outcome):
-            await cfg.put_category("watchdog", {"last_readiness": state, "pending_readiness": ""})
+            await self._put(cfg, {"last_readiness": state, "pending_readiness": ""})
 
-    @staticmethod
-    def _should_notify(cfg: Any, key: str, now: datetime, every: timedelta) -> bool:
-        last = _parse(cfg.get("watchdog", key, ""))
+    def _should_notify(self, cfg: Any, key: str, now: datetime, every: timedelta) -> bool:
+        last = _parse(self._get(cfg, key))
         return last is None or _naive_utc(now) - last >= every
 
 

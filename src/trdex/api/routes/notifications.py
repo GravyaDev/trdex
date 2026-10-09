@@ -28,5 +28,6 @@ async def send_test(body: TestRequest, _key: str = Depends(verify_api_key)) -> d
         body.channel,
         "trdex test notification",
         "If you can read this, the channel works.",
+        quick=True,
     )
     return {"channel": body.channel, "result": result}
