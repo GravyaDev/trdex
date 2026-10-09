@@ -131,6 +131,8 @@ if readiness:
     else:
         failures = readiness.get("failures", [])
         st.warning(f"Simulation gate: NOT READY — {'; '.join(failures)}")
+    for _w in readiness.get("warnings", []):
+        st.info(f"Readiness warning: {_w}")
     with st.expander("Readiness details"):
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Sim days", readiness.get("sim_days", 0))
@@ -143,6 +145,13 @@ if readiness:
             f"{criteria.get('min_trades', '?')} trades, "
             f">{criteria.get('min_win_rate', '?'):.0%} win rate, "
             f"<{criteria.get('max_drawdown', '?'):.0%} drawdown"
+        )
+        st.caption(
+            f"Regime bounds: CV {criteria.get('regime_cv_min') or 'unset'}"
+            f" to {criteria.get('regime_cv_max') or 'unset'}, "
+            f"data end {criteria.get('regime_data_end') or 'unset'} "
+            f"(max age {criteria.get('regime_max_age_days', '?')} days), "
+            f"changed {criteria.get('regime_set_at') or 'unknown'}"
         )
 
 # ── Portfolio snapshot ──────────────────────────────────────────��─────────────
@@ -1009,6 +1018,11 @@ with st.expander("Risk Thresholds"):
             ("sl_daily_drawdown_pct", "Daily Drawdown Limit %", "0.10"),
             ("gate_max_drawdown", "Max Drawdown Limit %", "0.20"),
             ("max_position_pct", "Max Position Size %", "0.02"),
+            ("risk_per_trade_pct", "Risk per Trade % (size = risk / stop)", "0.001"),
+            ("regime_cv_min", "Regime CV min (from regime_range.py)", ""),
+            ("regime_cv_max", "Regime CV max (from regime_range.py)", ""),
+            ("regime_data_end", "Regime data end YYYY-MM-DD (from regime_range.py)", ""),
+            ("regime_max_age_days", "Regime bounds max age (days, readiness)", "90"),
             ("gate_min_days", "Gate Min Simulation Days", "20"),
         ]:
             _thr_inputs[thr_key] = st.text_input(
@@ -1016,6 +1030,10 @@ with st.expander("Risk Thresholds"):
                 value=_thr.get(thr_key, default),
                 key=f"thr_{thr_key}",
             )
+        st.caption(
+            "Regime bounds last changed: "
+            f"{_thr.get('regime_set_at') or 'unknown'} (stamped automatically)"
+        )
         if st.form_submit_button("Save Thresholds"):
             pairs = {k: v for k, v in _thr_inputs.items() if v}
             if pairs:
