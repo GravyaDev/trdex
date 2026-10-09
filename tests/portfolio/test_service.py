@@ -260,3 +260,93 @@ async def test_close_fill_refuses_double_close() -> None:
         )
 
     repo._session.commit.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# snapshot — balance and total_pnl must come from the ledger
+# ---------------------------------------------------------------------------
+
+
+def _wire_snapshot_session(
+    repo: MagicMock,
+    *,
+    current_balance: Decimal,
+    total_pnl: Decimal,
+) -> None:
+    """Wire session.execute to return (current_balance, total_pnl) in order.
+
+    ``snapshot()`` calls ``BalanceRepository.current_balance()`` then
+    ``BalanceRepository.total_trade_pnl()``. Each is a single
+    ``session.execute(...)`` returning a scalar.
+    """
+    bal_result = MagicMock()
+    bal_result.scalar_one_or_none.return_value = current_balance
+
+    pnl_result = MagicMock()
+    pnl_result.scalar_one_or_none.return_value = total_pnl
+
+    repo._session.execute = AsyncMock(side_effect=[bal_result, pnl_result])
+
+
+async def test_snapshot_reads_balance_from_ledger_not_default() -> None:
+    """Regression: balance must come from BalanceRepository, not the Pydantic default.
+
+    Before the fix, ``Portfolio.balance`` was never assigned so it fell back
+    to ``Field(default=Decimal("10000"))`` — the API always reported $10k
+    regardless of realised P&L. This test inchiodates the ledger-driven path.
+    """
+    repo = _make_repo_mock()
+    feeds = MagicMock()
+    service = PortfolioService(repo, feeds)
+
+    repo.get_open_positions = AsyncMock(return_value=[])
+    repo.get_closed_positions = AsyncMock(return_value=[])
+
+    _wire_snapshot_session(
+        repo,
+        current_balance=Decimal("9846.55"),
+        total_pnl=Decimal("-153.45"),
+    )
+
+    portfolio = await service.snapshot()
+
+    assert portfolio.balance == Decimal("9846.55")
+    assert portfolio.total_pnl == Decimal("-153.45")
+    assert portfolio.equity == Decimal("9846.55")  # no open positions
+    assert portfolio.total_trades == 0
+
+
+async def test_snapshot_total_pnl_includes_fees_from_ledger() -> None:
+    """Regression: total_pnl must equal SUM(trade_fill.amount), fees included.
+
+    Before the fix, ``total_pnl`` was recomputed from positions via
+    ``(exit-entry)*amount`` which ignored both ``fee_open`` and the close
+    fee — the API under-reported losses by one round-trip fee per trade.
+    """
+    repo = _make_repo_mock()
+    feeds = MagicMock()
+    service = PortfolioService(repo, feeds)
+
+    # Two closed positions with superficial gross P&L = 0, but the ledger
+    # says -$2 total (fees). The service must trust the ledger.
+    closed_a = _position(id=1, entry_price="100", amount="1")
+    closed_a.exit_price = Decimal("100")
+    closed_a.status = "closed"
+    closed_b = _position(id=2, entry_price="200", amount="1")
+    closed_b.exit_price = Decimal("200")
+    closed_b.status = "closed"
+
+    repo.get_open_positions = AsyncMock(return_value=[])
+    repo.get_closed_positions = AsyncMock(return_value=[closed_a, closed_b])
+
+    _wire_snapshot_session(
+        repo,
+        current_balance=Decimal("9998"),
+        total_pnl=Decimal("-2"),
+    )
+
+    portfolio = await service.snapshot()
+
+    assert portfolio.total_pnl == Decimal("-2")
+    assert portfolio.balance == Decimal("9998")
+    assert portfolio.total_trades == 2

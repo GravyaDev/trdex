@@ -158,7 +158,8 @@ class Settings(BaseSettings):
     sl_position_pct: float = Field(default=0.02, description="Per-position stop-loss (2% = close at -2%)")
     sl_take_profit_pct: float = Field(default=0.04, description="Per-position take-profit (4%)")
     sl_trailing_stop_pct: float = Field(default=0.015, description="Trailing stop: close if price retraces 1.5% from peak")
-    sl_daily_drawdown_pct: float = Field(default=0.10, description="Daily portfolio drawdown → kill switch")
+    sl_daily_drawdown_pct: float = Field(default=0.10, description="Equity loss since 00:00 UTC (realised + unrealised) → kill switch")
+    sl_open_positions_loss_pct: float = Field(default=0.10, description="Unrealised loss as fraction of open-positions cost → kill switch")
 
     # Agent scheduler
     agent_scheduler_enabled: bool = Field(default=False, description="Auto-run agent cycle on interval")

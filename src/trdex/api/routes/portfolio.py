@@ -223,6 +223,7 @@ async def manual_close(
         qty=float(pos.amount),
         price=float(price),
         idempotency_key=f"manual_close:{pos.id}",
+        reduce_only=True,  # closing must stay possible with the kill switch active
     )
     if result.status != "filled":
         raise HTTPException(422, f"Close order rejected: {result.message}")

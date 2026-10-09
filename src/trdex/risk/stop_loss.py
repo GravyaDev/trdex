@@ -27,8 +27,9 @@ class StopReason(StrEnum):
     POSITION_STOP_LOSS = "position_stop_loss"    # single position hit SL %
     POSITION_TAKE_PROFIT = "position_take_profit"  # single position hit TP %
     TRAILING_STOP = "trailing_stop"              # price retraced from high-water mark
-    DAILY_DRAWDOWN = "daily_drawdown"             # total portfolio daily loss exceeded
-    MAX_DRAWDOWN = "max_drawdown"                 # all-time drawdown exceeded config limit
+    DAILY_DRAWDOWN = "daily_drawdown"             # equity loss since start of UTC day exceeded
+    OPEN_POSITIONS_LOSS = "open_positions_loss"   # unrealised loss / cost of the open book exceeded
+    MAX_DRAWDOWN = "max_drawdown"                 # mark-to-market peak-to-trough exceeded limit
     KILL_SWITCH = "kill_switch"                   # manual override via API
 
 
@@ -253,8 +254,9 @@ class StopLossMonitor:
         position_sl_pct: float = 0.05,       # 5% loss per position → close
         position_tp_pct: float = 0.10,       # 10% gain per position → close
         trailing_stop_pct: float = 0.03,     # 3% retrace from high-water mark → close
-        daily_drawdown_pct: float = 0.10,    # 10% portfolio daily loss → kill switch
-        max_drawdown_pct: float = 0.20,      # 20% all-time drawdown → kill switch
+        daily_drawdown_pct: float = 0.10,    # equity loss since UTC midnight → kill switch
+        max_drawdown_pct: float = 0.20,      # 20% mark-to-market drawdown → kill switch
+        open_positions_loss_pct: float = 0.10,  # unrealised loss / open-book cost → kill switch
     ) -> None:
         self._session_factory = session_factory
         self._feeds = feed_manager
@@ -265,6 +267,7 @@ class StopLossMonitor:
         self._trailing_pct = trailing_stop_pct
         self._daily_dd_pct = daily_drawdown_pct
         self._max_dd_pct = max_drawdown_pct
+        self._open_loss_pct = open_positions_loss_pct
         self._task: asyncio.Task[None] | None = None
         self._callbacks: list = []
         # Rolling cache of the last 50 events — hydrated from the
@@ -425,12 +428,15 @@ class StopLossMonitor:
             position.symbol, position.id, close_direction, qty, price, reason,
         )
         try:
+            # reduce_only: closes must go through even when the kill switch
+            # is active, otherwise a tripped switch traps open positions.
             result = await self._gateway.place(
                 symbol=position.symbol,
                 direction=close_direction,
                 qty=qty,
                 price=price,
                 idempotency_key=f"close:{position.id}",
+                reduce_only=True,
             )
             if result.status == "filled":
                 logger.info(
@@ -496,27 +502,114 @@ class StopLossMonitor:
                 f"Auto-close crashed for {position.symbol}: {exc}"
             )
 
+    async def _trip(self, events: list[StopLossEvent], reason: StopReason,
+                    loss_pct: float, message: str) -> None:
+        event = StopLossEvent(
+            reason=reason, symbol=None, position_id=None,
+            trigger_price=None, entry_price=None,
+            loss_pct=loss_pct, message=message,
+        )
+        events.append(event)
+        await _kill_switch.activate_async(message)
+        logger.critical("[StopLoss] %s: %s", reason.value.upper(), message)
+
+    async def _check_portfolio_limits(
+        self,
+        events: list[StopLossEvent],
+        *,
+        total_unrealized: float,
+        total_cost: float,
+        realised_balance: float | None,
+        day_start_balance: float | None,
+    ) -> None:
+        """Portfolio-level limits that trip the kill switch.
+
+        - Open-positions loss: unrealised loss as a fraction of the cost of
+          the open book. This is what used to be called "daily drawdown";
+          it is neither daily nor measured on equity, so it keeps its
+          behaviour under an honest name.
+        - Daily drawdown: equity now (realised balance + unrealised P&L)
+          versus the realised balance at the start of the UTC day.
+        - Max drawdown: mark-to-market equity versus its running peak.
+          Equity is realised balance + unrealised P&L — NOT the cost of the
+          open positions, which is what caused Bug 8 (2026-04-08).
+        """
+        if total_cost > 0:
+            open_loss = total_unrealized / total_cost
+            if open_loss <= -self._open_loss_pct:
+                await self._trip(
+                    events, StopReason.OPEN_POSITIONS_LOSS, open_loss,
+                    f"Open positions loss {open_loss:.2%} of their cost exceeded limit "
+                    f"{-self._open_loss_pct:.2%} — KILL SWITCH activated",
+                )
+
+        if realised_balance is None:
+            return
+        equity = realised_balance + total_unrealized
+
+        if day_start_balance is not None and day_start_balance > 0:
+            daily_loss = (day_start_balance - equity) / day_start_balance
+            if daily_loss >= self._daily_dd_pct:
+                await self._trip(
+                    events, StopReason.DAILY_DRAWDOWN, -daily_loss,
+                    f"Daily drawdown {daily_loss:.2%} of equity since 00:00 UTC exceeded "
+                    f"limit {self._daily_dd_pct:.2%} — KILL SWITCH activated",
+                )
+
+        if self._peak_equity is None or equity > self._peak_equity:
+            self._peak_equity = equity
+        if self._peak_equity > 0:
+            drawdown = (self._peak_equity - equity) / self._peak_equity
+            if drawdown >= self._max_dd_pct:
+                await self._trip(
+                    events, StopReason.MAX_DRAWDOWN, -drawdown,
+                    f"Max drawdown {drawdown:.2%} exceeded limit "
+                    f"{self._max_dd_pct:.2%} — KILL SWITCH activated",
+                )
+
     async def check_now(self) -> list[StopLossEvent]:
         """Run a single check cycle. Returns any events fired."""
         new_events: list[StopLossEvent] = []
 
-        # Skip all checks if kill switch is already active
-        if _kill_switch.active:
-            return new_events
+        # The kill switch halts NEW risk; it must not switch off protection
+        # of positions already open. Per-position SL/TP/trailing always run
+        # (their closes are reduce-only and pass the gateway). Portfolio-level
+        # checks are skipped while the switch is already tripped, otherwise
+        # they would re-fire and re-log the same event every cycle.
+        kill_switch_was_active = _kill_switch.active
 
         # First run: initialise peak equity from DB rather than current positions
         if self._peak_equity is None:
             await self._init_peak_equity()
 
+        from trdex.storage.balance_repo import BalanceRepository
         from trdex.storage.portfolio_repo import PortfolioRepository
 
         async with self._session_factory() as session:
             repo = PortfolioRepository(session)
             open_positions = await repo.get_open_positions()
 
-        if not open_positions:
-            self._last_check = datetime.now(tz=timezone.utc)
-            return new_events
+        # Realised balance and the day-start baseline are read ONCE, before any
+        # auto-close in this cycle: a close persisted mid-cycle would otherwise
+        # be counted twice (as realised AND as the unrealised loss below).
+        realised_balance: float | None = None
+        day_start_balance: float | None = None
+        if not kill_switch_was_active:
+            try:
+                async with self._session_factory() as session:
+                    bal_repo = BalanceRepository(session)
+                    realised_balance = float(await bal_repo.current_balance())
+                    midnight = datetime.now(tz=timezone.utc).replace(
+                        hour=0, minute=0, second=0, microsecond=0,
+                    )
+                    at_midnight = await bal_repo.balance_at(midnight)
+                    # No ledger row before today (fresh deploy): use today's
+                    # realised balance as the baseline.
+                    day_start_balance = (
+                        float(at_midnight) if at_midnight is not None else realised_balance
+                    )
+            except Exception:
+                logger.exception("[StopLoss] could not read balance ledger — portfolio checks skipped this cycle")
 
         # Fetch current prices for all unique symbols (with timestamp for staleness check).
         # IMPORTANT: use Binance only (source="binance") to avoid cross-feed price
@@ -672,65 +765,16 @@ class StopLossMonitor:
                     await self._auto_close(pos, price, "trailing_stop", price_age=price_times.get(pos.symbol))
                     del self._trailing_highs[pos_id]  # Clean up after close
 
-        # Portfolio-level: daily drawdown
-        if total_cost > 0:
-            portfolio_pnl_pct = total_unrealized / total_cost
-            if portfolio_pnl_pct <= -self._daily_dd_pct:
-                event = StopLossEvent(
-                    reason=StopReason.DAILY_DRAWDOWN,
-                    symbol=None,
-                    position_id=None,
-                    trigger_price=None,
-                    entry_price=None,
-                    loss_pct=portfolio_pnl_pct,
-                    message=(
-                        f"Daily drawdown {portfolio_pnl_pct:.2%} exceeded limit "
-                        f"{-self._daily_dd_pct:.2%} — KILL SWITCH activated"
-                    ),
-                )
-                new_events.append(event)
-                await _kill_switch.activate_async(event.message)
-                logger.critical("[StopLoss] PORTFOLIO DD: %s", event.message)
-
-        # Portfolio-level: all-time max drawdown (peak-to-trough).
-        #
-        # Realised-only by design: both ``peak_equity`` and the current
-        # ``equity`` read from BalanceRepository, which only records rows
-        # at close-fill time (``record_close_fill``). Unrealised P&L on
-        # open positions is intentionally excluded — that concern belongs
-        # to the per-position stop-loss / take-profit / trailing-stop
-        # checks above, and to the daily_drawdown check below which is
-        # mark-to-market on ``total_cost`` only.
-        #
-        # Mixing realised peak with mtM current (the pre-fix behaviour)
-        # caused a false-positive 98% drawdown: peak came from the
-        # $10k seed balance while equity came from $200 of open position
-        # cost, so ``(10000-200)/10000 = 98%`` tripped the 20% limit on
-        # the first trade of a fresh deploy. See Bug 8 / commit history.
-        from trdex.storage.balance_repo import BalanceRepository
-        async with self._session_factory() as session:
-            bal_repo = BalanceRepository(session)
-            equity = float(await bal_repo.current_balance())
-        if self._peak_equity is None or equity > self._peak_equity:
-            self._peak_equity = equity
-        if self._peak_equity > 0:
-            drawdown = (self._peak_equity - equity) / self._peak_equity
-            if drawdown >= self._max_dd_pct:
-                event = StopLossEvent(
-                    reason=StopReason.MAX_DRAWDOWN,
-                    symbol=None,
-                    position_id=None,
-                    trigger_price=None,
-                    entry_price=None,
-                    loss_pct=-drawdown,
-                    message=(
-                        f"Max drawdown {drawdown:.2%} exceeded limit "
-                        f"{self._max_dd_pct:.2%} — KILL SWITCH activated"
-                    ),
-                )
-                new_events.append(event)
-                await _kill_switch.activate_async(event.message)
-                logger.critical("[StopLoss] MAX DRAWDOWN: %s", event.message)
+        # Portfolio-level checks. Skipped while the kill switch is already
+        # tripped (see top of check_now) or when the ledger could not be read.
+        if not kill_switch_was_active:
+            await self._check_portfolio_limits(
+                new_events,
+                total_unrealized=total_unrealized,
+                total_cost=total_cost,
+                realised_balance=realised_balance,
+                day_start_balance=day_start_balance,
+            )
 
         # Store and dispatch
         self._events.extend(new_events)
@@ -782,6 +826,7 @@ class StopLossMonitor:
                 "position_tp_pct": self._tp_pct,
                 "trailing_stop_pct": self._trailing_pct,
                 "daily_drawdown_pct": self._daily_dd_pct,
+                "open_positions_loss_pct": self._open_loss_pct,
                 "max_drawdown_pct": self._max_dd_pct,
             },
         }

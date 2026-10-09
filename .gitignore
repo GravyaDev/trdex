@@ -118,3 +118,7 @@ channels_failed_lookup.md
 # ═══════════════════════════════════════════════════════
 docs/Report TrdeX LLM di Emergent.md
 trdex composer/
+
+# Backtest OHLCV cache (regenerable from Binance, ~50MB)
+scripts/data/ohlcv_5y/
+scripts/data/backtest_results_*.csv
