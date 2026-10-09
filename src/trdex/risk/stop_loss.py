@@ -18,6 +18,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -177,8 +178,8 @@ _TRAIL_CV_MULT = 1.5
 
 
 def effective_thresholds(
-    pos,
-    override,
+    pos: Any,
+    override: Any,
     cv: float,
     *,
     base_sl: float,
