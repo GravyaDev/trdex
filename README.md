@@ -139,7 +139,7 @@ Per-symbol overrides are available via the `/v1/risk/symbol-config` API and the 
 
 **Position size** is risk-based: `size = min(max_position_pct, risk_per_trade_pct / effective_sl)`, so a wider adaptive stop means a smaller position, not more risk per trade.
 
-**Volatility-regime gate** (Risk Gate 4c): new entries are blocked when the CV of the last 20 closes is outside `thresholds.regime_cv_min` / `regime_cv_max`, the range the strategy was backtested on (`scripts/backtest/regime_range.py`). In simulation unset bounds disable the gate; in live they block every entry.
+**Volatility-regime gate** (Risk Gate 4c): new entries are blocked when the CV of the last 20 closes is outside `thresholds.regime_cv_min` / `regime_cv_max`, the range the strategy was backtested on (`scripts/backtest/regime_range.py`). In simulation unset bounds disable the gate; in live they block every entry. Entries from the Telegram signal executor (branch `llm-agents`) are not covered by this gate.
 
 ## Go-live checklist
 
