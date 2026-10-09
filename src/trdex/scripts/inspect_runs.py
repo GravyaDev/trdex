@@ -448,8 +448,12 @@ async def section_7_readiness(engine, args: InspectArgs) -> None:
     _section("7. Readiness gate snapshot")
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
+        from trdex.services.runtime_config import RuntimeConfigService
+
+        cfg = RuntimeConfigService(session_factory)
+        await cfg.load(categories={"thresholds"})
         async with session_factory() as session:
-            report = await evaluate_readiness(session, get_settings())
+            report = await evaluate_readiness(session, get_settings(), cfg)
     except Exception as exc:
         print(f"  ERROR evaluating readiness: {exc!r}")
         return
@@ -466,6 +470,10 @@ async def section_7_readiness(engine, args: InspectArgs) -> None:
         print("  failures:")
         for f in report.failures:
             print(f"    - {f}")
+    if report.warnings:
+        print("  warnings:")
+        for w in report.warnings:
+            print(f"    - {w}")
 
 
 async def section_8_entity_graph(engine, args: InspectArgs) -> None:

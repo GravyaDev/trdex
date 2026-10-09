@@ -1235,6 +1235,7 @@ def create_app() -> FastAPI:
             "kill_switch_events": report.kill_switch_events,
             "criteria": report.criteria,
             "failures": report.failures,
+            "warnings": report.warnings,
         }
 
     # --- Debug endpoints ---

@@ -213,8 +213,10 @@ async def risk_node(state: AgentState) -> AgentState:
             await _write_last_signal(state, approved=False, reason=reason)
             return state
 
-    # Gate 5: Live mode requires passing simulation gate criteria
-    if settings.mode.value == "live" and state.session_factory is not None:
+    # Gate 5: Live mode requires passing simulation gate criteria — OPEN
+    # intents only, like 4b/4c: a readiness failure (e.g. regime bounds
+    # past regime_max_age_days) must stop new risk, never an exit.
+    if intent.is_open and settings.mode.value == "live" and state.session_factory is not None:
         from trdex.risk.readiness import evaluate_readiness
         try:
             async with state.session_factory() as session:
