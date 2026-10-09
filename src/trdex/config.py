@@ -148,6 +148,10 @@ class Settings(BaseSettings):
 
     # Risk defaults
     max_position_pct: float = Field(default=0.05, description="Max % of portfolio per trade")
+    risk_per_trade_pct: float = Field(
+        default=0.001,
+        description="Equity fraction lost if the stop is hit (risk-based sizing, capped by max_position_pct)",
+    )
 
     # Stop-loss monitor (external, independent of AI agents)
     sl_check_interval: float = Field(default=30.0, description="Seconds between stop-loss checks")
