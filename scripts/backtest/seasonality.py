@@ -23,13 +23,14 @@ from __future__ import annotations
 import argparse
 from datetime import UTC, datetime
 
+from scripts.backtest.run_suite import DATA_DIR, SYMBOLS, _load_cache
+
 from trdex.research.stats import (
     PRIOR_TIME_WINDOW_TESTS,
     basket_returns,
     dev_period,
     seasonality,
 )
-from scripts.backtest.run_suite import DATA_DIR, SYMBOLS, _load_cache
 
 
 def _load_available() -> dict[str, list[list]]:

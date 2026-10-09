@@ -87,6 +87,20 @@ class OHLCVRepository:
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
+    async def fetch_latest(
+        self, symbol: str, timeframe: str, limit: int = 100
+    ) -> list[OHLCVRecord]:
+        """The most recent ``limit`` candles, ordered by timestamp ascending."""
+        stmt = (
+            select(OHLCVRecord)
+            .where(OHLCVRecord.symbol == symbol)
+            .where(OHLCVRecord.timeframe == timeframe)
+            .order_by(OHLCVRecord.timestamp.desc())
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return list(reversed(result.scalars().all()))
+
     async def time_range(
         self, symbol: str, timeframe: str
     ) -> tuple[datetime | None, datetime | None]:

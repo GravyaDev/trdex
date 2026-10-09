@@ -301,3 +301,30 @@ async def test_kill_switch_activation_notifies_once(monkeypatch):
     await ks.activate_async("again")  # already active: no second message
     assert len(sent) == 1
     assert sent[0][0] == Event.KILL_SWITCH and "drawdown 21%" in sent[0][1]
+
+
+@pytest.mark.asyncio
+async def test_httpx_request_logs_never_contain_the_bot_token(caplog):
+    import logging
+
+    caplog.set_level(logging.DEBUG)
+    ch, _ = _telegram(lambda req: httpx.Response(200, json={"ok": True}))
+    await ch.send("s", "b")
+    logged = "\n".join(r.getMessage() for r in caplog.records)
+    assert "sendMessage" in logged  # httpx did log the request…
+    assert "SECRET-TOKEN" not in logged  # …without the token
+    assert "/bot***/" in logged
+
+
+@pytest.mark.asyncio
+async def test_long_retry_after_is_honoured_up_to_five_minutes():
+    calls = iter(
+        [
+            httpx.Response(429, json={"ok": False, "parameters": {"retry_after": 90}}),
+            httpx.Response(429, json={"ok": False, "parameters": {"retry_after": 900}}),
+            httpx.Response(200, json={"ok": True}),
+        ]
+    )
+    ch, sleeps = _telegram(lambda req: next(calls))
+    await ch.send("s", "b")
+    assert sleeps == [90.0, 300.0]

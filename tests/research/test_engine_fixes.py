@@ -7,6 +7,8 @@ different) than what the strategy would have done.
 from __future__ import annotations
 
 import pytest
+
+from trdex.agents.analyst import _rule_based_signal
 from trdex.research.engine import (
     EngineParams,
     run_backtest,
@@ -14,8 +16,6 @@ from trdex.research.engine import (
     split_trades_by_quarter,
 )
 from trdex.research.strategies import LiveRuleEngine
-
-from trdex.agents.analyst import _rule_based_signal
 
 H = 3_600_000
 DAY = 24 * H

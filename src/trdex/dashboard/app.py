@@ -151,7 +151,7 @@ if readiness:
             f" to {criteria.get('regime_cv_max') or 'unset'}, "
             f"data end {criteria.get('regime_data_end') or 'unset'} "
             f"(max age {criteria.get('regime_max_age_days', '?')} days), "
-            f"changed {criteria.get('regime_set_at') or 'unknown'}"
+            f"gate on since {criteria.get('regime_set_at') or 'never'}"
         )
 
 # ── Portfolio snapshot ──────────────────────────────────────────��─────────────
@@ -1223,9 +1223,6 @@ with st.expander("Risk Thresholds"):
             ("gate_max_drawdown", "Max Drawdown Limit %", "0.20"),
             ("max_position_pct", "Max Position Size %", "0.02"),
             ("risk_per_trade_pct", "Risk per Trade % (size = risk / stop)", "0.001"),
-            ("regime_cv_min", "Regime CV min (set by the weekly refresher)", ""),
-            ("regime_cv_max", "Regime CV max (set by the weekly refresher)", ""),
-            ("regime_data_end", "Regime data end YYYY-MM-DD (set by the weekly refresher)", ""),
             ("regime_max_age_days", "Regime bounds max age (days, readiness)", "90"),
             ("gate_min_days", "Gate Min Simulation Days", "20"),
         ]:
@@ -1235,11 +1232,12 @@ with st.expander("Risk Thresholds"):
                 key=f"thr_{thr_key}",
             )
         st.caption(
-            "Regime gate on since: "
-            f"{_thr.get('regime_set_at') or 'never'} (stamped automatically). "
+            "Regime bounds (read-only, written by the weekly refresher after revalidation): "
+            f"CV {_thr.get('regime_cv_min') or 'unset'} to {_thr.get('regime_cv_max') or 'unset'}, "
+            f"data to {_thr.get('regime_data_end') or 'unset'}; gate on since "
+            f"{_thr.get('regime_set_at') or 'never'}. "
             f"Last refresh: {_thr.get('regime_last_refresh_at') or 'never'} — "
-            f"{_thr.get('regime_last_refresh_status') or 'no run yet'}. "
-            "Manual edits of the regime fields are overwritten at the next refresh."
+            f"{_thr.get('regime_last_refresh_status') or 'no run yet'}."
         )
         if st.form_submit_button("Save Thresholds"):
             pairs = {k: v for k, v in _thr_inputs.items() if v}

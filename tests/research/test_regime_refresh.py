@@ -98,25 +98,47 @@ def _bars(n, *, start_ms, wild_from=None):
 CFG = RefreshConfig(symbols=("A/USDT",), engine=EngineParams(), risk_per_trade_pct=0.001)
 
 
-def test_bounds_and_backtest_see_only_the_development_period(monkeypatch):
-    start = NOW_MS - 2000 * 24 * H
-    data = {"A/USDT": _bars(48_000, start_ms=start, wild_from=40_000)}  # holdout is wild
+def _capture(monkeypatch):
     seen = {}
 
-    def fake_backtest(strategy, dev, params):
-        seen["last_ts"] = max(b[-1][0] for b in dev.values())
+    def fake_backtest(strategy, window, params):
+        seen["last_ts"] = max(b[-1][0] for b in window.values())
         seen["risk"] = strategy.risk_per_trade_pct_override
         return _result()
 
     monkeypatch.setattr(rr, "run_backtest", fake_backtest)
+    return seen
+
+
+def test_default_validation_window_is_the_whole_lookback_up_to_the_last_bar(monkeypatch):
+    start = NOW_MS - 2000 * 24 * H
+    data = {"A/USDT": _bars(48_000, start_ms=start, wild_from=40_000)}  # recent bars are wild
+    seen = _capture(monkeypatch)
     out = evaluate(data, CFG)
+    last = data["A/USDT"][-1][0]
+    assert seen["last_ts"] == last and seen["risk"] == 0.001
+    assert out.status == "refreshed"
+    assert out.cv_max > 0.1  # the recent regime is part of what was validated
+    assert out.data_end == out.dev_cutoff == datetime.fromtimestamp(last / 1000, tz=UTC).date()
+    assert "refreshed: CV" in out.summary()
+
+
+def test_a_holdout_keeps_recent_bars_out_of_backtest_and_bounds(monkeypatch):
+    start = NOW_MS - 2000 * 24 * H
+    data = {"A/USDT": _bars(48_000, start_ms=start, wild_from=40_000)}
+    seen = _capture(monkeypatch)
+    out = evaluate(data, replace(CFG, holdout=0.3))
     cutoff_ms = start + int((data["A/USDT"][-1][0] - start) * 0.7)
     assert seen["last_ts"] < cutoff_ms
-    assert seen["risk"] == 0.001
-    assert out.status == "refreshed"
-    assert out.cv_max < 0.02  # the 15% swings of the holdout are not in the range
-    assert out.data_end == datetime.fromtimestamp(data["A/USDT"][-1][0] / 1000, tz=UTC).date()
-    assert "refreshed: CV" in out.summary()
+    assert out.cv_max < 0.02  # the 15% swings after the cutoff are not in the range
+
+
+def test_degenerate_cv_range_is_not_written(monkeypatch):
+    _capture(monkeypatch)
+    monkeypatch.setattr(rr, "regime_range", lambda *a, **k: {"*": (0.0, 0.01, 0.02, 100)})
+    out = evaluate({"A/USDT": _bars(20_000, start_ms=NOW_MS - 900 * 24 * H)}, CFG)
+    assert out.status == "validation_failed"
+    assert any("degenerate CV range" in f for f in out.failures)
 
 
 def test_failed_revalidation_produces_no_bounds(monkeypatch):
@@ -394,11 +416,11 @@ async def test_first_tick_refreshes_writes_bounds_and_tells_the_operator(cfg, mo
     h = Harness(cfg, monkeypatch)
     await h.wd.tick()
     th = cfg.get_category("thresholds")
-    assert th["regime_cv_min"] == "0.002000" and th["regime_cv_max"] == "0.045000"
+    assert th["regime_cv_min"] == "0.002" and th["regime_cv_max"] == "0.045"
     assert th["regime_data_end"] == "2026-10-09"
     assert th["regime_set_at"]  # the gate just turned on
     assert th["regime_last_refresh_status"].startswith("refreshed")
-    assert h.events() == [Event.REGIME_REFRESHED, Event.READINESS_CHANGED]
+    assert h.events() == [Event.REGIME_REFRESHED]  # readiness: pending, needs 2 ticks
 
 
 @pytest.mark.asyncio
@@ -443,7 +465,7 @@ async def test_errors_retry_after_6h_and_notify_at_most_daily(cfg, monkeypatch):
     h.outcome = GOOD
     h.now = NOW + timedelta(hours=14)
     await h.wd.tick()
-    assert cfg.get("thresholds", "regime_cv_max") == "0.045000"
+    assert cfg.get("thresholds", "regime_cv_max") == "0.045"
     assert cfg.get("watchdog", "last_error_at") == ""
 
 
@@ -451,6 +473,7 @@ async def test_errors_retry_after_6h_and_notify_at_most_daily(cfg, monkeypatch):
 async def test_disabled_refresher_does_nothing_but_still_watches(cfg, monkeypatch):
     cfg._cache["scheduler"] = {"regime_refresh_enabled": "false"}
     h = Harness(cfg, monkeypatch)
+    await h.wd.tick()
     await h.wd.tick()
     assert h.cpu_runs == 0
     assert h.events() == [Event.READINESS_CHANGED]
@@ -483,17 +506,131 @@ async def test_fresh_bounds_do_not_warn(cfg, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_readiness_is_reported_only_when_it_flips(cfg, monkeypatch):
+async def test_readiness_flip_is_reported_once_it_holds_for_two_ticks(cfg, monkeypatch):
     cfg._cache["scheduler"] = {"regime_refresh_enabled": "false"}
     h = Harness(cfg, monkeypatch, ready=False)
+    await h.wd.tick()
+    assert h.events() == []  # first sighting: pending
     await h.wd.tick()
     await h.wd.tick()
     assert h.events() == [Event.READINESS_CHANGED]
     assert "NOT READY" in h.sent[0][1] and "Sharpe: 0.5 < 1.0" in h.sent[0][1]
     h.ready = True
     await h.wd.tick()
+    h.ready = False  # flapped back: nothing to report
+    await h.wd.tick()
+    assert h.events() == [Event.READINESS_CHANGED]
+    h.ready = True
+    await h.wd.tick()
+    await h.wd.tick()
     assert h.events() == [Event.READINESS_CHANGED, Event.READINESS_CHANGED]
     assert h.sent[-1][1].startswith("Live readiness: READY")
+
+
+@pytest.mark.asyncio
+async def test_undelivered_readiness_flip_is_retried(cfg, monkeypatch):
+    cfg._cache["scheduler"] = {"regime_refresh_enabled": "false"}
+    h = Harness(cfg, monkeypatch, ready=False)
+    results = iter([{"telegram": "error: down"}, {"telegram": "sent"}])
+    sent = []
+
+    async def flaky(event, subject, body):
+        sent.append(event)
+        return next(results)
+
+    h.wd._notify = flaky
+    for _ in range(3):
+        await h.wd.tick()
+    assert sent == [Event.READINESS_CHANGED, Event.READINESS_CHANGED]
+    assert cfg.get("watchdog", "last_readiness") == "NOT READY"
+
+
+@pytest.mark.asyncio
+async def test_refresh_error_is_notified_even_when_the_db_write_fails(cfg, monkeypatch):
+    h = Harness(cfg, monkeypatch, outcome=RuntimeError("db down"))
+    real_put = cfg.put_category
+
+    async def broken_put(category, pairs):
+        if category == "watchdog":
+            raise ConnectionError("db down")
+        return await real_put(category, pairs)
+
+    monkeypatch.setattr(cfg, "put_category", broken_put)
+    await h.wd.tick()
+    assert Event.REGIME_REFRESH_ERROR in h.events()
+
+
+@pytest.mark.asyncio
+async def test_one_failing_symbol_is_skipped_and_reported(cfg, monkeypatch):
+    h = Harness(cfg, monkeypatch)
+
+    async def sync(sf, fetch, symbol, **k):
+        if symbol == "ETH/USDT":
+            raise ValueError("delisted")
+        return 0
+
+    monkeypatch.setattr(rr, "sync_symbol", sync)
+    seen = {}
+
+    async def run_cpu(fn, data, rc):
+        seen["symbols"] = sorted(data)
+        return replace(GOOD)
+
+    h.wd._run_cpu = run_cpu
+    await h.wd.tick()
+    assert seen["symbols"] == ["BTC/USDT"]
+    status = cfg.get("thresholds", "regime_last_refresh_status")
+    assert "skipped ETH/USDT (ValueError: delisted)" in status
+
+
+@pytest.mark.asyncio
+async def test_less_than_half_the_symbols_is_an_error(cfg, monkeypatch):
+    cfg._cache["symbols"] = {"agent_scheduler_symbols": "A/USDT,B/USDT,C/USDT"}
+    h = Harness(cfg, monkeypatch)
+
+    async def sync(sf, fetch, symbol, **k):
+        if symbol != "A/USDT":
+            raise ValueError("feed error")
+        return 0
+
+    monkeypatch.setattr(rr, "sync_symbol", sync)
+    await h.wd.tick()
+    assert h.cpu_runs == 0
+    assert Event.REGIME_REFRESH_ERROR in h.events()
+    assert "only 1/3 symbols" in h.sent[0][1]
+
+
+def test_fractional_interval_never_means_every_hour(cfg):
+    cfg._cache["scheduler"] = {"regime_refresh_interval_days": "0.5"}
+    assert rr._sched(cfg, "regime_refresh_interval_days", 7) == 1
+    cfg._cache["scheduler"] = {"regime_refresh_interval_days": "abc"}
+    assert rr._sched(cfg, "regime_refresh_interval_days", 7) == 7
+
+
+def test_zero_risk_settings_are_replayed_as_live_reads_them(cfg):
+    cfg._cache["thresholds"] = {"risk_per_trade_pct": "0", "sl_trailing_stop_pct": "0"}
+    rc = build_refresh_config(cfg, SETTINGS)
+    assert rc.risk_per_trade_pct == 0.0 and rc.engine.trail_pct == 0.0
+
+
+@pytest.mark.asyncio
+async def test_feed_returning_non_hourly_bars_is_refused(store):
+    async def half_hourly(symbol, since_ms):
+        return [
+            OHLCV(
+                timestamp=datetime.fromtimestamp((since_ms + i * H // 2) / 1000, tz=UTC),
+                open=Decimal(1),
+                high=Decimal(1),
+                low=Decimal(1),
+                close=Decimal(1),
+                volume=Decimal(0),
+            )
+            for i in range(10)
+        ]
+
+    with pytest.raises(ValueError, match="not 1h-aligned"):
+        await sync_symbol(store, half_hourly, "A/USDT", lookback_days=10, now=NOW)
+    assert FakeStore.rows.get("A/USDT", {}) == {}
 
 
 @pytest.mark.asyncio
@@ -516,3 +653,21 @@ async def test_evaluation_runs_in_a_separate_process():
     assert isinstance(out, RefreshOutcome)
     assert out.status == "validation_failed"  # 140 days of dev data < 365
     assert any("history" in f for f in out.failures)
+
+
+@pytest.mark.asyncio
+async def test_cancelling_the_subprocess_terminates_the_worker():
+    import asyncio
+    import time
+
+    task = asyncio.create_task(rr.run_in_subprocess(time.sleep, 60))
+    await asyncio.sleep(1.5)
+    t0 = time.monotonic()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert time.monotonic() - t0 < 5
+    import multiprocessing
+
+    await asyncio.sleep(0.5)
+    assert not [p for p in multiprocessing.active_children() if p.is_alive()]

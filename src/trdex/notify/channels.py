@@ -8,6 +8,8 @@ token, SMTP password) never appear in error messages or logs.
 from __future__ import annotations
 
 import asyncio
+import logging
+import re
 import smtplib
 import ssl
 from collections.abc import Awaitable, Callable
@@ -18,6 +20,25 @@ import httpx
 
 TELEGRAM_API = "https://api.telegram.org"
 TELEGRAM_MAX_LEN = 4096
+MAX_RETRY_AFTER = 300.0
+
+_BOT_TOKEN_IN_URL = re.compile(r"/bot[^/\s]+/")
+
+
+class _RedactBotToken(logging.Filter):
+    """httpx logs every request URL at INFO; Bot API URLs embed the token."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        if "/bot" in message:
+            record.msg = _BOT_TOKEN_IN_URL.sub("/bot***/", message)
+            record.args = ()
+        return True
+
+
+for _name in ("httpx", "httpcore"):
+    if not any(isinstance(f, _RedactBotToken) for f in logging.getLogger(_name).filters):
+        logging.getLogger(_name).addFilter(_RedactBotToken())
 
 
 class NotificationError(RuntimeError):
@@ -90,8 +111,9 @@ class TelegramBotChannel:
                 last = f"HTTP {resp.status_code} {desc}".strip()
                 if resp.status_code == 429:
                     retry_after = (data.get("parameters") or {}).get("retry_after")
-                    if isinstance(retry_after, (int, float)):
-                        delay = float(retry_after)
+                    if isinstance(retry_after, (int, float)) and attempt < self._max_attempts - 1:
+                        await self._sleep(min(float(retry_after), MAX_RETRY_AFTER))
+                        continue
                 elif 400 <= resp.status_code < 500:
                     raise NotificationError(_redact(f"telegram: {last}", self._token))
             if attempt < self._max_attempts - 1:

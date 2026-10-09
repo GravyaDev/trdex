@@ -6,6 +6,7 @@ from __future__ import annotations
 import random
 
 import pytest
+
 from trdex.research.stats import (
     basket_returns,
     benjamini_hochberg,
@@ -17,7 +18,6 @@ from trdex.research.stats import (
     regime_range,
     seasonality,
 )
-
 from trdex.risk.sizing import recent_cv
 
 H = 3_600_000

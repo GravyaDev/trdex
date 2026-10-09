@@ -549,10 +549,18 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     from trdex.research.regime_refresh import RegimeWatchdog, watchdog_loop
     from trdex.services.runtime_config import get_config_service as _get_cfg
 
-    async def _fetch_1h_page(symbol: str, since_ms: int):
-        source = "binance" if "binance" in feed_manager.feeds else None
+    from trdex.market.models import OHLCV as _OHLCV
+
+    async def _fetch_1h_page(symbol: str, since_ms: int) -> list[_OHLCV]:
+        # Binance only: other feeds ignore ``since`` or return other
+        # granularities under "1h" (CoinGecko). No silent fallback.
+        if "binance" not in feed_manager.feeds:
+            raise RuntimeError(
+                "regime refresher needs the Binance feed "
+                "(integrations.binance_feed_enabled)"
+            )
         return await feed_manager.get_ohlcv(
-            symbol, timeframe="1h", limit=1000, since=since_ms, source=source
+            symbol, timeframe="1h", limit=1000, since=since_ms, source="binance"
         )
 
     _regime_watchdog_task = asyncio.create_task(
