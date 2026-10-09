@@ -29,6 +29,8 @@ from datetime import UTC, datetime
 from scripts.backtest.research import data_end, dev_period, regime_range
 from scripts.backtest.seasonality import _load_available
 
+from trdex.risk.readiness import REGIME_MAX_AGE_DAYS
+
 
 def main() -> None:
     ap = argparse.ArgumentParser(
@@ -61,8 +63,13 @@ def main() -> None:
         print(f"  regime_data_end = {end.isoformat()}")
         print(
             f"\nData ends {age} days ago; readiness rejects bounds older than "
-            "regime_max_age_days (default 90)."
+            f"regime_max_age_days (default {REGIME_MAX_AGE_DAYS})."
         )
+        if age > REGIME_MAX_AGE_DAYS:
+            print(
+                "WARNING: older than the default limit, readiness will fail with these "
+                "values. Refresh the cache (scripts/backtest/fetch_ohlcv.py) and re-run."
+            )
 
 
 if __name__ == "__main__":
