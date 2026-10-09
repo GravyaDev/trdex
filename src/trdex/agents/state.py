@@ -62,8 +62,10 @@ class RiskDecision:
     approved: bool = False
     reason: str = ""
     position_size: float = 0.0        # fraction of portfolio (0.0 – 1.0)
-    stop_loss_pct: float = 0.02       # default 2%
-    take_profit_pct: float = 0.04     # default 4%
+    # Per-position SL/TP requested for this trade. None = no per-position
+    # value: the StopLossMonitor applies operator config + adaptive thresholds.
+    stop_loss_pct: float | None = None
+    take_profit_pct: float | None = None
     annotation: str | None = None     # LLM risk commentary (observability-only, Task 7)
     drawdown_warning: bool = False    # True when approved above 10% dd (sim mode override)
 

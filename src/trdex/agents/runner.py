@@ -322,8 +322,9 @@ class AgentRunner:
                 risk_approved=state.risk.approved,
                 risk_reason=state.risk.reason,
                 position_size=state.risk.position_size,
-                stop_loss_pct=state.risk.stop_loss_pct,
-                take_profit_pct=state.risk.take_profit_pct,
+                # Column is NOT NULL DEFAULT 0: 0 means "monitor thresholds".
+                stop_loss_pct=state.risk.stop_loss_pct or 0.0,
+                take_profit_pct=state.risk.take_profit_pct or 0.0,
                 order_status=state.order.status,
                 filled_price=state.order.filled_price,
                 filled_qty=state.order.filled_qty,

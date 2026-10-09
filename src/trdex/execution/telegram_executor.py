@@ -4,7 +4,9 @@ Zero business logic here. This file is a sequencer:
   0. Normalise direction; reject SELL (long-only) before any I/O.
   1. Route the symbol (may raise SymbolNotRoutable → skip).
   2. Fetch current price from the routed feed.
-  3. Run all gates in order. First failure → skip with reason.
+  3. Run all gates in order. First failure → skip with reason. The
+     regime gate (last) pulls recent closes from the routed feed only
+     when bounds apply.
   4. Compute qty = budget / current_price.
   5. Compute SL/TP percentages relative to entry (or current if at-market).
   6. Place order via gateway. Any raise → error outcome.
@@ -24,6 +26,7 @@ from typing import Any, Callable, Literal, Protocol
 
 from trdex.execution.symbol_router import SymbolNotRoutable, route
 from trdex.execution.telegram_gates import GateConfig, run_all_gates
+from trdex.risk.sizing import VOL_WINDOW, recent_cv
 from trdex.telegram.parser import TelegramSignal
 
 logger = logging.getLogger(__name__)
@@ -78,6 +81,23 @@ class TelegramSignalExecutor:
         self._outcome_repo = outcome_repo
         self._balance_provider = balance_provider
         self._config = config
+
+    @staticmethod
+    async def _recent_cv(feed: Any, symbol: str) -> float | None:
+        """CV of the last VOL_WINDOW 1h closes, the Analyst's formula.
+
+        ``None`` (feed without ``get_recent_closes``, fetch error, too few
+        closes) means "unknown": with configured bounds the gate blocks.
+        """
+        get_closes = getattr(feed, "get_recent_closes", None)
+        if get_closes is None:
+            return None
+        try:
+            closes = await get_closes(symbol, VOL_WINDOW)
+        except Exception as exc:
+            logger.warning("[telegram-exec] closes fetch failed for %s: %s", symbol, exc)
+            return None
+        return recent_cv([float(c) for c in closes])
 
     async def execute(self, signal: TelegramSignal, *, outcome_id: int) -> ExecuteOutcome:
         # 0. Normalise direction up-front. Defence-in-depth: TelegramSignal
@@ -146,6 +166,7 @@ class TelegramSignalExecutor:
             outcome_repo=self._outcome_repo,
             balance=self._balance_provider(),
             config=self._config,
+            cv_provider=lambda: self._recent_cv(feed, signal.symbol),
         )
         if not gate_result.passed:
             logger.info("[telegram-exec] skip %s %s from %s: %s",

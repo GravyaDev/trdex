@@ -149,6 +149,11 @@ async def _telegram_background(
             from types import SimpleNamespace
 
             _settings = _get_settings()
+            from trdex.execution.telegram_gates import regime_gate_settings
+
+            regime, regime_blocker = regime_gate_settings(
+                svc, live=_settings.mode.value == "live", now=datetime.now(tz=UTC)
+            )
             config = GateConfig(
                 asset_class_cap=int(svc.get_typed(
                     "telegram", "asset_class_cap", 3,
@@ -162,7 +167,12 @@ async def _telegram_background(
                 entry_drift_tolerance=float(svc.get_typed(
                     "telegram", "entry_drift_tolerance", 0.005,
                 )),
+                max_stop_distance=float(svc.get_typed(
+                    "telegram", "max_stop_distance", 0.10,
+                )),
                 budget=Decimal(str(_settings.telegram_signal_budget)),
+                regime=regime,
+                regime_blocker=regime_blocker,
             )
             portfolio_repo = PortfolioRepository(session)
             outcome_repo = SignalOutcomeRepository(session)
@@ -188,6 +198,12 @@ async def _telegram_background(
                 async def get_current_price(self, symbol: str) -> float:
                     ticker = await self._mgr.get_ticker(symbol)
                     return float(ticker.price)
+
+                async def get_recent_closes(self, symbol: str, limit: int) -> list[float]:
+                    # 1h, like the agent runner's candles: the regime gate
+                    # must see the same CV as the Analyst / Risk Gate 4c.
+                    candles = await self._mgr.get_ohlcv(symbol, timeframe="1h", limit=limit)
+                    return [float(c.close) for c in candles]
 
             executor = TelegramSignalExecutor(
                 gateway=gateway,
@@ -1232,6 +1248,7 @@ def create_app() -> FastAPI:
             "kill_switch_events": report.kill_switch_events,
             "criteria": report.criteria,
             "failures": report.failures,
+            "warnings": report.warnings,
         }
 
     # --- Debug endpoints ---
