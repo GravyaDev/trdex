@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from types import SimpleNamespace
 from typing import Any
 
 from trdex.agents.intent import Intent
@@ -238,6 +239,23 @@ async def risk_node(state: AgentState) -> AgentState:
             await _write_last_signal(state, approved=False, reason=reason)
             return state
 
+    # SL/TP: use analyst LLM suggestions when available, clipped to safe range.
+    # Without a suggestion leave them unset (None): stamping a default here
+    # would override the operator's thresholds and the volatility-adaptive
+    # stop in the StopLossMonitor for every agent position.
+    _SL_MIN, _SL_MAX = 0.01, 0.10
+    _TP_MIN, _TP_MAX = 0.02, 0.20
+    sl_suggestion = state.analysis.suggested_stop_loss
+    tp_suggestion = state.analysis.suggested_take_profit
+    final_sl: float | None = None
+    final_tp: float | None = None
+    if sl_suggestion is not None:
+        final_sl = max(_SL_MIN, min(_SL_MAX, sl_suggestion))
+        logger.info("[Risk] SL from LLM: %.2f%% → clipped to %.2f%%", sl_suggestion * 100, final_sl * 100)
+    if tp_suggestion is not None:
+        final_tp = max(_TP_MIN, min(_TP_MAX, tp_suggestion))
+        logger.info("[Risk] TP from LLM: %.2f%% → clipped to %.2f%%", tp_suggestion * 100, final_tp * 100)
+
     # Position sizing — risk-based. An OPEN commits the equity fraction
     # that loses ``risk_per_trade_pct`` if the StopLossMonitor's stop is
     # hit, capped at max_position_pct (and the hard MAX_POSITION_FRACTION).
@@ -253,7 +271,18 @@ async def risk_node(state: AgentState) -> AgentState:
         )
         position_size = max_fraction
         if intent.is_open:
-            stop_pct = await _entry_stop_pct(state, cv, _cfg, settings)
+            # llm-agents: the stop stored on the position is the LLM
+            # suggestion (final_sl); the monitor applies max(floor, final_sl)
+            # (effective_thresholds), so sizing must use the same stop.
+            stop_pct = await _entry_stop_pct(
+                state,
+                cv,
+                _cfg,
+                settings,
+                position=SimpleNamespace(
+                    stop_loss_pct=final_sl, take_profit_pct=final_tp, source="agent"
+                ),
+            )
             risk_per_trade = _cfg_float(_cfg, "risk_per_trade_pct", settings.risk_per_trade_pct) or 0.0
             position_size = risk_position_fraction(
                 risk_per_trade=risk_per_trade, stop_pct=stop_pct, max_fraction=max_fraction,
@@ -272,23 +301,6 @@ async def risk_node(state: AgentState) -> AgentState:
         trade_value = portfolio.equity * position_size
         logger.info("[Risk] equity=%.2f position_size=%.3f → trade_value≈%.2f",
                     portfolio.equity, position_size, trade_value)
-
-    # SL/TP: use analyst LLM suggestions when available, clipped to safe range.
-    # Without a suggestion leave them unset (None): stamping a default here
-    # would override the operator's thresholds and the volatility-adaptive
-    # stop in the StopLossMonitor for every agent position.
-    _SL_MIN, _SL_MAX = 0.01, 0.10
-    _TP_MIN, _TP_MAX = 0.02, 0.20
-    sl_suggestion = state.analysis.suggested_stop_loss
-    tp_suggestion = state.analysis.suggested_take_profit
-    final_sl: float | None = None
-    final_tp: float | None = None
-    if sl_suggestion is not None:
-        final_sl = max(_SL_MIN, min(_SL_MAX, sl_suggestion))
-        logger.info("[Risk] SL from LLM: %.2f%% → clipped to %.2f%%", sl_suggestion * 100, final_sl * 100)
-    if tp_suggestion is not None:
-        final_tp = max(_TP_MIN, min(_TP_MAX, tp_suggestion))
-        logger.info("[Risk] TP from LLM: %.2f%% → clipped to %.2f%%", tp_suggestion * 100, final_tp * 100)
 
     # Flag trades approved above the live-mode drawdown threshold (10%).
     # These would have been blocked in live mode — useful for analysis.
