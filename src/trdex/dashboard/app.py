@@ -1213,6 +1213,9 @@ with st.expander("Risk Thresholds"):
             ("sl_daily_drawdown_pct", "Daily Drawdown Limit %", "0.10"),
             ("gate_max_drawdown", "Max Drawdown Limit %", "0.20"),
             ("max_position_pct", "Max Position Size %", "0.02"),
+            ("risk_per_trade_pct", "Risk per Trade % (size = risk / stop)", "0.001"),
+            ("regime_cv_min", "Regime CV min (from regime_range.py)", ""),
+            ("regime_cv_max", "Regime CV max (from regime_range.py)", ""),
             ("gate_min_days", "Gate Min Simulation Days", "20"),
         ]:
             _thr_inputs[thr_key] = st.text_input(

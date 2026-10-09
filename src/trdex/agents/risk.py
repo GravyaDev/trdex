@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from trdex.agents.intent import Intent
 from trdex.agents.memory_helpers import attach_memory_snapshot
@@ -42,6 +43,43 @@ MIN_CONFIDENCE = 0.3          # Analyst must be at least 30% confident
 MAX_POSITION_FRACTION = 0.05  # Never more than 5% of portfolio per trade
 MAX_DRAWDOWN_BLOCK_LIVE = 0.10   # Block new trades in live mode at 10%
 MAX_DRAWDOWN_BLOCK_SIM = 0.20    # More permissive in simulation (20%) to collect more data
+
+
+def _cfg_float(cfg: Any, key: str, default: float | None) -> float | None:
+    """Read a ``thresholds`` value from Runtime Config, falling back to ``default``."""
+    if cfg is None:
+        return default
+    value = cfg.get_typed("thresholds", key, default)
+    return None if value is None else float(value)
+
+
+async def _entry_stop_pct(state: AgentState, cv: float | None, cfg: Any, settings: Any) -> float:
+    """Stop-loss fraction the StopLossMonitor will apply to a new position on
+    ``state.symbol``: per-symbol override, else ``max(base, 2.5 x CV)``.
+
+    Uses the monitor's own ``effective_thresholds`` and the same Runtime
+    Config keys the monitor is built from, so sizing and exits agree.
+    Raises if the per-symbol override cannot be read (caller fails closed).
+    """
+    from trdex.risk.stop_loss import effective_thresholds
+
+    base_sl = _cfg_float(cfg, "sl_position_pct", settings.sl_position_pct)
+    base_tp = _cfg_float(cfg, "sl_take_profit_pct", settings.sl_take_profit_pct)
+    base_trail = _cfg_float(cfg, "sl_trailing_stop_pct", settings.sl_trailing_stop_pct)
+    override = None
+    if state.session_factory is not None:
+        from trdex.storage.symbol_config_repo import SymbolConfigRepository
+        async with state.session_factory() as session:
+            override = await SymbolConfigRepository(session).get(state.symbol)
+    stop_pct, _, _ = effective_thresholds(
+        None,
+        override,
+        cv if cv is not None else 0.0,
+        base_sl=base_sl or 0.0,
+        base_tp=base_tp or 0.0,
+        base_trail=base_trail or 0.0,
+    )
+    return float(stop_pct)
 
 
 async def risk_node(state: AgentState) -> AgentState:
@@ -132,6 +170,38 @@ async def risk_node(state: AgentState) -> AgentState:
             await _write_last_signal(state, approved=False, reason=reason)
             return state
 
+    # Volatility of the candles the Analyst used: same formula and window
+    # as the value it writes to the entity graph for the StopLossMonitor.
+    from trdex.risk.sizing import RegimeBounds, check_regime, recent_cv, risk_position_fraction
+    cv = recent_cv([c[4] for c in state.market.candles]) if state.market else None
+
+    # Gate 4c: volatility regime — OPEN intents only (CLOSE must always
+    # pass). Entries outside the CV range the strategy was backtested on
+    # are blocked; bounds come from scripts/backtest/regime_range.py via
+    # Runtime Config (thresholds.regime_cv_min / regime_cv_max).
+    # Simulation: unset bounds = gate off, to keep collecting data.
+    # Live: unset bounds = fail-closed (untested conditions).
+    if intent.is_open:
+        try:
+            bounds = RegimeBounds.from_config(
+                _cfg_float(_cfg, "regime_cv_min", None),
+                _cfg_float(_cfg, "regime_cv_max", None),
+            )
+            regime_block = check_regime(cv, bounds)
+            if regime_block is None and not bounds.configured and settings.mode.value == "live":
+                regime_block = (
+                    "regime bounds not configured — live mode requires "
+                    "thresholds.regime_cv_min/regime_cv_max from scripts/backtest/regime_range.py"
+                )
+        except Exception as exc:
+            regime_block = f"invalid regime bounds (fail-closed): {exc}"
+        if regime_block is not None:
+            reason = f"Volatility regime gate: {regime_block}."
+            state.risk = RiskDecision(approved=False, reason=reason)
+            logger.info("[Risk] BLOCKED — %s", reason)
+            await _write_last_signal(state, approved=False, reason=reason)
+            return state
+
     # Gate 5: Live mode requires passing simulation gate criteria
     if settings.mode.value == "live" and state.session_factory is not None:
         from trdex.risk.readiness import evaluate_readiness
@@ -158,9 +228,36 @@ async def risk_node(state: AgentState) -> AgentState:
             await _write_last_signal(state, approved=False, reason=reason)
             return state
 
-    # Position sizing: use configured max, capped at hard limit
-    # If we have real equity, log it for transparency
-    position_size = min(settings.max_position_pct, MAX_POSITION_FRACTION)
+    # Position sizing — risk-based. An OPEN commits the equity fraction
+    # that loses ``risk_per_trade_pct`` if the StopLossMonitor's stop is
+    # hit, capped at max_position_pct (and the hard MAX_POSITION_FRACTION).
+    # With the defaults (risk 0.1%, base stop 2%, cap 5%) a low-volatility
+    # entry is sized exactly as before; wider adaptive stops get smaller
+    # positions instead of more risk. CLOSE sells the whole position
+    # (executor), so its size is informational only.
+    sizing_note = ""
+    try:
+        max_fraction = min(
+            _cfg_float(_cfg, "max_position_pct", settings.max_position_pct) or 0.0,
+            MAX_POSITION_FRACTION,
+        )
+        position_size = max_fraction
+        if intent.is_open:
+            stop_pct = await _entry_stop_pct(state, cv, _cfg, settings)
+            risk_per_trade = _cfg_float(_cfg, "risk_per_trade_pct", settings.risk_per_trade_pct) or 0.0
+            position_size = risk_position_fraction(
+                risk_per_trade=risk_per_trade, stop_pct=stop_pct, max_fraction=max_fraction,
+            )
+            sizing_note = (
+                f" Size {position_size:.2%} of equity: risk {position_size * stop_pct:.3%}"
+                f" at stop {stop_pct:.2%} (cv={cv if cv is not None else 0.0:.4f})."
+            )
+    except Exception as exc:
+        reason = f"Position sizing failed (fail-closed): {exc}"
+        state.risk = RiskDecision(approved=False, reason=reason)
+        logger.exception("[Risk] BLOCKED — %s", reason)
+        await _write_last_signal(state, approved=False, reason=reason)
+        return state
     if portfolio.equity > 0:
         trade_value = portfolio.equity * position_size
         logger.info("[Risk] equity=%.2f position_size=%.3f → trade_value≈%.2f",
@@ -186,7 +283,7 @@ async def risk_node(state: AgentState) -> AgentState:
     # Flag trades approved above the live-mode drawdown threshold (10%).
     # These would have been blocked in live mode — useful for analysis.
     dd_warning = portfolio.drawdown_pct >= MAX_DRAWDOWN_BLOCK_LIVE
-    approved_reason = "All risk gates passed."
+    approved_reason = "All risk gates passed." + sizing_note
     if dd_warning:
         approved_reason += f" (drawdown {portfolio.drawdown_pct:.1%} — would be blocked in live mode at {MAX_DRAWDOWN_BLOCK_LIVE:.0%})"
     state.risk = RiskDecision(
