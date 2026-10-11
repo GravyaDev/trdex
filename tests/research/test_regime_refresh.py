@@ -787,3 +787,26 @@ async def test_a_corrupt_stored_cluster_value_is_overwritten_not_a_dead_end(cfg,
     h = Harness(cfg, monkeypatch, outcome=replace(GOOD, clusters=[["BTC/USDT", "ETH/USDT"]]))
     await h.wd.tick()
     assert cfg.get_category("thresholds")["correlation_clusters"] == '[["BTC/USDT", "ETH/USDT"]]'
+
+
+def test_refresh_replays_the_venue_perps_by_default_spot_on_request(cfg, monkeypatch):
+    rc = build_refresh_config(cfg, SETTINGS)
+    assert rc.engine.perps and rc.engine.max_leverage == 3.0
+    assert rc.engine.funding_rate_8h == pytest.approx(0.0001)
+    cfg._cache["thresholds"] = {"execution_venue": "spot"}
+    spot = build_refresh_config(cfg, SETTINGS)
+    assert not spot.engine.perps and spot.engine.funding_rate_8h == 0.0
+
+    seen = {}
+
+    def fake_backtest(strategy, window, params):
+        seen["shorts"] = strategy.shorts
+        return _result()
+
+    monkeypatch.setattr(rr, "run_backtest", fake_backtest)
+    start = NOW_MS - 400 * 24 * H
+    data = {"A/USDT": _bars(9600, start_ms=start)}
+    evaluate(data, replace(CFG, engine=rc.engine))
+    assert seen["shorts"] is True
+    evaluate(data, replace(CFG, engine=spot.engine))
+    assert seen["shorts"] is False

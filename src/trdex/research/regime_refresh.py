@@ -167,7 +167,8 @@ def evaluate(ohlcv_by_symbol: dict[str, list[list[Any]]], cfg: RefreshConfig) ->
         clusters=tuple(frozenset(c) for c in clusters or ()),
         max_per_cluster=cfg.max_per_cluster,
     )
-    result = run_backtest(LiveRuleEngine(risk_per_trade_pct=cfg.risk_per_trade_pct), window, engine)
+    strategy = LiveRuleEngine(risk_per_trade_pct=cfg.risk_per_trade_pct, shorts=engine.perps)
+    result = run_backtest(strategy, window, engine)
     metrics = {
         "trades": float(result.trades_count),
         "return_pct": result.return_pct,
@@ -316,12 +317,14 @@ def build_refresh_config(cfg: Any, settings: Any) -> RefreshConfig:
     gate judges the simulation with.
     """
     from trdex.agents.risk import MAX_POSITION_FRACTION
+    from trdex.risk.leverage import derivatives_config
     from trdex.risk.portfolio_budget import DEFAULT_CORRELATION, portfolio_rules
     from trdex.risk.readiness import MIN_TRADES_FOR_EVALUATION
 
     # Raises on invalid values (refresh error, notified). The stored
     # clusters are not read: this job recomputes and overwrites them.
     rules = portfolio_rules(cfg, with_clusters=False)
+    venue = derivatives_config(cfg)  # perps: shorts, leverage, funding replayed too
 
     symbols_csv = (
         cfg.get("symbols", "agent_scheduler_symbols", "") or settings.agent_scheduler_symbols
@@ -339,6 +342,11 @@ def build_refresh_config(cfg: Any, settings: Any) -> RefreshConfig:
         trail_pct=_threshold(cfg, "sl_trailing_stop_pct", settings.sl_trailing_stop_pct),
         min_reward_risk=rules.min_reward_risk,
         portfolio_risk_max_pct=rules.risk_cap,
+        perps=venue.perps,
+        max_leverage=venue.max_leverage,
+        maintenance_margin_rate=venue.mmr,
+        liquidation_buffer=venue.buffer,
+        funding_rate_8h=venue.funding_rate_8h if venue.perps else 0.0,
     )
     criteria = ValidationCriteria(
         min_trades=MIN_TRADES_FOR_EVALUATION,

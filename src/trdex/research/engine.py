@@ -12,6 +12,7 @@ from math import sqrt
 from statistics import mean, pstdev
 from typing import Any
 
+from trdex.risk.leverage import DerivativesConfig, choose_leverage, funding_cash, liquidation_price
 from trdex.risk.portfolio_budget import cluster_block, fit_to_budget, reward_risk_block
 from trdex.risk.sizing import risk_position_fraction
 
@@ -176,9 +177,20 @@ class EngineParams:
     portfolio_risk_max_pct: float | None = None
     clusters: tuple[frozenset[str], ...] = ()
     max_per_cluster: int = 0
+    # Perpetual futures (trdex.risk.leverage), as live on the usdm venue:
+    # isolated margin at the leverage the Risk node would choose (entries
+    # whose stop no leverage can keep inside the liquidation buffer are
+    # skipped), funding every 8h on the notional, and a gap through the
+    # liquidation price loses the whole margin. False = spot (unchanged).
+    perps: bool = False
+    max_leverage: float = 1.0
+    maintenance_margin_rate: float = 0.005
+    liquidation_buffer: float = 0.5
+    funding_rate_8h: float = 0.0
 
 
 _BARS_PER_YEAR = {"1h": 8760, "1d": 365}
+_FUNDING_MS = 8 * 3_600_000
 
 
 @dataclass
@@ -188,6 +200,7 @@ class _Account:
     cash: float
     committed: float = 0.0
     open_risk: dict[str, float] = field(default_factory=dict)  # symbol -> cash lost at stop
+    open_side: dict[str, str] = field(default_factory=dict)  # symbol -> "BUY" | "SELL"
 
 
 @dataclass
@@ -206,6 +219,12 @@ class _SymbolState:
     tp_pct: float = 0.0
     trail_pct: float = 0.0
     last_close: float | None = None
+    # Perps only (leverage 0 = spot accounting): margin locked, entry fee
+    # paid in cash, and the isolated liquidation price.
+    leverage: int = 0
+    margin: float = 0.0
+    entry_fee: float = 0.0
+    liq_price: float = 0.0
 
 
 def run_backtest(
@@ -348,6 +367,11 @@ def _step(
 ) -> None:
     ts, o, h, l, _c, _v = st.bars[i]
 
+    # 0) Funding at 00/08/16 UTC on perps carried into this bar.
+    if st.leverage and params.funding_rate_8h and ts % _FUNDING_MS == 0:
+        side = "BUY" if st.position_state == "long" else "SELL"
+        account.cash += funding_cash(side, st.entry_qty, o, params.funding_rate_8h)
+
     # 1) Exits for a position carried into this bar (gap-aware).
     exited_intrabar = False
     if st.position_state != "flat":
@@ -393,7 +417,10 @@ def _check_exits(st, ts, o, h, l, params, account, trades) -> bool:
     if st.position_state == "long":
         if l <= st.stop:
             reason = "TRAIL" if st.stop > st.initial_stop else "SL"
-            _close(st, ts, min(o, st.stop), reason, params, account, trades)
+            fill = min(o, st.stop)
+            if st.leverage and fill <= st.liq_price:
+                reason, fill = "LIQ", st.liq_price  # gapped through liquidation
+            _close(st, ts, fill, reason, params, account, trades)
             return True
         tp_price = st.entry_price * (1 + st.tp_pct)
         if h >= tp_price:
@@ -407,7 +434,10 @@ def _check_exits(st, ts, o, h, l, params, account, trades) -> bool:
     if st.position_state == "short":
         if h >= st.stop:
             reason = "TRAIL" if st.stop < st.initial_stop else "SL"
-            _close(st, ts, max(o, st.stop), reason, params, account, trades)
+            fill = max(o, st.stop)
+            if st.leverage and fill >= st.liq_price:
+                reason, fill = "LIQ", st.liq_price
+            _close(st, ts, fill, reason, params, account, trades)
             return True
         tp_price = st.entry_price * (1 - st.tp_pct)
         if l <= tp_price:
@@ -437,10 +467,31 @@ def _open(st, side, o, ts, strategy, i, params, account) -> bool:
     # Size on realised equity (cash + budget locked in open positions),
     # like the live executor sizes on portfolio equity.
     equity = account.cash + account.committed
+    entry_side = "BUY" if side == "long" else "SELL"
     if reward_risk_block(sl, tp, params.min_reward_risk):
         return False
-    if cluster_block(st.symbol, account.open_risk, params.clusters, params.max_per_cluster):
+    if cluster_block(
+        st.symbol,
+        account.open_side.items(),
+        params.clusters,
+        params.max_per_cluster,
+        side=entry_side,
+    ):
         return False
+    leverage = 0
+    if params.perps:
+        chosen, _ = choose_leverage(
+            sl,
+            DerivativesConfig(
+                venue="usdm",
+                max_leverage=params.max_leverage,
+                mmr=params.maintenance_margin_rate,
+                buffer=params.liquidation_buffer,
+            ),
+        )
+        if chosen is None:
+            return False
+        leverage = chosen
     if params.portfolio_risk_max_pct:
         fit = fit_to_budget(
             planned_size=fraction,
@@ -452,11 +503,21 @@ def _open(st, side, o, ts, strategy, i, params, account) -> bool:
             return False
         fraction = fit.size
     budget = equity * fraction
-    account.cash -= budget
-    account.committed += budget
+    st.leverage = leverage
+    if leverage:
+        # Perps: lock the margin, pay the entry fee on the notional.
+        st.margin = budget / leverage
+        st.entry_fee = budget * params.fee_pct
+        st.entry_qty = budget / o
+        st.liq_price = liquidation_price(o, entry_side, leverage, params.maintenance_margin_rate)
+        account.cash -= st.margin + st.entry_fee
+        account.committed += st.margin
+    else:
+        account.cash -= budget
+        account.committed += budget
+        st.entry_qty = (budget / o) * (1 - params.fee_pct)
     st.position_state = side
     st.entry_price = o
-    st.entry_qty = (budget / o) * (1 - params.fee_pct)
     st.entry_ts = ts
     st.budget = budget
     st.tp_pct = tp
@@ -465,19 +526,30 @@ def _open(st, side, o, ts, strategy, i, params, account) -> bool:
     st.initial_stop = o * (1 - sl) if side == "long" else o * (1 + sl)
     st.stop = st.initial_stop
     account.open_risk[st.symbol] = budget * sl
+    account.open_side[st.symbol] = entry_side
     return True
 
 
 def _close(st, ts, exit_price, reason, params, account, trades) -> None:
     qty, entry = st.entry_qty, st.entry_price
     exit_fee = qty * exit_price * params.fee_pct
-    if st.position_state == "long":
-        proceeds = qty * exit_price - exit_fee
+    if st.leverage:
+        move = exit_price - entry if st.position_state == "long" else entry - exit_price
+        # Isolated margin: a liquidation loses the whole margin, never more.
+        proceeds = 0.0 if reason == "LIQ" else max(0.0, st.margin + move * qty - exit_fee)
+        account.cash += proceeds
+        account.committed -= st.margin
+        cost = st.margin + st.entry_fee
     else:
-        proceeds = qty * entry + (entry - exit_price) * qty - exit_fee
-    account.cash += proceeds
-    account.committed -= st.budget
+        if st.position_state == "long":
+            proceeds = qty * exit_price - exit_fee
+        else:
+            proceeds = qty * entry + (entry - exit_price) * qty - exit_fee
+        account.cash += proceeds
+        account.committed -= st.budget
+        cost = st.budget
     account.open_risk.pop(st.symbol, None)
+    account.open_side.pop(st.symbol, None)
     trades.append({
         "symbol": st.symbol,
         "side": st.position_state,
@@ -489,17 +561,27 @@ def _close(st, ts, exit_price, reason, params, account, trades) -> None:
         # Cash P&L of the round trip: includes BOTH fees (the entry fee is
         # the budget not converted into qty), so per-symbol/quarter sums
         # and win rate match the change in equity.
-        "net_pnl": proceeds - st.budget,
+        "net_pnl": proceeds - cost,
         "reason": reason,
+        "leverage": st.leverage or 1,
     })
     st.position_state = "flat"
     st.budget = 0.0
+    st.leverage, st.margin, st.entry_fee, st.liq_price = 0, 0.0, 0.0, 0.0
 
 
 def _mark_to_market(account: _Account, states: list[_SymbolState]) -> float:
     equity = account.cash
     for st in states:
         if st.position_state == "flat" or st.last_close is None:
+            continue
+        if st.leverage:
+            move = (
+                st.last_close - st.entry_price
+                if st.position_state == "long"
+                else st.entry_price - st.last_close
+            )
+            equity += max(0.0, st.margin + move * st.entry_qty)
             continue
         if st.position_state == "long":
             equity += st.entry_qty * st.last_close

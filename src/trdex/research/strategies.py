@@ -20,8 +20,9 @@ class LiveRuleEngine:
     - Signal: ``trdex.agents.analyst._rule_based_signal`` (RSI14 + SMA9/21),
       imported from production code so the two cannot drift apart.
     - Risk gate 2: confidence below ``trdex.agents.risk.MIN_CONFIDENCE`` → HOLD.
-    - Intent translation as in ``signal_to_intent``: long-only, BUY opens
-      when flat, SELL closes an open long, never opens a short.
+    - Intent translation as in ``signal_to_intent``: BUY opens a long when
+      flat or closes a short; SELL closes a long, or opens a short when
+      flat and ``shorts`` (perps venue); no flip within one bar.
     - Exits as in ``StopLossMonitor``: ``effective_thresholds`` from
       production code, i.e. config base (EngineParams) widened by the
       volatility floor max(base, k x CV of the last 20 closes).
@@ -43,15 +44,20 @@ class LiveRuleEngine:
     name = "LiveRuleEngine"
     timeframe = "1h"
 
-    def __init__(self, regime=None, risk_per_trade_pct: float | None = 0.001):
+    def __init__(
+        self, regime=None, risk_per_trade_pct: float | None = 0.001, shorts: bool = False
+    ):
         """``regime``: ``trdex.risk.sizing.RegimeBounds`` (default: no bounds).
         ``risk_per_trade_pct``: live default of thresholds.risk_per_trade_pct
         (src/trdex/config.py); ``None`` = fixed notional sizing.
+        ``shorts``: the venue is perpetual futures, so SELL when flat opens
+        a short (``signal_to_intent(shorts=True)``).
         """
         from trdex.risk.sizing import RegimeBounds
 
         self.regime = regime if regime is not None else RegimeBounds()
         self.risk_per_trade_pct_override = risk_per_trade_pct
+        self.shorts = shorts
 
     def generate_signal(self, bar_index, candles, indicators, position_state):
         from trdex.agents.analyst import _rule_based_signal
@@ -67,16 +73,19 @@ class LiveRuleEngine:
         )
         if signal == "HOLD" or confidence < MIN_CONFIDENCE:
             return "HOLD"
-        if signal == "BUY":
-            if position_state != "flat":
-                return "HOLD"
-            from trdex.risk.sizing import check_regime
+        # Same truth table as signal_to_intent: closes first, no flip
+        # within one bar, entries only when flat and inside the regime.
+        if signal == "BUY" and position_state == "short":
+            return "CLOSE_SHORT"
+        if signal == "SELL" and position_state == "long":
+            return "CLOSE_LONG"
+        if position_state != "flat" or (signal == "SELL" and not self.shorts):
+            return "HOLD"
+        from trdex.risk.sizing import check_regime
 
-            if check_regime(self._cv(bar_index, indicators), self.regime) is not None:
-                return "HOLD"
-            return "BUY"
-        # SELL: close an open long; long-only, so never open a short.
-        return "CLOSE_LONG" if position_state == "long" else "HOLD"
+        if check_regime(self._cv(bar_index, indicators), self.regime) is not None:
+            return "HOLD"
+        return signal
 
     @staticmethod
     def _cv(bar_index, indicators):
