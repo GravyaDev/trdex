@@ -18,7 +18,6 @@ _IDEMPOTENCY_TTL = 300.0  # 5 minutes
 
 if TYPE_CHECKING:
     from trdex.config import Settings
-    from trdex.execution.live_executor import LiveExecutor
     from trdex.risk.stop_loss import KillSwitch
 
 logger = logging.getLogger(__name__)
@@ -45,6 +44,32 @@ def _to_order_result(result: ExecutionResult) -> OrderResult:
     )
 
 
+def _live_executor_for_venue(settings: Settings) -> ExecutionGateway | None:
+    """Perpetuals (usdm) or spot executor, per ``thresholds.execution_venue``.
+
+    An unreadable venue setting leaves live without an executor: orders
+    are rejected (fail closed) rather than sent to the wrong market. The
+    venue is read once here; changing it needs a restart in live.
+    """
+    from trdex.risk.leverage import derivatives_config
+    from trdex.services.runtime_config import get_config_service
+
+    try:
+        venue = derivatives_config(get_config_service())
+    except Exception:
+        logger.exception("[Gateway] invalid execution venue — live orders will be rejected")
+        return None
+    if venue.perps:
+        from trdex.execution.live_perp_executor import LivePerpExecutor
+
+        logger.info("[Gateway] live executor: Binance USDⓈ-M perpetuals (max %sx)", venue.max_leverage)
+        return LivePerpExecutor.from_settings(settings)
+    from trdex.execution.live_executor import LiveExecutor
+
+    logger.info("[Gateway] live executor: Binance spot (long-only)")
+    return LiveExecutor.from_settings(settings)
+
+
 class DefaultExecutionGateway(ExecutionGateway):
     """Orchestrates order routing: kill-switch check → sim or live dispatch.
 
@@ -56,7 +81,7 @@ class DefaultExecutionGateway(ExecutionGateway):
         self,
         mode: TrdexMode,
         simulator: Simulator,
-        live_executor: LiveExecutor | None,
+        live_executor: ExecutionGateway | None,
         kill_switch: KillSwitch,
     ) -> None:
         self._mode = mode
@@ -79,9 +104,7 @@ class DefaultExecutionGateway(ExecutionGateway):
 
         if s.mode == TrdexMode.LIVE:
             if s.binance_api_key and s.binance_api_secret:
-                from trdex.execution.live_executor import LiveExecutor
-                live_executor = LiveExecutor.from_settings(s)
-                logger.info("[Gateway] live executor initialised (Binance testnet)")
+                live_executor = _live_executor_for_venue(s)
             else:
                 logger.warning(
                     "[Gateway] mode=live but TRDEX_BINANCE_API_KEY / TRDEX_BINANCE_API_SECRET "
