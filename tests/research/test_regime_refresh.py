@@ -778,3 +778,12 @@ async def test_too_little_recent_data_keeps_the_stored_clusters(cfg, monkeypatch
         "clusters BTC/USDT, ETH/USDT"
         in replace(GOOD, clusters=[["BTC/USDT", "ETH/USDT"]]).summary()
     )
+
+
+@pytest.mark.asyncio
+async def test_a_corrupt_stored_cluster_value_is_overwritten_not_a_dead_end(cfg, monkeypatch):
+    cfg._cache["thresholds"]["correlation_clusters"] = "{corrupt"
+    build_refresh_config(cfg, SETTINGS)  # does not read the stored clusters
+    h = Harness(cfg, monkeypatch, outcome=replace(GOOD, clusters=[["BTC/USDT", "ETH/USDT"]]))
+    await h.wd.tick()
+    assert cfg.get_category("thresholds")["correlation_clusters"] == '[["BTC/USDT", "ETH/USDT"]]'

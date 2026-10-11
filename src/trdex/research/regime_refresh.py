@@ -319,7 +319,9 @@ def build_refresh_config(cfg: Any, settings: Any) -> RefreshConfig:
     from trdex.risk.portfolio_budget import DEFAULT_CORRELATION, portfolio_rules
     from trdex.risk.readiness import MIN_TRADES_FOR_EVALUATION
 
-    rules = portfolio_rules(cfg)  # raises on invalid values: refresh error, notified
+    # Raises on invalid values (refresh error, notified). The stored
+    # clusters are not read: this job recomputes and overwrites them.
+    rules = portfolio_rules(cfg, with_clusters=False)
 
     symbols_csv = (
         cfg.get("symbols", "agent_scheduler_symbols", "") or settings.agent_scheduler_symbols

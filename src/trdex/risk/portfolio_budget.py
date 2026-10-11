@@ -216,10 +216,12 @@ class PortfolioRules:
     min_reward_risk: float = DEFAULT_MIN_REWARD_RISK
 
 
-def portfolio_rules(cfg: Any) -> PortfolioRules:
+def portfolio_rules(cfg: Any, *, with_clusters: bool = True) -> PortfolioRules:
     """Rules from Runtime Config ``thresholds``; blank -> default, 0 -> off.
 
     Raises ValueError on invalid values (callers fail closed).
+    ``with_clusters=False`` skips the stored clusters: the refresher
+    computes them itself and must be able to overwrite a corrupt value.
     """
     if cfg is None:
         return PortfolioRules()
@@ -239,7 +241,11 @@ def portfolio_rules(cfg: Any) -> PortfolioRules:
         raise ValueError(f"max_positions_per_cluster must be a whole number, got {per_cluster}")
     return PortfolioRules(
         risk_cap=cap if cap > 0 else None,
-        clusters=tuple(parse_clusters(cfg.get("thresholds", "correlation_clusters", ""))),
+        clusters=(
+            tuple(parse_clusters(cfg.get("thresholds", "correlation_clusters", "")))
+            if with_clusters
+            else ()
+        ),
         max_per_cluster=int(per_cluster),
         min_reward_risk=num("min_reward_risk", DEFAULT_MIN_REWARD_RISK),
     )
