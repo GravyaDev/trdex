@@ -40,9 +40,16 @@ _SECRET_IN_TEXT = re.compile(
 DOWN_AFTER_FAILURES = 5  # consecutive failures before a feed reads "down"
 
 
+_URL_PATH = re.compile(r"(https?://[^/\s'\"]+)[^\s'\"]*")
+
+
 def _redact(message: str) -> str:
-    """Error text without credentials that some libraries put in URLs."""
-    return _SECRET_IN_TEXT.sub(r"\1=***", message)[:200]
+    """Error text without credentials that some libraries put in URLs.
+
+    URLs keep only scheme and host (some feeds put the key in the path),
+    and ``key=value`` pairs lose the value.
+    """
+    return _SECRET_IN_TEXT.sub(r"\1=***", _URL_PATH.sub(r"\1/...", message))[:200]
 
 
 @dataclass

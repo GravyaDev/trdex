@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import text
@@ -21,24 +21,28 @@ class MacroEventsRepository:
         self._session = session
 
     async def replace_window(
-        self, source: str, events: list[MacroEvent], fetched_at: datetime
+        self,
+        source: str,
+        events: list[MacroEvent],
+        fetched_at: datetime,
+        *,
+        start: datetime,
+        end: datetime,
     ) -> int:
-        """Replace ``source`` rows inside the fetched window with ``events``.
+        """Replace ``source`` rows in [start, end) with ``events``.
 
-        The window spans the first to the last fetched event, so moved or
-        cancelled events of that week disappear while earlier weeks stay.
-        One transaction: readers never see a half-replaced week.
+        The window is the fetched week, so moved or cancelled events of
+        that week disappear while earlier weeks stay. One transaction:
+        readers never see a half-replaced week.
         """
         if not events:
             return 0
-        start = min(e.time for e in events) - timedelta(minutes=1)
-        end = max(e.time for e in events) + timedelta(minutes=1)
         await self._session.execute(
             text(
                 "DELETE FROM macro_events WHERE source = :source "
-                "AND event_time BETWEEN :start AND :end"
+                "AND event_time >= :start AND event_time < :end"
             ),
-            {"source": source, "start": start, "end": end},
+            {"source": source, "start": _aware(start), "end": _aware(end)},
         )
         await self._session.execute(
             text(

@@ -66,7 +66,8 @@ def test_parse_rejects_garbage_payloads():
         parse_ff({"error": "rate limited"})
     with pytest.raises(ValueError):
         parse_ff([{"nope": 1}])
-    assert parse_ff([]) == []
+    with pytest.raises(ValueError, match="empty"):
+        parse_ff([])  # the weekly file is never empty: an outage, not a quiet week
 
 
 # ── config ────────────────────────────────────────────────────────────────
@@ -104,6 +105,9 @@ def test_config_defaults_and_overrides():
         {"macro_gate_impacts": "Critical"},
         {"macro_gate_before_min": "-5"},
         {"macro_gate_after_min": "soon"},
+        {"macro_gate_before_min": "inf"},
+        {"macro_gate_after_min": "nan"},
+        {"macro_gate_after_min": "100000"},
     ],
 )
 def test_config_nonsense_raises_so_callers_fail_closed(bad):
@@ -259,9 +263,136 @@ async def test_repository_replaces_only_the_fetched_window():
 
     s = Session()
     events = [CPI, MacroEvent("USD", "NFP", NOW + timedelta(days=2), "High")]
-    assert await MacroEventsRepository(s).replace_window("forexfactory", events, NOW) == 2
+    start, end = mc.week_window(events)
+    repo = MacroEventsRepository(s)
+    assert await repo.replace_window("forexfactory", events, NOW, start=start, end=end) == 2
     delete, insert, commit = s.calls
     assert delete[0].startswith("DELETE FROM macro_events")
-    assert delete[1]["start"] < CPI.time and delete[1]["end"] > events[1].time
+    assert (delete[1]["start"], delete[1]["end"]) == (start, end)
     assert insert[0].startswith("INSERT INTO macro_events") and len(insert[1]) == 2
     assert commit[0] == "COMMIT"
+
+
+# ── payload sanity (an outage must not look like a quiet week) ────────────
+
+
+def test_week_window_runs_sunday_to_sunday_utc_around_the_median_event():
+    start, end = mc.week_window([CPI, MacroEvent("USD", "NFP", NOW + timedelta(days=2), "High")])
+    assert (start, end) == (datetime(2026, 10, 11, tzinfo=UTC), datetime(2026, 10, 18, tzinfo=UTC))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("payload", "needle"),
+    [
+        ([], "empty"),
+        ([_ff("CPI m/m", "USD", "2026-10-07T08:30:00-04:00")], "not the current week"),
+    ],
+    ids=["empty", "last-week"],
+)
+async def test_empty_or_stale_payload_is_a_failure_and_keeps_what_we_had(payload, needle):
+    responses = iter([[_ff("CPI m/m", "USD", "2026-10-14T08:30:00-04:00")], payload])
+
+    async def fetch():
+        return next(responses)
+
+    clock = Clock(NOW)
+    cal = MacroCalendar(fetch=fetch, clock=clock)
+    assert await cal.refresh() is True
+    clock.t = NOW + timedelta(minutes=10)  # 10 min before CPI
+    assert await cal.refresh(force=True) is False and needle in cal.last_error
+    assert [e.title for e in cal.events] == ["CPI m/m"] and cal.last_success == NOW
+    assert cal.block_reason(clock.t, GATE, live=True) is not None
+
+
+@pytest.mark.asyncio
+async def test_cancelled_or_moved_events_of_the_week_disappear():
+    payloads = iter(
+        [
+            [
+                _ff("Old CPI", "USD", "2026-10-12T08:30:00-04:00"),
+                _ff("NFP", "USD", "2026-10-16T08:30:00-04:00"),
+            ],
+            [_ff("NFP", "USD", "2026-10-16T08:30:00-04:00")],
+        ]
+    )
+
+    async def fetch():
+        return next(payloads)
+
+    cal = MacroCalendar(fetch=fetch, clock=Clock(NOW))
+    await cal.refresh()
+    await cal.refresh(force=True)
+    assert [e.title for e in cal.events] == ["NFP"]
+
+
+# ── fetch: rate limiter, bounded retries, Retry-After ─────────────────────
+
+
+class _Limiter:
+    def __init__(self):
+        self.acquired = self.rate_limited = self.ok = 0
+
+    async def acquire(self):
+        self.acquired += 1
+
+    def report_success(self):
+        self.ok += 1
+
+    def report_rate_limit(self):
+        self.rate_limited += 1
+
+
+def _transport(*responses):
+    import httpx
+
+    seq = iter(responses)
+
+    def handler(request):
+        r = next(seq)
+        if isinstance(r, Exception):
+            raise r
+        status, headers = r
+        return httpx.Response(status, headers=headers, json=[] if status == 200 else None)
+
+    return httpx.MockTransport(handler)
+
+
+async def _fetch(*responses):
+    import httpx  # noqa: F401
+
+    waits, limiter = [], _Limiter()
+
+    async def sleep(s):
+        waits.append(s)
+
+    try:
+        result = await mc.fetch_ff_week(
+            transport=_transport(*responses), limiter=limiter, sleep=sleep
+        )
+    except RuntimeError as exc:
+        result = exc
+    return result, waits, limiter
+
+
+@pytest.mark.asyncio
+async def test_fetch_retries_server_errors_and_network_failures_through_the_limiter():
+    import httpx
+
+    result, waits, limiter = await _fetch((503, {}), httpx.ConnectError("boom"), (200, {}))
+    assert result == [] and waits == [30.0, 60.0]
+    assert limiter.acquired == 3 and limiter.ok == 1
+
+
+@pytest.mark.asyncio
+async def test_fetch_honours_a_short_retry_after_and_gives_up_on_a_long_one():
+    result, waits, limiter = await _fetch((429, {"Retry-After": "120"}), (200, {}))
+    assert result == [] and waits == [120.0] and limiter.rate_limited == 1
+    result, waits, _ = await _fetch((429, {"Retry-After": "3600"}))
+    assert str(result) == "calendar HTTP 429" and waits == []
+
+
+@pytest.mark.asyncio
+async def test_fetch_fails_at_once_on_client_errors():
+    result, waits, limiter = await _fetch((404, {}))
+    assert str(result) == "calendar HTTP 404" and waits == [] and limiter.acquired == 1

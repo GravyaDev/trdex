@@ -75,3 +75,21 @@ async def test_manager_reports_every_registered_feed():
     assert health["bad"]["status"] == "down" and health["bad"]["rate_limited"] == 1
     assert health["unused"]["status"] == "idle"
     assert health["good"]["circuit"] == "closed"
+
+
+def test_keys_in_url_paths_never_reach_the_status_page():
+    import httpx
+
+    from trdex.market.manager import FeedStats
+
+    req = httpx.Request("GET", "https://v6.exchangerate-api.com/v6/SECRETKEY123/latest/EUR")
+    exc = httpx.HTTPStatusError(
+        "Client error '403 Forbidden' for url "
+        "'https://v6.exchangerate-api.com/v6/SECRETKEY123/latest/EUR'",
+        request=req,
+        response=httpx.Response(403, request=req),
+    )
+    stats = FeedStats("forex")
+    stats.record_failure(exc, rate_limited=False)
+    assert "SECRETKEY123" not in stats.last_error
+    assert "https://v6.exchangerate-api.com/..." in stats.last_error

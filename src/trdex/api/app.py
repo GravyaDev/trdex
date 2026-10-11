@@ -1110,8 +1110,10 @@ def _macro_gate_status() -> dict[str, object]:
             now, gate, live=settings.mode.value == "live"
         )
         out["upcoming"] = [e.as_dict() for e in calendar.upcoming(now, gate)]
-    except ValueError as exc:
+    except Exception as exc:
+        # The gates fail closed on the same error: show it as blocking.
         out["error"] = str(exc)
+        out["blocking_now"] = f"macro gate error (fail-closed): {exc}"
     return out
 
 

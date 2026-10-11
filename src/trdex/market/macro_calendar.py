@@ -7,9 +7,12 @@ exits are never blocked.
 
 Source: Forex Factory's public weekly JSON (no key). It is fetched at
 most every ``REFRESH_EVERY`` and retried no sooner than ``RETRY_AFTER``
-after a failure (the feed asks for a light touch). Each successful fetch
-replaces that week's rows in ``macro_events``; earlier weeks stay, so
-the table builds up a history a future backtest can replay.
+after a failure (the feed asks for a light touch), through a
+``RateLimiter`` with bounded retries that honours ``Retry-After``. A
+payload that is empty or covers another week is a failure, not "no
+events". Each successful fetch replaces that week's rows (Sunday to
+Sunday UTC) in ``macro_events``; earlier weeks stay, so the table builds
+up a history a future backtest can replay.
 
 Fail-closed like the regime gate: in live mode a calendar older than
 ``stale_after`` blocks entries (we cannot tell whether an event is
@@ -27,6 +30,8 @@ from typing import Any
 
 import httpx
 
+from trdex.market.rate_limiter import RateLimiter
+
 logger = logging.getLogger(__name__)
 
 SOURCE = "forexfactory"
@@ -35,6 +40,9 @@ REFRESH_EVERY = timedelta(hours=6)
 RETRY_AFTER = timedelta(hours=1)
 NOTIFY_EVERY = timedelta(hours=24)
 IMPACTS = ("High", "Medium", "Low", "Holiday")
+MAX_WINDOW_MIN = 24 * 60  # longest before/after window accepted from config
+FETCH_ATTEMPTS = 3
+MAX_RETRY_AFTER = 300.0  # seconds; a longer Retry-After waits for RETRY_AFTER instead
 
 
 @dataclass(frozen=True)
@@ -88,9 +96,25 @@ def parse_ff(payload: Any) -> list[MacroEvent]:
             )
         except (KeyError, ValueError, TypeError):
             continue
-    if payload and not out:
+    if not payload:
+        raise ValueError("calendar payload is empty")
+    if not out:
         raise ValueError("calendar payload has no parsable events")
     return sorted(out, key=lambda e: e.time)
+
+
+def week_window(events: list[MacroEvent]) -> tuple[datetime, datetime]:
+    """[Sunday 00:00, next Sunday 00:00) UTC around the payload's week.
+
+    The week is the one of the median event (Forex Factory weeks run
+    Sunday to Saturday in New York, so a few Sunday-evening events fall
+    on Sunday UTC). Raises on an empty list.
+    """
+    if not events:
+        raise ValueError("no events")
+    mid = sorted(e.time for e in events)[len(events) // 2]
+    monday = datetime(mid.year, mid.month, mid.day, tzinfo=UTC) - timedelta(days=mid.weekday())
+    return monday - timedelta(days=1), monday + timedelta(days=6)
 
 
 # ── gate ──────────────────────────────────────────────────────────────────
@@ -135,8 +159,8 @@ def macro_gate_config(cfg: Any) -> MacroGateConfig:
         if not raw:
             return default
         value = float(raw)
-        if value < 0:
-            raise ValueError(f"{key} must be >= 0, got {raw}")
+        if not 0 <= value <= MAX_WINDOW_MIN:  # also rejects nan / inf
+            raise ValueError(f"{key} must be between 0 and {MAX_WINDOW_MIN} minutes, got {raw}")
         return timedelta(minutes=value)
 
     impacts = _csv_set(cfg.get("thresholds", "macro_gate_impacts", ""), base.impacts)
@@ -192,15 +216,59 @@ def macro_block_reason(
 Fetch = Callable[[], Awaitable[Any]]
 
 
-async def fetch_ff_week() -> Any:
-    """GET the weekly JSON once (no retries here: the caller paces requests)."""
+_FF_LIMITER = RateLimiter("forexfactory", default_rpm=2)  # >= 30 s between requests
+
+
+def _retry_after(resp: httpx.Response) -> float | None:
+    try:
+        return float(resp.headers.get("Retry-After", ""))
+    except ValueError:
+        return None
+
+
+async def fetch_ff_week(
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+    limiter: RateLimiter | None = None,
+    sleep: Callable[[float], Awaitable[Any]] = asyncio.sleep,
+) -> Any:
+    """GET the weekly JSON through the rate limiter, with bounded retries.
+
+    Network errors and 5xx are retried (``FETCH_ATTEMPTS`` in total);
+    429 waits ``Retry-After`` when it is at most ``MAX_RETRY_AFTER``,
+    otherwise gives up (the caller retries after ``RETRY_AFTER``). Other
+    statuses fail at once.
+    """
+    limiter = limiter or _FF_LIMITER
+    last = "no attempt"
     async with httpx.AsyncClient(
-        timeout=15.0, headers={"User-Agent": "Mozilla/5.0 (compatible; trdex calendar)"}
+        timeout=15.0,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; trdex calendar)"},
+        transport=transport,
     ) as client:
-        resp = await client.get(FF_URL)
-    if resp.status_code != 200:
-        raise RuntimeError(f"calendar HTTP {resp.status_code}")
-    return resp.json()
+        for attempt in range(1, FETCH_ATTEMPTS + 1):
+            await limiter.acquire()
+            wait = 30.0 * attempt
+            try:
+                resp = await client.get(FF_URL)
+            except httpx.TransportError as exc:
+                last = f"{type(exc).__name__}"
+            else:
+                if resp.status_code == 200:
+                    limiter.report_success()
+                    return resp.json()
+                last = f"calendar HTTP {resp.status_code}"
+                if resp.status_code == 429:
+                    limiter.report_rate_limit()
+                    retry_after = _retry_after(resp)
+                    if retry_after is not None and retry_after > MAX_RETRY_AFTER:
+                        break
+                    wait = max(wait, retry_after or 0.0)
+                elif resp.status_code < 500:
+                    break
+            if attempt < FETCH_ATTEMPTS:
+                await sleep(wait)
+    raise RuntimeError(last)
 
 
 @dataclass
@@ -245,20 +313,27 @@ class MacroCalendar:
             self.last_attempt = now
             try:
                 events = parse_ff(await self.fetch())
+                start, end = week_window(events)
+                if not start <= now < end + timedelta(days=1):
+                    raise ValueError(
+                        f"calendar covers {start:%Y-%m-%d}..{end:%Y-%m-%d}, not the current week"
+                    )
                 if self.session_factory is not None:
                     from trdex.storage.macro_events_repo import MacroEventsRepository
 
                     async with self.session_factory() as session:
-                        await MacroEventsRepository(session).replace_window(SOURCE, events, now)
+                        await MacroEventsRepository(session).replace_window(
+                            SOURCE, events, now, start=start, end=end
+                        )
             except Exception as exc:
                 self.last_error = f"{type(exc).__name__}: {exc}"[:200]
                 logger.warning("[macro-calendar] refresh failed: %s", self.last_error)
                 return False
+            # Same replacement as in the DB: the fetched week's rows go,
+            # the rest stays (only the last two days of it are needed).
             keep_from = now - timedelta(days=2)
-            older = [e for e in self.events if e.time < (events[0].time if events else now)]
-            self.events = sorted(
-                [e for e in older if e.time >= keep_from] + events, key=lambda e: e.time
-            )
+            kept = [e for e in self.events if e.time >= keep_from and not start <= e.time < end]
+            self.events = sorted(kept + events, key=lambda e: e.time)
             self.last_success, self.last_error = now, None
             logger.info("[macro-calendar] %d events loaded", len(events))
             return True
@@ -329,7 +404,7 @@ async def macro_calendar_loop(
 
                 await notify(
                     Event.MACRO_CALENDAR_STALE,
-                    "Economic calendar unavailable — live entries wait",
+                    "Economic calendar unavailable — live entries would wait",
                     f"Last successful update: "
                     f"{calendar.last_success.isoformat() if calendar.last_success else 'never'}. "
                     f"Last error: {calendar.last_error or 'none'}. The macro gate blocks new live "
