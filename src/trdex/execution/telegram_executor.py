@@ -25,7 +25,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Literal, Protocol
 
 from trdex.execution.symbol_router import SymbolNotRoutable, route
-from trdex.execution.telegram_gates import GateConfig, run_all_gates
+from trdex.execution.telegram_gates import GateConfig, run_all_gates, telegram_budget
 from trdex.risk.sizing import VOL_WINDOW, recent_cv
 from trdex.telegram.parser import TelegramSignal
 
@@ -173,8 +173,21 @@ class TelegramSignalExecutor:
                         direction, signal.symbol, signal.source, gate_result.reason)
             return ExecuteOutcome(status="skipped", reason=gate_result.reason)
 
-        # 4. Sizing
-        qty = float(self._config.budget) / current_price
+        # 4. Sizing: the signal budget, reduced to fit the portfolio risk
+        # budget if needed; skipped when not even MIN_KEEP of it fits.
+        budget, budget_note = telegram_budget(
+            signal,
+            current_price=current_price,
+            cash=self._balance_provider().available,
+            config=self._config,
+        )
+        if budget is None:
+            logger.info("[telegram-exec] skip %s %s from %s: %s",
+                        direction, signal.symbol, signal.source, budget_note)
+            return ExecuteOutcome(status="skipped", reason=budget_note)
+        if budget_note:
+            logger.info("[telegram-exec] %s %s: %s", direction, signal.symbol, budget_note)
+        qty = float(budget) / current_price
 
         # 5. SL/TP percentages — always positive, relative to entry price.
         # StopLossMonitor reads pos.stop_loss_pct / pos.take_profit_pct and
@@ -263,7 +276,7 @@ class TelegramSignalExecutor:
                 side=direction,
                 entry_price=Decimal(str(order_result.filled_price)),
                 amount=Decimal(str(order_result.filled_qty)),
-                budget=self._config.budget,
+                budget=budget,
                 fee=fee_value,
                 source="telegram",
                 signal_id=str(outcome_id),

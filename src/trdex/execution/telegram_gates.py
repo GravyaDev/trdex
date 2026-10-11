@@ -61,6 +61,19 @@ class GateConfig:
     # Macro event gate (trdex.market.macro_calendar), evaluated when the
     # config is built for this signal: the reason entries must wait, if any.
     macro_blocker: str | None = None
+    # Portfolio rules (trdex.risk.portfolio_budget), snapshot for this
+    # signal. Defaults switch them off (unit tests, old callers).
+    min_reward_risk: float = 0.0
+    default_stop_pct: float = 0.02  # monitor floor when the signal has no stop
+    default_tp_pct: float = 0.04  # monitor floor when the signal has no target
+    clusters: tuple[frozenset[str], ...] = ()
+    max_per_cluster: int = 0
+    open_symbols: tuple[str, ...] = ()
+    portfolio_risk_cap: float | None = None
+    open_risk_fraction: float = 0.0  # of portfolio_equity
+    # Cash + notional of open positions at entry; None -> cash balance
+    # (smaller, so the budget check errs on the strict side).
+    portfolio_equity: Decimal | None = None
 
     def __post_init__(self) -> None:
         # Misconfig from RuntimeConfig must fail loud at build time, not
@@ -242,6 +255,88 @@ async def gate_stop_loss(
     return GateResult(passed=True, reason="")
 
 
+def signal_exit_pcts(
+    signal: TelegramSignal, *, current_price: float, config: GateConfig
+) -> tuple[float, float]:
+    """(stop, take-profit) distances the position will have, as fractions.
+
+    The signal's own stop/first target relative to its entry (or the
+    current price for at-market), else the monitor floors from config.
+    """
+    reference = signal.entry if signal.entry is not None else current_price
+    stop = (
+        abs(signal.stop_loss - reference) / reference
+        if signal.stop_loss is not None and reference > 0
+        else config.default_stop_pct
+    )
+    tp = (
+        abs(signal.targets[0] - reference) / reference
+        if signal.targets and reference > 0
+        else config.default_tp_pct
+    )
+    return stop, tp
+
+
+def gate_reward_risk(
+    signal: TelegramSignal, *, current_price: float, config: GateConfig
+) -> GateResult:
+    """Same rule as the Risk node: take-profit >= min_reward_risk x stop."""
+    from trdex.risk.portfolio_budget import reward_risk_block
+
+    stop, tp = signal_exit_pcts(signal, current_price=current_price, config=config)
+    reason = reward_risk_block(stop, tp, config.min_reward_risk)
+    if reason is not None:
+        return GateResult(passed=False, reason=reason)
+    return GateResult(passed=True, reason="")
+
+
+def gate_cluster(signal: TelegramSignal, *, config: GateConfig) -> GateResult:
+    """Same rule as Risk Gate 4e: cap open positions per correlated cluster."""
+    from trdex.risk.portfolio_budget import cluster_block
+
+    reason = cluster_block(
+        signal.symbol, config.open_symbols, config.clusters, config.max_per_cluster
+    )
+    if reason is not None:
+        return GateResult(passed=False, reason=reason)
+    return GateResult(passed=True, reason="")
+
+
+def telegram_budget(
+    signal: TelegramSignal, *, current_price: float, cash: Decimal, config: GateConfig
+) -> tuple[Decimal | None, str]:
+    """Signal budget fitted into the portfolio risk budget: (budget or None, note).
+
+    None means the signal must be skipped; the note says why or how much
+    it was reduced. Unknown equity or a zero stop with a budget configured
+    fails closed.
+    """
+    from trdex.risk.portfolio_budget import fit_to_budget
+
+    if config.portfolio_risk_cap is None:
+        return config.budget, ""
+    equity = config.portfolio_equity if config.portfolio_equity is not None else cash
+    if equity <= 0:
+        return None, "portfolio risk budget: equity unknown"
+    stop, _ = signal_exit_pcts(signal, current_price=current_price, config=config)
+    planned = float(config.budget / equity)
+    try:
+        fit = fit_to_budget(
+            planned_size=planned,
+            stop_pct=stop,
+            open_risk=config.open_risk_fraction,
+            cap=config.portfolio_risk_cap,
+        )
+    except ValueError as exc:
+        return None, f"portfolio risk budget: {exc}"
+    if fit.rejected is not None:
+        return None, fit.rejected
+    if not fit.reduced:
+        return config.budget, ""
+    reduced = (config.budget * Decimal(str(fit.size / planned))).quantize(Decimal("0.01"))
+    return reduced, fit.note.strip()
+
+
 def gate_macro(signal: TelegramSignal, *, config: GateConfig) -> GateResult:
     """Same rule as Risk Gate 4d: no new entries around high-impact events."""
     if config.macro_blocker:
@@ -348,6 +443,14 @@ async def run_all_gates(
         return result
 
     result = await gate_stop_loss(signal, current_price=current_price, config=config)
+    if not result.passed:
+        return result
+
+    result = gate_reward_risk(signal, current_price=current_price, config=config)
+    if not result.passed:
+        return result
+
+    result = gate_cluster(signal, config=config)
     if not result.passed:
         return result
 

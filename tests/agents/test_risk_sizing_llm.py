@@ -57,6 +57,17 @@ def _monitor_stop(result, closes) -> float:
     return effective_thresholds(pos, None, recent_cv(closes) or 0.0, **BASE)[0]
 
 
+
+@pytest.fixture(autouse=True)
+def _reward_risk_off(monkeypatch):
+    """These tests isolate SL/TP handling and sizing; reward/risk has its own tests."""
+    from trdex.risk.portfolio_budget import PortfolioRules
+
+    monkeypatch.setattr(
+        "trdex.risk.portfolio_budget.portfolio_rules",
+        lambda cfg: PortfolioRules(min_reward_risk=0.0),
+    )
+
 @pytest.mark.asyncio
 async def test_llm_stop_wider_than_the_floor_shrinks_the_position():
     result = await _run(_state(FLAT, sl=0.08))

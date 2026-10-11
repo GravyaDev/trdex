@@ -145,6 +145,14 @@ Per-symbol overrides are available via the `/v1/risk/symbol-config` API and the 
 
 **Macro event gate** (Risk Gate 4d, also on Telegram entries): no new entries from 30 minutes before to 60 minutes after high-impact USD releases (FOMC, CPI, NFP, ...), from the public Forex Factory weekly calendar, refreshed every 6 hours (rate-limited, bounded retries, `Retry-After` honoured; an empty or other-week payload counts as a failure, never as "no events") and stored in `macro_events`, where history accumulates for future backtests. Window, impacts and currencies are in dashboard → Risk Thresholds (`macro_gate_*`). Exits are never blocked. A calendar older than 24 h blocks live entries (fail-closed) and is notified; in simulation the gate is then off. The backtest cannot replay it yet, so live is slightly more conservative than what was validated.
 
+**Portfolio rules** (`trdex.risk.portfolio_budget`; Risk node, Telegram executor and backtest replay share the same functions; entries only, exits are never blocked). Each is set in dashboard → Risk Thresholds; `0` switches it off:
+
+- *Reward/risk*: the take-profit the monitor will apply must be at least `min_reward_risk` (default 1.5) times the stop it will apply. With the default floors (2 % / 4 %, 2.5× / 5× CV) the rule engine is always at 2.0. In practice it rejects LLM or Telegram stops that are too wide for their target.
+- *Portfolio risk budget*: the equity lost if every open position (agent, Telegram, manual) and the new one hit their effective stops stays under `portfolio_risk_max_pct` (default 0.5 %, about five full positions at the default 0.1 % per trade). An entry that does not fit is **reduced** to the room left, and rejected only if less than 25 % of its planned size would remain. Equity is cash plus the notional of open positions at entry.
+- *Correlated clusters*: at most `max_positions_per_cluster` (default 3) open positions among symbols whose daily returns over the last 90 days correlate at or above `correlation_threshold` (default 0.8, single linkage). The weekly regime refresher recomputes the clusters from the data it syncs and stores them read-only (`correlation_clusters`), even when revalidation fails. Unlisted symbols are unconstrained.
+
+The refresher's backtest replays all three rules, so the bounds are validated on the strategy as live will trade it. One caveat: the clusters are computed on the latest 90 days and applied to the whole window, a mild look-ahead. The positions' risk is read from the DB on every entry; if it cannot be read, the entry is rejected (fail-closed).
+
 ## Notifications
 
 Telegram bot and/or email, chosen per event in dashboard → 🔔 Notifications (with a test button): kill switch activated, live readiness changed, regime bounds refreshed, revalidation failed, refresh job error (at most daily), bounds expiring (daily in the last 14 days) or expired.

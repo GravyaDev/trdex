@@ -166,6 +166,17 @@ async def _telegram_background(
                 )
             except Exception as exc:
                 macro_blocker = f"macro gate error (fail-closed): {exc}"
+            # Portfolio rules: same snapshot logic as the Risk node. Any
+            # error propagates to the except below: no execution.
+            from trdex.risk.open_risk import load_open_risk_in
+            from trdex.risk.portfolio_budget import portfolio_rules
+
+            rules = portfolio_rules(svc)
+            open_risk = await load_open_risk_in(session, svc, _settings)
+            # Ledger cash balance; equity for the budget = cash + notional
+            # of open positions at entry (same as the backtest replay).
+            current = await BalanceRepository(session).current_balance()
+            equity = float(current) + open_risk.committed
             config = GateConfig(
                 asset_class_cap=int(svc.get_typed(
                     "telegram", "asset_class_cap", 3,
@@ -186,14 +197,23 @@ async def _telegram_background(
                 regime=regime,
                 regime_blocker=regime_blocker,
                 macro_blocker=macro_blocker,
+                min_reward_risk=rules.min_reward_risk,
+                default_stop_pct=float(svc.get_typed(
+                    "thresholds", "sl_position_pct", _settings.sl_position_pct)),
+                default_tp_pct=float(svc.get_typed(
+                    "thresholds", "sl_take_profit_pct", _settings.sl_take_profit_pct)),
+                clusters=rules.clusters,
+                max_per_cluster=rules.max_per_cluster,
+                open_symbols=open_risk.symbols,
+                portfolio_risk_cap=rules.risk_cap,
+                open_risk_fraction=open_risk.fraction(equity),
+                portfolio_equity=Decimal(str(equity)),
             )
             portfolio_repo = PortfolioRepository(session)
             outcome_repo = SignalOutcomeRepository(session)
-            balance_repo = BalanceRepository(session)
-            # Ledger-backed balance snapshot. BalanceRepository.current_balance()
-            # returns the running balance after the last event; wrap in a
-            # SimpleNamespace to match the executor's _BalanceLike protocol.
-            current = await balance_repo.current_balance()
+            # Ledger-backed balance snapshot (``current`` above, the running
+            # balance after the last event); wrap in a SimpleNamespace to
+            # match the executor's _BalanceLike protocol.
             balance = SimpleNamespace(available=current)
             portfolio_service = PortfolioService(portfolio_repo, feed_manager)
 

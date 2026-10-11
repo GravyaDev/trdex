@@ -1250,6 +1250,10 @@ with st.expander("Risk Thresholds"):
             ("max_position_pct", "Max Position Size %", "0.02"),
             ("risk_per_trade_pct", "Risk per Trade % (size = risk / stop)", "0.001"),
             ("regime_max_age_days", "Regime bounds max age (days, readiness)", "90"),
+            ("portfolio_risk_max_pct", "Portfolio risk budget (all positions at stop)", "0.005"),
+            ("max_positions_per_cluster", "Max open positions per correlated cluster", "3"),
+            ("correlation_threshold", "Correlation threshold for clusters (weekly)", "0.8"),
+            ("min_reward_risk", "Min reward/risk (take-profit / stop)", "1.5"),
             ("macro_gate_enabled", "Macro gate enabled (true/false)", "true"),
             ("macro_gate_before_min", "Macro gate: minutes before event", "30"),
             ("macro_gate_after_min", "Macro gate: minutes after event", "60"),
@@ -1269,6 +1273,11 @@ with st.expander("Risk Thresholds"):
             f"{_thr.get('regime_set_at') or 'never'}. "
             f"Last refresh: {_thr.get('regime_last_refresh_at') or 'never'} — "
             f"{_thr.get('regime_last_refresh_status') or 'no run yet'}."
+        )
+        st.caption(
+            "Correlated clusters (read-only, recomputed weekly): "
+            f"{_thr.get('correlation_clusters') or 'none yet'} "
+            f"({_thr.get('correlation_clusters_at') or 'never'})"
         )
         if st.form_submit_button("Save Thresholds"):
             pairs = {k: v for k, v in _thr_inputs.items() if v}

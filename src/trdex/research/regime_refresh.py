@@ -31,12 +31,13 @@ the agent falls back to; LLM decisions cannot be replayed historically.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import math
 import multiprocessing
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from itertools import pairwise
 from typing import Any, Literal
@@ -44,6 +45,7 @@ from typing import Any, Literal
 from trdex.research.engine import BacktestResult, EngineParams, run_backtest
 from trdex.research.stats import data_end, dev_period, regime_range
 from trdex.research.strategies import LiveRuleEngine
+from trdex.risk.portfolio_budget import correlation_clusters
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +104,9 @@ class RefreshConfig:
     holdout: float = 0.0  # 0 = validate on the whole lookback (see module doc)
     lo_pct: float = 0.5
     hi_pct: float = 99.5
+    # Portfolio rules replayed in the backtest (clusters come from the data).
+    correlation_threshold: float = 0.8
+    max_per_cluster: int = 0
 
 
 @dataclass
@@ -114,6 +119,7 @@ class RefreshOutcome:
     metrics: dict[str, float] = field(default_factory=dict)
     failures: list[str] = field(default_factory=list)
     skipped: dict[str, str] = field(default_factory=dict)  # symbol -> reason
+    clusters: list[list[str]] = field(default_factory=list)  # correlated groups
 
     def summary(self) -> str:
         m = self.metrics
@@ -148,9 +154,15 @@ def evaluate(ohlcv_by_symbol: dict[str, list[list[Any]]], cfg: RefreshConfig) ->
         raise ValueError("validation window too short for every symbol")
     first = min(b[0][0] for b in window.values())
     dev_days = (cutoff - first) / 86_400_000
-    result = run_backtest(
-        LiveRuleEngine(risk_per_trade_pct=cfg.risk_per_trade_pct), window, cfg.engine
+    # Correlated clusters from the most recent 90 days of the full data:
+    # what the live cluster gate will use, and replayed in the backtest.
+    clusters = correlation_clusters(data, threshold=cfg.correlation_threshold)
+    engine = replace(
+        cfg.engine,
+        clusters=tuple(frozenset(c) for c in clusters),
+        max_per_cluster=cfg.max_per_cluster,
     )
+    result = run_backtest(LiveRuleEngine(risk_per_trade_pct=cfg.risk_per_trade_pct), window, engine)
     metrics = {
         "trades": float(result.trades_count),
         "return_pct": result.return_pct,
@@ -171,8 +183,12 @@ def evaluate(ohlcv_by_symbol: dict[str, list[list[Any]]], cfg: RefreshConfig) ->
     end = datetime.fromtimestamp(data_end(data) / 1000, tz=UTC).date()
     cut = datetime.fromtimestamp((cutoff - BAR_MS) / 1000, tz=UTC).date()
     if failures:
-        return RefreshOutcome("validation_failed", end, cut, metrics=metrics, failures=failures)
-    return RefreshOutcome("refreshed", end, cut, cv_min=lo, cv_max=hi, metrics=metrics)
+        return RefreshOutcome(
+            "validation_failed", end, cut, metrics=metrics, failures=failures, clusters=clusters
+        )
+    return RefreshOutcome(
+        "refreshed", end, cut, cv_min=lo, cv_max=hi, metrics=metrics, clusters=clusters
+    )
 
 
 # ── data ──────────────────────────────────────────────────────────────────
@@ -295,7 +311,10 @@ def build_refresh_config(cfg: Any, settings: Any) -> RefreshConfig:
     gate judges the simulation with.
     """
     from trdex.agents.risk import MAX_POSITION_FRACTION
+    from trdex.risk.portfolio_budget import DEFAULT_CORRELATION, portfolio_rules
     from trdex.risk.readiness import MIN_TRADES_FOR_EVALUATION
+
+    rules = portfolio_rules(cfg)  # raises on invalid values: refresh error, notified
 
     symbols_csv = (
         cfg.get("symbols", "agent_scheduler_symbols", "") or settings.agent_scheduler_symbols
@@ -311,6 +330,8 @@ def build_refresh_config(cfg: Any, settings: Any) -> RefreshConfig:
         sl_pct=_threshold(cfg, "sl_position_pct", settings.sl_position_pct),
         tp_pct=_threshold(cfg, "sl_take_profit_pct", settings.sl_take_profit_pct),
         trail_pct=_threshold(cfg, "sl_trailing_stop_pct", settings.sl_trailing_stop_pct),
+        min_reward_risk=rules.min_reward_risk,
+        portfolio_risk_max_pct=rules.risk_cap,
     )
     criteria = ValidationCriteria(
         min_trades=MIN_TRADES_FOR_EVALUATION,
@@ -324,7 +345,20 @@ def build_refresh_config(cfg: Any, settings: Any) -> RefreshConfig:
         risk_per_trade_pct=_threshold(cfg, "risk_per_trade_pct", settings.risk_per_trade_pct),
         criteria=criteria,
         lookback_days=_sched(cfg, "regime_lookback_days", 1825),
+        correlation_threshold=_unit(cfg, "correlation_threshold", DEFAULT_CORRELATION),
+        max_per_cluster=rules.max_per_cluster,
     )
+
+
+def _unit(cfg: Any, key: str, default: float) -> float:
+    """A value in (0, 1] from ``thresholds``; blank -> default, garbage raises."""
+    raw = str(cfg.get("thresholds", key, "") or "").strip()
+    if not raw:
+        return default
+    value = float(raw)
+    if not 0 < value <= 1:
+        raise ValueError(f"{key} must be in (0, 1], got {raw}")
+    return value
 
 
 # ── watchdog ──────────────────────────────────────────────────────────────
@@ -476,6 +510,9 @@ class RegimeWatchdog:
         pairs = {
             "regime_last_refresh_at": _iso(now),
             "regime_last_refresh_status": outcome.summary()[:1000],
+            # Clusters are a risk control, not a validation result: always kept current.
+            "correlation_clusters": json.dumps(outcome.clusters),
+            "correlation_clusters_at": _iso(now),
         }
         if outcome.status == "refreshed":
             pairs |= {

@@ -7,11 +7,12 @@ them down before engine logic is written.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from math import sqrt
 from statistics import mean, pstdev
 from typing import Any
 
+from trdex.risk.portfolio_budget import cluster_block, fit_to_budget, reward_risk_block
 from trdex.risk.sizing import risk_position_fraction
 
 
@@ -166,6 +167,15 @@ class EngineParams:
     # risk_per_trade_pct / stop of equity, capped at position_size_pct.
     # None = fixed notional sizing at position_size_pct.
     risk_per_trade_pct: float | None = None
+    # Portfolio rules (trdex.risk.portfolio_budget), as the live Risk node
+    # applies them: take-profit at least min_reward_risk x stop, total
+    # risk at stop capped (entries reduced to fit, else skipped) and at
+    # most max_per_cluster open positions per correlated cluster.
+    # 0 / None / () = off.
+    min_reward_risk: float = 0.0
+    portfolio_risk_max_pct: float | None = None
+    clusters: tuple[frozenset[str], ...] = ()
+    max_per_cluster: int = 0
 
 
 _BARS_PER_YEAR = {"1h": 8760, "1d": 365}
@@ -177,6 +187,7 @@ class _Account:
 
     cash: float
     committed: float = 0.0
+    open_risk: dict[str, float] = field(default_factory=dict)  # symbol -> cash lost at stop
 
 
 @dataclass
@@ -217,10 +228,8 @@ def run_backtest(
         evaluated at entry, for exits that depend on market state.
     A trail of 0 disables the trailing stop.
     """
-    effective = EngineParams(
-        initial_equity=params.initial_equity,
-        position_size_pct=params.position_size_pct,
-        fee_pct=params.fee_pct,
+    effective = replace(
+        params,
         sl_pct=getattr(strategy, "sl_pct_override", params.sl_pct),
         tp_pct=getattr(strategy, "tp_pct_override", params.tp_pct),
         trail_pct=getattr(strategy, "trail_pct_override", params.trail_pct),
@@ -359,14 +368,12 @@ def _step(
         if st.position_state == "short":
             _close(st, ts, o, "FLIP", params, account, trades)
         if st.position_state == "flat" and not exited_intrabar:
-            _open(st, "long", o, ts, strategy, i, params, account)
-            opened = True
+            opened = _open(st, "long", o, ts, strategy, i, params, account)
     elif sig == "SELL":
         if st.position_state == "long":
             _close(st, ts, o, "FLIP", params, account, trades)
         if st.position_state == "flat" and not exited_intrabar:
-            _open(st, "short", o, ts, strategy, i, params, account)
-            opened = True
+            opened = _open(st, "short", o, ts, strategy, i, params, account)
     elif sig == "CLOSE_LONG" and st.position_state == "long":
         _close(st, ts, o, "SIGNAL", params, account, trades)
     elif sig == "CLOSE_SHORT" and st.position_state == "short":
@@ -414,7 +421,8 @@ def _check_exits(st, ts, o, h, l, params, account, trades) -> bool:
     return False
 
 
-def _open(st, side, o, ts, strategy, i, params, account) -> None:
+def _open(st, side, o, ts, strategy, i, params, account) -> bool:
+    """Open at ``o``; False when a portfolio rule skips the entry."""
     sl, tp, trail = params.sl_pct, params.tp_pct, params.trail_pct
     hook = getattr(strategy, "exit_pcts", None)
     if hook is not None:
@@ -428,7 +436,22 @@ def _open(st, side, o, ts, strategy, i, params, account) -> None:
         )
     # Size on realised equity (cash + budget locked in open positions),
     # like the live executor sizes on portfolio equity.
-    budget = (account.cash + account.committed) * fraction
+    equity = account.cash + account.committed
+    if reward_risk_block(sl, tp, params.min_reward_risk):
+        return False
+    if cluster_block(st.symbol, account.open_risk, params.clusters, params.max_per_cluster):
+        return False
+    if params.portfolio_risk_max_pct:
+        fit = fit_to_budget(
+            planned_size=fraction,
+            stop_pct=sl,
+            open_risk=sum(account.open_risk.values()) / equity if equity > 0 else 0.0,
+            cap=params.portfolio_risk_max_pct,
+        )
+        if fit.rejected is not None:
+            return False
+        fraction = fit.size
+    budget = equity * fraction
     account.cash -= budget
     account.committed += budget
     st.position_state = side
@@ -441,6 +464,8 @@ def _open(st, side, o, ts, strategy, i, params, account) -> None:
     st.extreme = o
     st.initial_stop = o * (1 - sl) if side == "long" else o * (1 + sl)
     st.stop = st.initial_stop
+    account.open_risk[st.symbol] = budget * sl
+    return True
 
 
 def _close(st, ts, exit_price, reason, params, account, trades) -> None:
@@ -452,6 +477,7 @@ def _close(st, ts, exit_price, reason, params, account, trades) -> None:
         proceeds = qty * entry + (entry - exit_price) * qty - exit_fee
     account.cash += proceeds
     account.committed -= st.budget
+    account.open_risk.pop(st.symbol, None)
     trades.append({
         "symbol": st.symbol,
         "side": st.position_state,

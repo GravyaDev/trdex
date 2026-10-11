@@ -68,6 +68,18 @@ def _fresh_empty_calendar(monkeypatch):
     monkeypatch.setattr("trdex.market.macro_calendar._calendar", cal)
 
 
+
+@pytest.fixture(autouse=True)
+def _no_open_positions(monkeypatch):
+    """Portfolio rules have their own tests; here no position is open."""
+    from trdex.risk.open_risk import OpenRisk
+
+    async def none_open(*a, **k):
+        return OpenRisk(0.0, ())
+
+    monkeypatch.setattr("trdex.risk.open_risk.load_open_risk", none_open)
+
+
 async def _run(state, *, cfg=None, mode="simulation"):
     ks = AsyncMock()
     ks.active = False

@@ -705,3 +705,62 @@ async def test_db_outage_does_not_turn_errors_into_hourly_spam(cfg, monkeypatch)
         await h.wd.tick()
     assert h.cpu_runs == 1  # 6h backoff held in memory
     assert h.events().count(Event.REGIME_REFRESH_ERROR) == 1
+
+
+# ── correlated clusters (portfolio rules) ─────────────────────────────────
+
+
+def _walk(n, *, start_ms, seed):
+    import random
+
+    rnd, out, p = random.Random(seed), [], 100.0
+    for i in range(n):
+        c = p * (1 + rnd.gauss(0, 0.004))
+        out.append([start_ms + i * H, p, max(p, c), min(p, c), c, 1.0])
+        p = c
+    return out
+
+
+def test_clusters_come_from_the_data_and_are_replayed_in_the_backtest(monkeypatch):
+    start = NOW_MS - 400 * 24 * H
+    data = {
+        "A/USDT": _walk(9600, start_ms=start, seed=1),
+        "B/USDT": _walk(9600, start_ms=start, seed=1),  # moves exactly like A
+        "C/USDT": _walk(9600, start_ms=start, seed=2),
+    }
+    seen = {}
+
+    def fake_backtest(strategy, window, params):
+        seen["params"] = params
+        return _result()
+
+    monkeypatch.setattr(rr, "run_backtest", fake_backtest)
+    cfg = replace(CFG, symbols=tuple(data), max_per_cluster=1)
+    out = evaluate(data, cfg)
+    assert out.clusters == [["A/USDT", "B/USDT"]]
+    assert seen["params"].clusters == (frozenset({"A/USDT", "B/USDT"}),)
+    assert seen["params"].max_per_cluster == 1
+
+
+def test_refresh_config_carries_the_portfolio_rules(cfg):
+    cfg._cache["thresholds"] = {
+        "portfolio_risk_max_pct": "0.004",
+        "max_positions_per_cluster": "2",
+        "min_reward_risk": "2",
+        "correlation_threshold": "0.9",
+    }
+    rc = build_refresh_config(cfg, SETTINGS)
+    assert rc.engine.portfolio_risk_max_pct == 0.004 and rc.engine.min_reward_risk == 2
+    assert rc.max_per_cluster == 2 and rc.correlation_threshold == 0.9
+    cfg._cache["thresholds"] = {"correlation_threshold": "1.5"}
+    with pytest.raises(ValueError, match="correlation_threshold"):
+        build_refresh_config(cfg, SETTINGS)
+
+
+@pytest.mark.asyncio
+async def test_clusters_are_stored_even_when_revalidation_fails(cfg, monkeypatch):
+    h = Harness(cfg, monkeypatch, outcome=replace(BAD, clusters=[["BTC/USDT", "ETH/USDT"]]))
+    await h.wd.tick()
+    th = cfg.get_category("thresholds")
+    assert th["correlation_clusters"] == '[["BTC/USDT", "ETH/USDT"]]'
+    assert th["correlation_clusters_at"] and "regime_cv_min" not in th

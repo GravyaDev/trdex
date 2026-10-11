@@ -61,6 +61,12 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str | None, type]] = {
     ("thresholds", "regime_set_at"): (None, str),  # stamped when the regime gate turns on
     ("thresholds", "regime_last_refresh_at"): (None, str),  # regime refresher
     ("thresholds", "regime_last_refresh_status"): (None, str),
+    ("thresholds", "portfolio_risk_max_pct"): (None, float),  # trdex.risk.portfolio_budget
+    ("thresholds", "max_positions_per_cluster"): (None, int),
+    ("thresholds", "min_reward_risk"): (None, float),
+    ("thresholds", "correlation_threshold"): (None, float),  # used by the regime refresher
+    ("thresholds", "correlation_clusters"): (None, str),  # JSON, written weekly
+    ("thresholds", "correlation_clusters_at"): (None, str),
     ("thresholds", "macro_gate_enabled"): (None, bool),  # trdex.market.macro_calendar
     ("thresholds", "macro_gate_before_min"): (None, float),
     ("thresholds", "macro_gate_after_min"): (None, float),
