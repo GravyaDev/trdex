@@ -98,7 +98,7 @@ class Simulator(ExecutionGateway):
 
         return result
 
-    async def cancel(self, order_id: str) -> bool:
+    async def cancel(self, order_id: str, symbol: str | None = None) -> bool:
         if order_id in self._orders:
             del self._orders[order_id]
             logger.info("[SIM] Cancelled order %s", order_id)

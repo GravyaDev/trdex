@@ -267,3 +267,20 @@ async def test_executor_uses_fallback_equity_when_zero():
     call_kwargs = mock_gw.place.call_args.kwargs
     expected_qty = 10_000.0 * 0.02 / 50_000.0
     assert call_kwargs["qty"] == pytest.approx(expected_qty)
+
+
+@pytest.mark.asyncio
+async def test_close_is_skipped_not_guessed_when_the_position_cannot_be_read():
+    """A failed read must never become a close sent to a default market."""
+    mock_gw = AsyncMock()
+    fake_session_cm = AsyncMock()
+    fake_session_cm.__aenter__.return_value = AsyncMock()
+    with patch(
+        "trdex.storage.portfolio_repo.PortfolioRepository.get_open_positions",
+        new=AsyncMock(side_effect=RuntimeError("db hiccup")),
+    ):
+        state = _make_state(intent=Intent.CLOSE_LONG, gateway=mock_gw,
+                            session_factory=MagicMock(return_value=fake_session_cm))
+        result = await executor_node(state)
+    assert result.order.status == "skipped"
+    mock_gw.place.assert_not_awaited()

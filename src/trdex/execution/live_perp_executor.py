@@ -111,9 +111,9 @@ class LivePerpExecutor(ExecutionGateway):
         # Back to the symbol trdex uses everywhere else.
         return result.model_copy(update={"symbol": order.symbol})
 
-    async def cancel(self, order_id: str) -> bool:
+    async def cancel(self, order_id: str, symbol: str | None = None) -> bool:
         try:
-            await self._exchange.cancel_order(order_id)
+            await self._exchange.cancel_order(order_id, perp_symbol(symbol) if symbol else None)
             return True
         except Exception:
             logger.exception("[LivePerp] failed to cancel order %s", order_id)

@@ -142,3 +142,39 @@ async def test_testnet_means_binance_demo_trading_not_the_retired_sandbox():
         assert not executor._exchange.isSandboxModeEnabled
     finally:
         await executor.close()
+
+
+@pytest.mark.asyncio
+async def test_spot_testnet_is_demo_trading_too_one_key_set_for_both():
+    from trdex.config import get_settings
+    from trdex.execution.live_executor import LiveExecutor
+
+    settings = get_settings().model_copy(
+        update={"binance_api_key": "k", "binance_api_secret": "s", "binance_testnet": True}
+    )
+    executor = LiveExecutor.from_settings(settings)
+    try:
+        assert executor._exchange.options.get("enableDemoTrading") is True
+        assert "demo" in str(executor._exchange.urls["api"])
+    finally:
+        await executor.close()
+
+
+@pytest.mark.asyncio
+async def test_cancel_goes_to_the_venue_with_the_symbol():
+    from trdex.config import TrdexMode
+    from trdex.execution.default_gateway import DefaultExecutionGateway
+    from trdex.execution.simulator import Simulator
+
+    perp_ex = _exchange(cancel_order=AsyncMock(return_value={}))
+    spot = MagicMock(cancel=AsyncMock(return_value=True))
+    gw = DefaultExecutionGateway(
+        mode=TrdexMode.LIVE,
+        simulator=Simulator(),
+        live_executor=spot,
+        kill_switch=SimpleNamespace(active=False),
+        perp_executor=LivePerpExecutor(perp_ex),
+    )
+    assert await gw.cancel("o-1", "BTC/USDT", venue="usdm") is True
+    perp_ex.cancel_order.assert_awaited_once_with("o-1", "BTC/USDT:USDT")
+    spot.cancel.assert_not_awaited()

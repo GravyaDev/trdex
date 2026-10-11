@@ -172,7 +172,7 @@ Rules:
 - **Manual opens** with leverage are checked against the stop the monitor will apply.
 - **Simulation**: the StopLossMonitor charges funding on `usdm` positions at `funding_rate_8h` (00/08/16 UTC, as `funding` ledger rows; the row lock means it is never charged twice). A position that gaps through its liquidation price loses its whole margin.
 - **Live**: the exchange does both. They are not reconciled into the ledger yet; a position liquidated on the exchange makes its close fail, which trips the kill switch.
-- **Binance testnet**: USDⓈ-M has no sandbox any more. With `binance_testnet=true`, perpetual orders go to Binance **demo trading**, which needs API keys created on demo.binance.com.
+- **Binance testnet**: USDⓈ-M has no sandbox any more. With `binance_testnet=true`, spot and perpetual orders both go to Binance **demo trading**, with one key set created on demo.binance.com. Keys from the old spot testnet (testnet.binance.vision) no longer work.
 - **Backtest and refresher** replay the venue: margin, funding, liquidation (whole margin lost) and shorts, so long and short rules are revalidated together.
 - **Dashboard**: each position shows side, leverage, margin and liquidation price.
 

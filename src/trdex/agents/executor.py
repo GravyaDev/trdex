@@ -11,40 +11,31 @@ from trdex.agents.state import AgentState, OrderResult
 logger = logging.getLogger(__name__)
 
 
-async def _resolve_close_idempotency_key(
-    state: AgentState,
-) -> tuple[str, int | None, str]:
-    """Look up the agent-owned open position on ``state.symbol`` and
-    return ``(idempotency_key, position_id, venue)``.
+async def _resolve_close(state: AgentState) -> tuple[str, float, str] | None:
+    """The agent-owned open position on ``state.symbol``, read ONCE (D13):
+    ``(idempotency_key, qty, venue)``, or None if it is gone or unreadable.
 
-    D19: the close path must use the same idempotency key shape that
-    the StopLossMonitor uses — ``close:{position_id}`` — so the
-    exchange deduplicates concurrent close attempts by the agent and
-    the SL monitor against a single position.
-
-    Falls back to the run-scoped key if the session factory is not
-    injected (unit tests) or the position cannot be located; in that
-    case ``position_id`` is ``None`` and the runner's ``_dispatch_fill``
-    will not attempt to persist the close (D13 abort path).
+    D19: the key is ``close:{position_id}``, the same shape the
+    StopLossMonitor uses, so the exchange dedupes concurrent closes.
+    Key, quantity and venue come from the same read: a close must never
+    be sent to a market guessed after a failed lookup (on spot a SELL for
+    a perp position would sell coins held there).
     """
     from trdex.storage.portfolio_repo import PortfolioRepository
 
-    fallback = f"agent:{state.run_id}"
     if state.session_factory is None:
-        return fallback, None, "spot"
+        return None
     try:
         async with state.session_factory() as session:
-            repo = PortfolioRepository(session)
-            positions = await repo.get_open_positions()
-            for p in positions:
-                # D21 mirror: only close positions the agent owns.
-                if p.symbol == state.symbol and p.source == "agent":
-                    return f"close:{p.id}", p.id, str(getattr(p, "venue", None) or "spot")
+            positions = await PortfolioRepository(session).get_open_positions()
     except Exception:
-        logger.exception(
-            "[Executor] failed to resolve position id for close on %s", state.symbol
-        )
-    return fallback, None, "spot"
+        logger.exception("[Executor] failed to read the open position on %s", state.symbol)
+        return None
+    for p in positions:
+        # D21 mirror: only close positions the agent owns.
+        if p.symbol == state.symbol and p.source == "agent":
+            return f"close:{p.id}", float(p.amount), str(getattr(p, "venue", None) or "spot")
+    return None
 
 
 async def executor_node(state: AgentState) -> AgentState:
@@ -93,30 +84,33 @@ async def executor_node(state: AgentState) -> AgentState:
         return state
     if qty_basis == "equity":
         idempotency_key, venue = f"agent:{state.run_id}", state.risk.venue
+        close_qty = 0.0
     else:
-        # A close goes to the market its position lives on.
-        idempotency_key, _pos_id, venue = await _resolve_close_idempotency_key(state)
+        # A close goes to the market its position lives on; amount and
+        # venue come from the same read of the live DB (the SL monitor may
+        # have closed it since the cycle started).
+        resolved = await _resolve_close(state)
+        if resolved is None:
+            state.order = OrderResult(
+                status="skipped",
+                message=(
+                    f"{intent.name} on {state.symbol}: no open agent position found "
+                    "(possibly closed by SL) or it could not be read."
+                ),
+            )
+            logger.warning(
+                "[Executor] %s skipped — no readable open position for %s",
+                intent.name, state.symbol,
+            )
+            return state
+        idempotency_key, close_qty, venue = resolved
 
     if qty_basis == "equity":
         equity = state.portfolio.equity if state.portfolio.equity > 0 else 10_000.0
         trade_value = equity * state.risk.position_size
         qty = trade_value / price
     else:
-        # CLOSE_LONG: close the full position size. Re-read from DB
-        # to get the authoritative amount (runner may race with SL).
-        qty = await _resolve_close_qty(state)
-        if qty <= 0:
-            state.order = OrderResult(
-                status="skipped",
-                message=(
-                    f"{intent.name} on {state.symbol}: no open agent position found "
-                    "(possibly closed by SL)."
-                ),
-            )
-            logger.warning(
-                "[Executor] %s skipped — no open position for %s", intent.name, state.symbol
-            )
-            return state
+        qty = close_qty  # the whole position
 
     # Resolve gateway — use injected one or create a default instance
     gateway = state.gateway
@@ -141,29 +135,3 @@ async def executor_node(state: AgentState) -> AgentState:
     )
     logger.info("[Executor] result: status=%s %s", state.order.status, state.order.message)
     return state
-
-
-async def _resolve_close_qty(state: AgentState) -> float:
-    """Return the quantity of the agent-owned open position on
-    ``state.symbol``, or 0.0 if none is found.
-
-    Re-reads the live DB (D13): the cached ``portfolio`` snapshot in
-    ``state`` may be stale by the time the executor runs if the SL
-    monitor closed the position mid-cycle.
-    """
-    from trdex.storage.portfolio_repo import PortfolioRepository
-
-    if state.session_factory is None:
-        return 0.0
-    try:
-        async with state.session_factory() as session:
-            repo = PortfolioRepository(session)
-            positions = await repo.get_open_positions()
-            for p in positions:
-                if p.symbol == state.symbol and p.source == "agent":
-                    return float(p.amount)
-    except Exception:
-        logger.exception(
-            "[Executor] failed to resolve close qty for %s", state.symbol
-        )
-    return 0.0

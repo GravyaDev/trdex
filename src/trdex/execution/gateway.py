@@ -18,6 +18,6 @@ class ExecutionGateway(ABC):
         ...
 
     @abstractmethod
-    async def cancel(self, order_id: str) -> bool:
-        """Cancel an open order. Returns True if cancelled."""
+    async def cancel(self, order_id: str, symbol: str | None = None) -> bool:
+        """Cancel an open order (Binance needs its symbol). True if cancelled."""
         ...

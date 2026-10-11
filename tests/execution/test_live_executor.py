@@ -142,7 +142,7 @@ async def test_cancel_calls_exchange_cancel_order():
     exchange = _mock_exchange({}, {})
     executor = LiveExecutor(exchange)
     result = await executor.cancel("order-999")
-    exchange.cancel_order.assert_awaited_once_with("order-999")
+    exchange.cancel_order.assert_awaited_once_with("order-999", None)
     assert result is True
 
 

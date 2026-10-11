@@ -192,10 +192,13 @@ class DefaultExecutionGateway(ExecutionGateway):
             )
         return await executor.execute(order)
 
-    async def cancel(self, order_id: str) -> bool:
-        """Route cancellation to the appropriate executor."""
+    async def cancel(
+        self, order_id: str, symbol: str | None = None, venue: str = "spot"
+    ) -> bool:
+        """Route cancellation to the executor of the order's venue."""
         if self._mode == TrdexMode.SIMULATION:
-            return await self._simulator.cancel(order_id)
-        if self._live_executor is None:
+            return await self._simulator.cancel(order_id, symbol)
+        executor = self._perp_executor if venue == "usdm" else self._live_executor
+        if executor is None:
             return False
-        return await self._live_executor.cancel(order_id)
+        return await executor.cancel(order_id, symbol)
