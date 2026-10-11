@@ -83,12 +83,35 @@ Criteri di accettazione:
   - Tile KPI di rischio: rischio per posizione, rischio di portafoglio, max drawdown, VaR 95%, esposizione.
   - Barra di stato della pipeline.
 
-### C. Frontend grafici con lightweight-charts
+### C. Edge misurato: finestre temporali, Kelly frazionario, stime bayesiane
+
+Origine: post "framework dato a Claude" (video seb.ai, 2026-10-11). Delle sue 4 regole, il filtro di volatilità c'è già (gate 4c). Restano queste tre.
+
+- **Stime bayesiane**
+  - Win rate e payoff medio con posteriori Beta per segmento: strategia × lato × simbolo, e per fonte Telegram.
+  - Aggiornate a ogni chiusura.
+  - Con pochi trade la stima resta vicina al prior, quindi niente conclusioni su 3 operazioni.
+  - Sostituiscono le soglie fisse dell'affidabilità Telegram (`reliability_min_samples`, `reliability_win_rate_min`) con un limite inferiore credibile.
+- **Kelly frazionario**
+  - Calcolato sulle stime bayesiane: `f* = (p·b − q)/b`, applicato a ¼.
+  - Usato solo come **tetto**: riduce il rischio per trade quando l'edge misurato cala, ferma un segmento con edge ≤ 0, e non supera mai `risk_per_trade_pct`.
+  - Non usa la "confidenza" dell'LLM, che non è una probabilità calibrata.
+- **Finestre temporali**
+  - `scripts/backtest/seasonality.py` gira in automatico nel refresher settimanale.
+  - Una finestra ora/giorno diventa gate solo se supera, insieme:
+    - la correzione Holm/BH;
+    - la stabilità tra sotto-periodi;
+    - l'holdout;
+    - la rivalidazione del backtest con il filtro attivo.
+  - Il conteggio dei test cresce a ogni run, così ripetere l'analisi ogni settimana non produce falsi edge per caso.
+  - Se nessuna finestra passa, non si applica nessun filtro.
+
+### D. Frontend grafici con lightweight-charts
 
 - Candele per simbolo con ingressi, uscite e linee di stop/target, servite dall'API.
 - La dashboard Streamlit resta finché il nuovo frontend non è alla pari.
 
-### D. Manutenzione
+### E. Manutenzione
 
 - #10: rigenerare la baseline CI dopo i merge.
 - `tests/test_audit_fixes.py`: 29 errori preesistenti dovuti a percorsi Windows assoluti (`c:/Users/...`). Vanno resi relativi al repo.
