@@ -64,15 +64,20 @@ class GateConfig:
     # Portfolio rules (trdex.risk.portfolio_budget), snapshot for this
     # signal. Defaults switch them off (unit tests, old callers).
     min_reward_risk: float = 0.0
-    default_stop_pct: float = 0.02  # monitor floor when the signal has no stop
-    default_tp_pct: float = 0.04  # monitor floor when the signal has no target
+    # Exits the StopLossMonitor will apply to this signal's position:
+    # monitor bases, the symbol's override row and the entity-graph CV.
+    default_stop_pct: float = 0.02
+    default_tp_pct: float = 0.04
+    default_trail_pct: float = 0.015
+    exit_override: Any = None
+    exit_cv: float = 0.0
     clusters: tuple[frozenset[str], ...] = ()
     max_per_cluster: int = 0
     open_symbols: tuple[str, ...] = ()
     portfolio_risk_cap: float | None = None
     open_risk_fraction: float = 0.0  # of portfolio_equity
-    # Cash + notional of open positions at entry; None -> cash balance
-    # (smaller, so the budget check errs on the strict side).
+    # Ledger balance + unrealised P&L at current prices; None -> the cash
+    # balance passed to telegram_budget.
     portfolio_equity: Decimal | None = None
 
     def __post_init__(self) -> None:
@@ -258,23 +263,37 @@ async def gate_stop_loss(
 def signal_exit_pcts(
     signal: TelegramSignal, *, current_price: float, config: GateConfig
 ) -> tuple[float, float]:
-    """(stop, take-profit) distances the position will have, as fractions.
+    """(stop, take-profit) the StopLossMonitor will apply, as fractions.
 
-    The signal's own stop/first target relative to its entry (or the
-    current price for at-market), else the monitor floors from config.
+    The signal's stop / first target relative to its entry (or the current
+    price for at-market) are stored on the position exactly like this by
+    the executor; ``effective_thresholds`` then applies the per-symbol
+    override and, where the signal has none, the CV floor.
     """
+    from types import SimpleNamespace
+
+    from trdex.risk.stop_loss import effective_thresholds
+
     reference = signal.entry if signal.entry is not None else current_price
-    stop = (
+    pos_sl = (
         abs(signal.stop_loss - reference) / reference
         if signal.stop_loss is not None and reference > 0
-        else config.default_stop_pct
+        else None
     )
-    tp = (
+    pos_tp = (
         abs(signal.targets[0] - reference) / reference
         if signal.targets and reference > 0
-        else config.default_tp_pct
+        else None
     )
-    return stop, tp
+    stop, tp, _ = effective_thresholds(
+        SimpleNamespace(stop_loss_pct=pos_sl, take_profit_pct=pos_tp, source="telegram"),
+        config.exit_override,
+        config.exit_cv,
+        base_sl=config.default_stop_pct,
+        base_tp=config.default_tp_pct,
+        base_trail=config.default_trail_pct,
+    )
+    return float(stop), float(tp)
 
 
 def gate_reward_risk(

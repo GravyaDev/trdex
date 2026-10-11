@@ -12,7 +12,13 @@ import pytest
 from tests.agents.test_risk_sizing_gate import FLAT, _Cfg, _run, _state
 from trdex.agents.intent import Intent
 from trdex.agents.state import AnalysisResult
-from trdex.risk.open_risk import OpenRisk, load_open_risk_in
+from trdex.risk.open_risk import (
+    Exposure,
+    OpenRisk,
+    fetch_prices,
+    load_open_risk_in,
+    unrealized_pnl,
+)
 
 
 @asynccontextmanager
@@ -102,26 +108,25 @@ async def test_unreadable_open_positions_fail_closed(monkeypatch):
     assert "portfolio risk check failed (fail-closed): db down" in result.risk.reason
 
 
+def _pos(symbol, budget, sl, source, side="BUY", entry=100.0):
+    return SimpleNamespace(
+        symbol=symbol,
+        budget=budget,
+        stop_loss_pct=sl,
+        take_profit_pct=None,
+        source=source,
+        side=side,
+        entry_price=entry,
+        amount=budget / entry,
+    )
+
+
 @pytest.mark.asyncio
 async def test_open_risk_uses_the_stop_the_monitor_applies(monkeypatch):
     positions = [
-        SimpleNamespace(
-            symbol="BTC/USDT", budget=500, stop_loss_pct=None, take_profit_pct=None, source="agent"
-        ),
-        SimpleNamespace(
-            symbol="WILD/USDT",
-            budget=500,
-            stop_loss_pct=0.05,
-            take_profit_pct=None,
-            source="agent",
-        ),
-        SimpleNamespace(
-            symbol="TG/USDT",
-            budget=100,
-            stop_loss_pct=0.03,
-            take_profit_pct=None,
-            source="telegram",
-        ),
+        _pos("BTC/USDT", 500, None, "agent"),
+        _pos("WILD/USDT", 500, 0.05, "agent"),
+        _pos("TG/USDT", 100, 0.03, "telegram"),
     ]
 
     class Repo:
@@ -148,5 +153,80 @@ async def test_open_risk_uses_the_stop_the_monitor_applies(monkeypatch):
     assert risk.risk_cash == pytest.approx(63.0)
     assert risk.symbols == ("BTC/USDT", "TG/USDT", "WILD/USDT")
     assert risk.fraction(10_000) == pytest.approx(0.0063)
+    assert len(risk.exposures) == 3
     with pytest.raises(ValueError):
         risk.fraction(0)
+
+
+# ── equity: ledger (realised) + unrealised at current prices ──────────────
+
+
+@pytest.mark.asyncio
+async def test_equity_marks_open_positions_to_market_and_tolerates_a_missing_price():
+    exposures = [
+        Exposure("BTC/USDT", "BUY", 100.0, 5.0),
+        Exposure("ETH/USDT", "SELL", 50.0, 2.0),
+        Exposure("DOWN/USDT", "BUY", 10.0, 1.0),
+    ]
+
+    async def price_of(sym):
+        if sym == "DOWN/USDT":
+            raise RuntimeError("feed down")
+        return {"BTC/USDT": 90.0, "ETH/USDT": 40.0}[sym]
+
+    prices = await fetch_prices([e.symbol for e in exposures], price_of)
+    assert prices == {"BTC/USDT": 90.0, "ETH/USDT": 40.0}
+    # BTC long -50, ETH short +20, DOWN at entry 0
+    assert unrealized_pnl(exposures, prices) == pytest.approx(-30.0)
+
+
+@pytest.mark.asyncio
+async def test_agent_equity_no_longer_books_open_positions_as_losses(monkeypatch):
+    """Before: exit_price None -> unrealised = -cost, so two 5% positions read
+    as a 10% drawdown and shrank equity for sizing."""
+    from trdex.agents import runner as runner_mod
+
+    class PosRepo:
+        def __init__(self, session):
+            pass
+
+        async def get_open_positions(self):
+            return [
+                SimpleNamespace(
+                    symbol="BTC/USDT",
+                    source="agent",
+                    side="BUY",
+                    entry_price=100.0,
+                    amount=5.0,
+                    exit_price=None,
+                ),
+                SimpleNamespace(
+                    symbol="ETH/USDT",
+                    source="telegram",
+                    side="BUY",
+                    entry_price=50.0,
+                    amount=10.0,
+                    exit_price=None,
+                ),
+            ]
+
+    class BalRepo:
+        def __init__(self, session):
+            pass
+
+        async def current_balance(self):
+            return 10_000
+
+        async def peak_balance(self):
+            return 10_000
+
+    class Feeds:
+        async def get_ticker(self, sym):
+            return SimpleNamespace(price={"BTC/USDT": 110.0, "ETH/USDT": 50.0}[sym])
+
+    monkeypatch.setattr(runner_mod, "PortfolioRepository", PosRepo)
+    monkeypatch.setattr(runner_mod, "BalanceRepository", BalRepo)
+    ctx = await runner_mod.AgentRunner(MagicMock(), Feeds())._load_portfolio_context()
+    assert ctx.equity == pytest.approx(10_050.0)  # +50 unrealised on BTC
+    assert ctx.drawdown_pct == 0.0
+    assert ctx.open_position_symbols_by_agent == ["BTC/USDT"]

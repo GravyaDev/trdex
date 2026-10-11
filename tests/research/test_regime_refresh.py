@@ -764,3 +764,17 @@ async def test_clusters_are_stored_even_when_revalidation_fails(cfg, monkeypatch
     th = cfg.get_category("thresholds")
     assert th["correlation_clusters"] == '[["BTC/USDT", "ETH/USDT"]]'
     assert th["correlation_clusters_at"] and "regime_cv_min" not in th
+
+
+@pytest.mark.asyncio
+async def test_too_little_recent_data_keeps_the_stored_clusters(cfg, monkeypatch):
+    cfg._cache["thresholds"]["correlation_clusters"] = '[["BTC/USDT", "ETH/USDT"]]'
+    h = Harness(cfg, monkeypatch, outcome=replace(GOOD, clusters=None))
+    await h.wd.tick()
+    th = cfg.get_category("thresholds")
+    assert th["correlation_clusters"] == '[["BTC/USDT", "ETH/USDT"]]'
+    assert "clusters unchanged (too little recent data)" in th["regime_last_refresh_status"]
+    assert (
+        "clusters BTC/USDT, ETH/USDT"
+        in replace(GOOD, clusters=[["BTC/USDT", "ETH/USDT"]]).summary()
+    )

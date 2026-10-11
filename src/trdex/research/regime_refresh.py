@@ -119,7 +119,8 @@ class RefreshOutcome:
     metrics: dict[str, float] = field(default_factory=dict)
     failures: list[str] = field(default_factory=list)
     skipped: dict[str, str] = field(default_factory=dict)  # symbol -> reason
-    clusters: list[list[str]] = field(default_factory=list)  # correlated groups
+    # Correlated groups; None = not enough recent data (stored ones stay).
+    clusters: list[list[str]] | None = None
 
     def summary(self) -> str:
         m = self.metrics
@@ -137,7 +138,11 @@ class RefreshOutcome:
             head = f"refreshed: CV {self.cv_min:.6f}-{self.cv_max:.6f}, data to {self.data_end}"
         else:
             head = f"validation failed ({'; '.join(self.failures)})"
-        return f"{head}; {perf}{skipped}"
+        if self.clusters is None:
+            groups = "; clusters unchanged (too little recent data)"
+        else:
+            groups = f"; clusters {' | '.join(', '.join(c) for c in self.clusters) or 'none'}"
+        return f"{head}; {perf}{groups}{skipped}"
 
 
 def evaluate(ohlcv_by_symbol: dict[str, list[list[Any]]], cfg: RefreshConfig) -> RefreshOutcome:
@@ -159,7 +164,7 @@ def evaluate(ohlcv_by_symbol: dict[str, list[list[Any]]], cfg: RefreshConfig) ->
     clusters = correlation_clusters(data, threshold=cfg.correlation_threshold)
     engine = replace(
         cfg.engine,
-        clusters=tuple(frozenset(c) for c in clusters),
+        clusters=tuple(frozenset(c) for c in clusters or ()),
         max_per_cluster=cfg.max_per_cluster,
     )
     result = run_backtest(LiveRuleEngine(risk_per_trade_pct=cfg.risk_per_trade_pct), window, engine)
@@ -510,10 +515,14 @@ class RegimeWatchdog:
         pairs = {
             "regime_last_refresh_at": _iso(now),
             "regime_last_refresh_status": outcome.summary()[:1000],
-            # Clusters are a risk control, not a validation result: always kept current.
-            "correlation_clusters": json.dumps(outcome.clusters),
-            "correlation_clusters_at": _iso(now),
         }
+        if outcome.clusters is not None:
+            # A risk control, not a validation result: kept current even
+            # when revalidation fails; unknown (too little data) keeps the old.
+            pairs |= {
+                "correlation_clusters": json.dumps(outcome.clusters),
+                "correlation_clusters_at": _iso(now),
+            }
         if outcome.status == "refreshed":
             pairs |= {
                 "regime_cv_min": repr(outcome.cv_min),

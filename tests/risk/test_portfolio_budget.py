@@ -62,10 +62,12 @@ def test_cluster_cap_counts_open_positions_in_the_same_cluster():
     assert cluster_block("SOL/USDT", MAJORS, [MAJORS], 0) is None  # off
 
 
-def test_clusters_parse_from_json_and_ignore_garbage():
+def test_clusters_parse_from_json_and_garbage_raises_so_callers_fail_closed():
     assert parse_clusters(json.dumps([["A", "B"], ["C"]])) == [frozenset({"A", "B"})]
-    assert parse_clusters("not json") == [] and parse_clusters("") == []
-    assert parse_clusters('{"a": 1}') == []
+    assert parse_clusters("") == [] and parse_clusters(None) == []
+    for bad in ("not json", '{"a": 1}', "[1, 2]", '[["A", 3]]'):
+        with pytest.raises(ValueError):
+            parse_clusters(bad)
 
 
 def _daily_bars(returns, start=1_700_000_000_000):
@@ -87,7 +89,26 @@ def test_correlated_symbols_cluster_and_independent_ones_do_not():
     assert correlation_clusters(bars) == [["BTC/USDT", "ETH/USDT"]]
     assert correlation_clusters(bars, threshold=0.999) == []
     short = {k: v[:20] for k, v in bars.items()}
-    assert correlation_clusters(short) == []  # < 30 common days
+    assert correlation_clusters(short) is None  # unknown, not "uncorrelated"
+
+
+def test_a_new_or_stale_symbol_is_left_out_instead_of_wiping_the_clusters():
+    rnd = random.Random(7)
+    base = [rnd.gauss(0, 0.03) for _ in range(200)]
+    bars = {
+        "BTC/USDT": _daily_bars(base),
+        "ETH/USDT": _daily_bars([b + rnd.gauss(0, 0.005) for b in base]),
+        "SOL/USDT": _daily_bars([b + rnd.gauss(0, 0.005) for b in base]),
+        # listed 20 days ago
+        "NEW/USDT": _daily_bars([rnd.gauss(0, 0.03) for _ in range(20)], start=_day(180)),
+        # data stopped 150 days ago, uncorrelated anyway
+        "OLD/USDT": _daily_bars([rnd.gauss(0, 0.03) for _ in range(50)]),
+    }
+    assert correlation_clusters(bars) == [["BTC/USDT", "ETH/USDT", "SOL/USDT"]]
+
+
+def _day(n, start=1_700_000_000_000):
+    return start + n * 86_400_000
 
 
 # ── reward / risk ─────────────────────────────────────────────────────────
@@ -128,3 +149,7 @@ def test_rules_from_config():
         portfolio_rules(Cfg(portfolio_risk_max_pct="lots"))
     with pytest.raises(ValueError):
         portfolio_rules(Cfg(min_reward_risk=-1))
+    with pytest.raises(ValueError, match="whole number"):
+        portfolio_rules(Cfg(max_positions_per_cluster="0.5"))  # would truncate to "off"
+    with pytest.raises(ValueError):
+        portfolio_rules(Cfg(correlation_clusters="{corrupt"))  # would mean "no clusters"

@@ -32,6 +32,7 @@ DEFAULT_PORTFOLIO_RISK = 0.005  # 0.5% of equity at stop, all positions together
 DEFAULT_MAX_PER_CLUSTER = 3
 DEFAULT_MIN_REWARD_RISK = 1.5
 DEFAULT_CORRELATION = 0.8
+_MIN_DAYS = 31  # daily closes -> 30 returns, the least a correlation is computed on
 
 
 # ── risk budget ───────────────────────────────────────────────────────────
@@ -86,16 +87,19 @@ def fit_to_budget(
 
 
 def parse_clusters(raw: Any) -> list[frozenset[str]]:
-    """Clusters stored as JSON ``[["BTC/USDT", "ETH/USDT"], ...]``; bad -> []."""
+    """Clusters stored as JSON ``[["BTC/USDT", "ETH/USDT"], ...]``; blank -> [].
+
+    Raises ValueError on anything else: the value is written by the
+    refresher, so garbage means corruption and callers fail closed.
+    """
     if raw is None or not str(raw).strip():
         return []
-    try:
-        data = json.loads(raw) if isinstance(raw, str) else raw
-    except ValueError:
-        return []
-    if not isinstance(data, list):
-        return []
-    return [frozenset(str(s) for s in c) for c in data if isinstance(c, list) and len(c) > 1]
+    data = json.loads(raw) if isinstance(raw, str) else raw
+    if not isinstance(data, list) or not all(
+        isinstance(c, list) and all(isinstance(x, str) for x in c) for c in data
+    ):
+        raise ValueError(f"correlation_clusters is not a list of symbol lists: {str(raw)[:80]}")
+    return [frozenset(c) for c in data if len(c) > 1]
 
 
 def cluster_block(
@@ -131,22 +135,24 @@ def correlation_clusters(
     *,
     threshold: float = DEFAULT_CORRELATION,
     days: int = 90,
-) -> list[list[str]]:
+) -> list[list[str]] | None:
     """Single-linkage clusters of symbols whose daily returns correlate >= threshold.
 
-    Uses the last ``days`` days the symbols have in common; symbols with
-    fewer than 30 common days are left alone. Singletons are omitted.
+    Only the last ``days`` days before the newest bar of any symbol count;
+    a pair is compared on the days both have there and needs at least 30
+    returns, so a newly listed or stale symbol is simply left out instead
+    of shrinking everyone's window. Singletons are omitted. None when
+    fewer than two symbols have enough data: unknown, not "uncorrelated".
     """
     closes = {s: daily_closes(b) for s, b in bars_by_symbol.items() if b}
-    symbols = sorted(closes)
+    if not closes:
+        return None
+    last_day = max(max(c) for c in closes.values())
+    first_day = last_day - days
+    recent = {s: {d: v for d, v in c.items() if d >= first_day} for s, c in closes.items()}
+    symbols = sorted(s for s, c in recent.items() if len(c) >= _MIN_DAYS)
     if len(symbols) < 2:
-        return []
-    common = sorted(set.intersection(*(set(c) for c in closes.values())))[-(days + 1) :]
-    if len(common) < 31:
-        return []
-    returns = {
-        s: [closes[s][d] / closes[s][p] - 1.0 for p, d in pairwise(common)] for s in symbols
-    }
+        return None
     parent = {s: s for s in symbols}
 
     def find(s: str) -> str:
@@ -157,7 +163,12 @@ def correlation_clusters(
 
     for i, a in enumerate(symbols):
         for b in symbols[i + 1 :]:
-            if _pearson(returns[a], returns[b]) >= threshold:
+            common = sorted(recent[a].keys() & recent[b].keys())
+            if len(common) < _MIN_DAYS:
+                continue
+            ra = [recent[a][d] / recent[a][p] - 1.0 for p, d in pairwise(common)]
+            rb = [recent[b][d] / recent[b][p] - 1.0 for p, d in pairwise(common)]
+            if _pearson(ra, rb) >= threshold:
                 parent[find(a)] = find(b)
     groups: dict[str, list[str]] = {}
     for s in symbols:
@@ -208,7 +219,7 @@ class PortfolioRules:
 def portfolio_rules(cfg: Any) -> PortfolioRules:
     """Rules from Runtime Config ``thresholds``; blank -> default, 0 -> off.
 
-    Raises ValueError on non-numeric values (callers fail closed).
+    Raises ValueError on invalid values (callers fail closed).
     """
     if cfg is None:
         return PortfolioRules()
@@ -223,9 +234,12 @@ def portfolio_rules(cfg: Any) -> PortfolioRules:
         return value
 
     cap = num("portfolio_risk_max_pct", DEFAULT_PORTFOLIO_RISK)
+    per_cluster = num("max_positions_per_cluster", DEFAULT_MAX_PER_CLUSTER)
+    if not per_cluster.is_integer():
+        raise ValueError(f"max_positions_per_cluster must be a whole number, got {per_cluster}")
     return PortfolioRules(
         risk_cap=cap if cap > 0 else None,
         clusters=tuple(parse_clusters(cfg.get("thresholds", "correlation_clusters", ""))),
-        max_per_cluster=int(num("max_positions_per_cluster", DEFAULT_MAX_PER_CLUSTER)),
+        max_per_cluster=int(per_cluster),
         min_reward_risk=num("min_reward_risk", DEFAULT_MIN_REWARD_RISK),
     )

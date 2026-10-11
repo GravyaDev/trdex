@@ -7,7 +7,8 @@ import logging
 import secrets
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import AsyncIterator
+from decimal import Decimal
+from typing import Any, AsyncIterator
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
@@ -100,6 +101,89 @@ async def _ingest_news_to_qdrant(chat_id: str, text: str, timestamp) -> None:
         logger.exception("[telegram] Qdrant news ingestion failed for chat %s", chat_id)
 
 
+async def build_telegram_gate_config(
+    sig: Any, *, session: Any, svc: Any, settings: Any, feed_manager: Any
+) -> tuple[Any, Decimal]:
+    """GateConfig snapshot for one Telegram signal, and the ledger balance.
+
+    Same inputs as the Risk node: regime and macro gates, portfolio rules,
+    the exits the StopLossMonitor will apply to this symbol, and equity =
+    ledger balance + unrealised P&L at current prices. Raises on any read
+    error: the caller does not execute.
+    """
+    from trdex.execution.telegram_gates import GateConfig, regime_gate_settings
+    from trdex.market.macro_calendar import get_macro_calendar, macro_gate_config
+    from trdex.risk.open_risk import (
+        exit_bases,
+        fetch_prices,
+        load_open_risk_in,
+        monitor_cv,
+        unrealized_pnl,
+    )
+    from trdex.risk.portfolio_budget import portfolio_rules
+    from trdex.storage.balance_repo import BalanceRepository
+    from trdex.storage.symbol_config_repo import SymbolConfigRepository
+
+    regime, regime_blocker = regime_gate_settings(
+        svc, live=settings.mode.value == "live", now=datetime.now(tz=UTC)
+    )
+    try:
+        macro_blocker = get_macro_calendar().block_reason(
+            datetime.now(tz=UTC),
+            macro_gate_config(svc),
+            live=settings.mode.value == "live",
+        )
+    except Exception as exc:
+        macro_blocker = f"macro gate error (fail-closed): {exc}"
+    # Portfolio rules: same snapshot logic as the Risk node.
+    rules = portfolio_rules(svc)
+    open_risk = await load_open_risk_in(session, svc, settings)
+    base_sl, base_tp, base_trail = exit_bases(svc, settings)
+
+    async def _price(sym: str) -> float:
+        return float((await feed_manager.get_ticker(sym)).price)
+
+    # Ledger cash balance (realised only: opening a position does
+    # not debit it); equity adds unrealised P&L at current prices.
+    current = await BalanceRepository(session).current_balance()
+    prices = await fetch_prices(open_risk.symbols, _price)
+    equity = float(current) + unrealized_pnl(open_risk.exposures, prices)
+    config = GateConfig(
+        asset_class_cap=int(svc.get_typed(
+            "telegram", "asset_class_cap", 3,
+        )),
+        reliability_min_samples=int(svc.get_typed(
+            "telegram", "reliability_min_samples", 20,
+        )),
+        reliability_win_rate_min=float(svc.get_typed(
+            "telegram", "reliability_win_rate_min", 0.5,
+        )),
+        entry_drift_tolerance=float(svc.get_typed(
+            "telegram", "entry_drift_tolerance", 0.005,
+        )),
+        max_stop_distance=float(svc.get_typed(
+            "telegram", "max_stop_distance", 0.10,
+        )),
+        budget=Decimal(str(settings.telegram_signal_budget)),
+        regime=regime,
+        regime_blocker=regime_blocker,
+        macro_blocker=macro_blocker,
+        min_reward_risk=rules.min_reward_risk,
+        default_stop_pct=base_sl,
+        default_tp_pct=base_tp,
+        default_trail_pct=base_trail,
+        exit_override=await SymbolConfigRepository(session).get(sig.symbol),
+        exit_cv=await monitor_cv(session, sig.symbol),
+        clusters=rules.clusters,
+        max_per_cluster=rules.max_per_cluster,
+        open_symbols=open_risk.symbols,
+        portfolio_risk_cap=rules.risk_cap,
+        open_risk_fraction=open_risk.fraction(equity),
+        portfolio_equity=Decimal(str(equity)),
+    )
+    return config, current
+
+
 async def _telegram_background(
     monitor: TelegramMonitor,
     channels: list[str],
@@ -142,72 +226,15 @@ async def _telegram_background(
             return
         try:
             from trdex.config import get_settings as _get_settings
-            from trdex.execution.telegram_gates import GateConfig
             from trdex.execution.telegram_executor import TelegramSignalExecutor
             from trdex.storage.portfolio_repo import PortfolioRepository
             from trdex.storage.signal_outcome_repo import SignalOutcomeRepository
-            from trdex.storage.balance_repo import BalanceRepository
             from trdex.portfolio.service import PortfolioService
             from types import SimpleNamespace
 
             _settings = _get_settings()
-            from trdex.execution.telegram_gates import regime_gate_settings
-
-            regime, regime_blocker = regime_gate_settings(
-                svc, live=_settings.mode.value == "live", now=datetime.now(tz=UTC)
-            )
-            from trdex.market.macro_calendar import get_macro_calendar, macro_gate_config
-
-            try:
-                macro_blocker = get_macro_calendar().block_reason(
-                    datetime.now(tz=UTC),
-                    macro_gate_config(svc),
-                    live=_settings.mode.value == "live",
-                )
-            except Exception as exc:
-                macro_blocker = f"macro gate error (fail-closed): {exc}"
-            # Portfolio rules: same snapshot logic as the Risk node. Any
-            # error propagates to the except below: no execution.
-            from trdex.risk.open_risk import load_open_risk_in
-            from trdex.risk.portfolio_budget import portfolio_rules
-
-            rules = portfolio_rules(svc)
-            open_risk = await load_open_risk_in(session, svc, _settings)
-            # Ledger cash balance; equity for the budget = cash + notional
-            # of open positions at entry (same as the backtest replay).
-            current = await BalanceRepository(session).current_balance()
-            equity = float(current) + open_risk.committed
-            config = GateConfig(
-                asset_class_cap=int(svc.get_typed(
-                    "telegram", "asset_class_cap", 3,
-                )),
-                reliability_min_samples=int(svc.get_typed(
-                    "telegram", "reliability_min_samples", 20,
-                )),
-                reliability_win_rate_min=float(svc.get_typed(
-                    "telegram", "reliability_win_rate_min", 0.5,
-                )),
-                entry_drift_tolerance=float(svc.get_typed(
-                    "telegram", "entry_drift_tolerance", 0.005,
-                )),
-                max_stop_distance=float(svc.get_typed(
-                    "telegram", "max_stop_distance", 0.10,
-                )),
-                budget=Decimal(str(_settings.telegram_signal_budget)),
-                regime=regime,
-                regime_blocker=regime_blocker,
-                macro_blocker=macro_blocker,
-                min_reward_risk=rules.min_reward_risk,
-                default_stop_pct=float(svc.get_typed(
-                    "thresholds", "sl_position_pct", _settings.sl_position_pct)),
-                default_tp_pct=float(svc.get_typed(
-                    "thresholds", "sl_take_profit_pct", _settings.sl_take_profit_pct)),
-                clusters=rules.clusters,
-                max_per_cluster=rules.max_per_cluster,
-                open_symbols=open_risk.symbols,
-                portfolio_risk_cap=rules.risk_cap,
-                open_risk_fraction=open_risk.fraction(equity),
-                portfolio_equity=Decimal(str(equity)),
+            config, current = await build_telegram_gate_config(
+                sig, session=session, svc=svc, settings=_settings, feed_manager=feed_manager
             )
             portfolio_repo = PortfolioRepository(session)
             outcome_repo = SignalOutcomeRepository(session)

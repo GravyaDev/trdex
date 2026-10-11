@@ -85,17 +85,25 @@ class AgentRunner:
                 p.symbol for p in open_positions if p.source == "agent"
             ]
 
-            unrealized_pnl = sum(
-                (float(p.exit_price or 0) - float(p.entry_price)) * float(p.amount)
-                if p.side == "BUY"
-                else (float(p.entry_price) - float(p.exit_price or 0)) * float(p.amount)
+            # Mark to market at current prices. (Open positions have no
+            # exit_price: the old formula used 0 and booked their whole
+            # cost as a loss, inflating drawdown and shrinking equity.)
+            from trdex.risk.open_risk import Exposure, fetch_prices, unrealized_pnl
+
+            async def _price(sym: str) -> float:
+                return float((await self._feeds.get_ticker(sym)).price)
+
+            exposures = [
+                Exposure(p.symbol, str(p.side), float(p.entry_price), float(p.amount))
                 for p in open_positions
-            )
+            ]
+            prices = await fetch_prices({e.symbol for e in exposures}, _price)
+            unrealized = unrealized_pnl(exposures, prices)
 
             # Cash balance from ledger (authoritative source)
             balance = float(await bal_repo.current_balance())
             peak_balance = float(await bal_repo.peak_balance())
-            equity = balance + unrealized_pnl
+            equity = balance + unrealized
             peak_equity = peak_balance  # peak is tracked via ledger entries at fill time
             drawdown_pct = max(0.0, (peak_equity - equity) / peak_equity) if peak_equity > 0 else 0.0
 
@@ -103,7 +111,7 @@ class AgentRunner:
                 equity=equity,
                 open_position_symbols=open_symbols,
                 open_position_symbols_by_agent=open_symbols_by_agent,
-                unrealized_pnl=unrealized_pnl,
+                unrealized_pnl=unrealized,
                 realized_pnl=balance - peak_balance,  # net change from peak
                 drawdown_pct=drawdown_pct,
             )
