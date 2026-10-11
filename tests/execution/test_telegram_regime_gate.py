@@ -196,3 +196,18 @@ def test_invalid_bounds_block_in_both_modes(live, bad):
 
 def test_missing_runtime_config_blocks():
     assert regime_gate_settings(None, live=False, now=NOW)[1] is not None
+
+
+# ── macro gate ────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_macro_blocker_skips_the_signal_before_any_order():
+    feed, gw = ClosesFeed(CALM), FakeGateway()
+    cfg = GateConfig(macro_blocker="USD CPI m/m (High) at 12:30 UTC")
+    outcome = await _make_executor(feed=feed, gateway=gw, config=cfg).execute(
+        make_signal(), outcome_id=7
+    )
+    assert outcome.status == "skipped"
+    assert outcome.reason == "macro event gate: USD CPI m/m (High) at 12:30 UTC"
+    assert gw.calls == [] and feed.calls == []

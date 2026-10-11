@@ -121,6 +121,32 @@ else:
     st.error("Cannot reach the trdex API. Is it running?")
     st.stop()
 
+# ── Status bar: feeds, kill switch, macro gate ─────────────────────────────
+
+_sys = get("/v1/status") or {}
+_feed_icons = {"ok": "🟢", "degraded": "🟡", "down": "🔴", "idle": "⚪"}
+_feed_parts = []
+for _f in _sys.get("feed_health", []):
+    _lat = _f.get("avg_latency_ms")
+    _feed_parts.append(
+        f"{_feed_icons.get(_f.get('status'), '⚪')} {_f.get('name')}"
+        + (f" {int(_lat)}ms" if _lat is not None else "")
+    )
+_ks = _sys.get("kill_switch", {})
+_macro = _sys.get("macro_gate", {})
+st.caption(
+    f"Mode: **{_sys.get('mode', '?')}** · Feeds: {' · '.join(_feed_parts) or 'none'} · "
+    f"Kill switch: {'🔴 ACTIVE' if _ks.get('active') else '🟢 off'} · "
+    f"Macro gate: {'⛔ entries paused' if _macro.get('blocking_now') else '🟢 open'}"
+)
+for _f in _sys.get("feed_health", []):
+    if _f.get("status") == "down":
+        st.warning(f"Feed {_f.get('name')} is down: {_f.get('last_error') or 'no detail'}")
+if _ks.get("active"):
+    st.error(f"Kill switch ACTIVE since {_ks.get('activated_at')}: {_ks.get('reason')}")
+if _macro.get("blocking_now"):
+    st.info(f"Macro gate: {_macro['blocking_now']}")
+
 # ── Readiness check (sim → live gate) ──────────────────────────────────────
 
 readiness = get("/v1/system/readiness")
@@ -1224,6 +1250,11 @@ with st.expander("Risk Thresholds"):
             ("max_position_pct", "Max Position Size %", "0.02"),
             ("risk_per_trade_pct", "Risk per Trade % (size = risk / stop)", "0.001"),
             ("regime_max_age_days", "Regime bounds max age (days, readiness)", "90"),
+            ("macro_gate_enabled", "Macro gate enabled (true/false)", "true"),
+            ("macro_gate_before_min", "Macro gate: minutes before event", "30"),
+            ("macro_gate_after_min", "Macro gate: minutes after event", "60"),
+            ("macro_gate_impacts", "Macro gate impacts (High,Medium,Low)", "High"),
+            ("macro_gate_currencies", "Macro gate currencies (USD,EUR or ALL)", "USD"),
             ("gate_min_days", "Gate Min Simulation Days", "20"),
         ]:
             _thr_inputs[thr_key] = st.text_input(
@@ -1320,6 +1351,34 @@ with st.expander("🔔 Notifications"):
                 (st.success if _res.get("result") == "sent" else st.warning)(
                     f"{_chan}: {_res.get('result')}"
                 )
+
+with st.expander("📅 Macro events (entry blackout)"):
+    _cal = _macro.get("calendar", {})
+    st.caption(
+        f"Source: {_cal.get('source', '?')} · last update {_cal.get('last_success') or 'never'}"
+        + (f" · last error: {_cal.get('last_error')}" if _cal.get("last_error") else "")
+    )
+    if _macro.get("error"):
+        st.error(f"Macro gate settings invalid: {_macro['error']}")
+    _upcoming = _macro.get("upcoming", [])
+    if _upcoming:
+        st.dataframe(
+            [
+                {
+                    "time (UTC)": e["time"][:16].replace("T", " "),
+                    "ccy": e["currency"],
+                    "event": e["title"],
+                    "impact": e["impact"],
+                    "forecast": e.get("forecast") or "",
+                    "previous": e.get("previous") or "",
+                }
+                for e in _upcoming
+            ],
+            hide_index=True,
+            use_container_width=True,
+        )
+    else:
+        st.caption("No matching events in the next 72 hours.")
 
 with st.expander("Scheduler"):
     _sch = _all_cfg.get("scheduler", {})

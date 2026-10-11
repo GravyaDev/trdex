@@ -50,6 +50,23 @@ class _Cfg:
             return default
         return self._v[key]
 
+    def get(self, category, key, default=""):
+        if category != "thresholds" or key not in self._v:
+            return default
+        return str(self._v[key])
+
+
+@pytest.fixture(autouse=True)
+def _fresh_empty_calendar(monkeypatch):
+    """Macro gate (4d) has its own tests; here it must neither block nor fail closed."""
+    from datetime import UTC, datetime
+
+    from trdex.market.macro_calendar import MacroCalendar
+
+    cal = MacroCalendar()
+    cal.last_success = datetime.now(tz=UTC)
+    monkeypatch.setattr("trdex.market.macro_calendar._calendar", cal)
+
 
 async def _run(state, *, cfg=None, mode="simulation"):
     ks = AsyncMock()

@@ -143,6 +143,8 @@ Per-symbol overrides are available via the `/v1/risk/symbol-config` API and the 
 
 **Regime refresher** (`trdex.research.regime_refresh`, always on): an hourly watchdog inside the app. Every `scheduler.regime_refresh_interval_days` (default 7) it syncs closed 1h **Binance** OHLCV of the agent symbols into the DB (5 years on the first run; requires `integrations.binance_feed_enabled`), backtests the live rules net of fees on that window with the same risk settings the Risk node uses, and writes new bounds and `regime_data_end` **only if** the backtest clears the same bar the simulation must clear (≥ 20 trades, net return > 0, win rate, max drawdown, Sharpe, ≥ 365 days of data). Otherwise the old bounds stay until they expire (`regime_max_age_days`, default 90) and live entries stop. The job fits nothing, so it validates on all data up to the last closed bar; the sealed holdout is for manual research (`scripts/backtest`), where rules are iterated. Validation covers the rules the agent falls back to; LLM decisions cannot be replayed historically. The bounds are read-only in the dashboard; `scripts/backtest/regime_range.py` remains as a manual tool. The agent's own candles still come from the live feed: DB candles are used only when the newest one is at most two bars old.
 
+**Macro event gate** (Risk Gate 4d, also on Telegram entries): no new entries from 30 minutes before to 60 minutes after high-impact USD releases (FOMC, CPI, NFP, ...), from the public Forex Factory weekly calendar, refreshed every 6 hours and stored in `macro_events` (history accumulates for future backtests). Window, impacts and currencies are in dashboard → Risk Thresholds (`macro_gate_*`). Exits are never blocked. A calendar older than 24 h blocks live entries (fail-closed) and is notified; in simulation the gate is then off. The backtest cannot replay it yet, so live is slightly more conservative than what was validated.
+
 ## Notifications
 
 Telegram bot and/or email, chosen per event in dashboard → 🔔 Notifications (with a test button): kill switch activated, live readiness changed, regime bounds refreshed, revalidation failed, refresh job error (at most daily), bounds expiring (daily in the last 14 days) or expired.
@@ -162,6 +164,7 @@ Live mode is enforced by the readiness gate (`GET /v1/system/readiness`, dashboa
 - **Dashboard**: `https://trdex.gravya.it/dashboard/` (basic auth)
 - **CLI**: `uv run python -m trdex.scripts.inspect_runs --hours 24` (inside app container or dev)
 - **API**: `GET /v1/health`, `/v1/status`, `/v1/system/readiness`, `/v1/portfolio`, `/v1/risk/status`
+- **Status bar** (top of the dashboard, from `/v1/status`): per-feed health (ok / degraded / down, average latency, redacted last error, circuit state), kill switch, macro gate.
 
 ## Project status
 

@@ -41,6 +41,7 @@ _telegram_eval_task: asyncio.Task[None] | None = None
 _scheduler: IngestionScheduler | None = None
 _agent_task: asyncio.Task[None] | None = None
 _regime_watchdog_task: asyncio.Task[None] | None = None
+_macro_calendar_task: asyncio.Task[None] | None = None
 
 
 async def _ingest_signal_to_qdrant(signal) -> None:
@@ -155,6 +156,16 @@ async def _telegram_background(
             regime, regime_blocker = regime_gate_settings(
                 svc, live=_settings.mode.value == "live", now=datetime.now(tz=UTC)
             )
+            from trdex.market.macro_calendar import get_macro_calendar, macro_gate_config
+
+            try:
+                macro_blocker = get_macro_calendar().block_reason(
+                    datetime.now(tz=UTC),
+                    macro_gate_config(svc),
+                    live=_settings.mode.value == "live",
+                )
+            except Exception as exc:
+                macro_blocker = f"macro gate error (fail-closed): {exc}"
             config = GateConfig(
                 asset_class_cap=int(svc.get_typed(
                     "telegram", "asset_class_cap", 3,
@@ -174,6 +185,7 @@ async def _telegram_background(
                 budget=Decimal(str(_settings.telegram_signal_budget)),
                 regime=regime,
                 regime_blocker=regime_blocker,
+                macro_blocker=macro_blocker,
             )
             portfolio_repo = PortfolioRepository(session)
             outcome_repo = SignalOutcomeRepository(session)
@@ -343,6 +355,7 @@ async def _telegram_background(
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     global _telegram_task, _telegram_eval_task, _scheduler, _agent_task, _regime_watchdog_task
+    global _macro_calendar_task
 
     # --- Apply DB migrations (idempotent, self-healing on fresh deploys) ---
     # Must run before anything else touches the database. The migration
@@ -576,6 +589,17 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         name="regime-watchdog",
     )
     logger.info("[regime-watchdog] scheduled — hourly tick, weekly refresh")
+
+    # Economic calendar for the macro entry gate (Risk Gate 4d, Telegram):
+    # refreshed every 6h, notifies while stale.
+    from trdex.market.macro_calendar import MacroCalendar, macro_calendar_loop, set_macro_calendar
+
+    _macro_calendar = MacroCalendar(session_factory=session_factory)
+    set_macro_calendar(_macro_calendar)
+    _macro_calendar_task = asyncio.create_task(
+        macro_calendar_loop(_macro_calendar, notify=_notify, cfg_provider=_get_cfg),
+        name="macro-calendar",
+    )
 
     # --- News ingestion scheduler ---
     # Read API keys and symbols from RuntimeConfig (DB-backed, dashboard-editable)
@@ -1057,9 +1081,38 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     if _regime_watchdog_task:
         _regime_watchdog_task.cancel()
         await asyncio.gather(_regime_watchdog_task, return_exceptions=True)
+    if _macro_calendar_task:
+        _macro_calendar_task.cancel()
+        await asyncio.gather(_macro_calendar_task, return_exceptions=True)
     if monitor:
         await monitor.stop()
     await feed_manager.close_all()
+
+
+def _kill_switch_status() -> dict[str, object]:
+    from trdex.risk.stop_loss import get_kill_switch
+
+    return dict(get_kill_switch().status)
+
+
+def _macro_gate_status() -> dict[str, object]:
+    """Calendar freshness, whether entries are blocked right now, next events."""
+    from trdex.market.macro_calendar import get_macro_calendar, macro_gate_config
+    from trdex.services.runtime_config import get_config_service
+
+    calendar = get_macro_calendar()
+    now = datetime.now(tz=UTC)
+    out: dict[str, object] = {"calendar": calendar.status()}
+    try:
+        gate = macro_gate_config(get_config_service())
+        out["enabled"] = gate.enabled
+        out["blocking_now"] = calendar.block_reason(
+            now, gate, live=settings.mode.value == "live"
+        )
+        out["upcoming"] = [e.as_dict() for e in calendar.upcoming(now, gate)]
+    except ValueError as exc:
+        out["error"] = str(exc)
+    return out
 
 
 async def verify_api_key(api_key: str | None = Security(API_KEY_HEADER)) -> str:
@@ -1206,6 +1259,9 @@ def create_app() -> FastAPI:
             "regime_watchdog": {
                 "running": _regime_watchdog_task is not None and not _regime_watchdog_task.done(),
             },
+            "feed_health": _fm.health() if _fm else [],
+            "kill_switch": _kill_switch_status(),
+            "macro_gate": _macro_gate_status(),
         }
 
     @app.get("/v1/signals")

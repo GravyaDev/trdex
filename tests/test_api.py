@@ -28,3 +28,6 @@ async def test_status_endpoint_no_auth() -> None:
     data = response.json()
     assert data["mode"] == "simulation"
     assert "timestamp" in data
+    assert data["feed_health"] == []  # no feed manager without the lifespan
+    assert data["kill_switch"]["active"] in (True, False)
+    assert "calendar" in data["macro_gate"] and "blocking_now" in data["macro_gate"]

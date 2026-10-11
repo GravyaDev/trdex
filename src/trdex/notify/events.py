@@ -18,6 +18,7 @@ class Event(StrEnum):
     REGIME_VALIDATION_FAILED = "regime_validation_failed"
     REGIME_REFRESH_ERROR = "regime_refresh_error"
     REGIME_EXPIRING = "regime_expiring"
+    MACRO_CALENDAR_STALE = "macro_calendar_stale"
 
 
 ROUTES = ("telegram", "email", "both", "none")
@@ -29,6 +30,7 @@ DEFAULT_ROUTES: dict[Event, str] = {
     Event.REGIME_VALIDATION_FAILED: "both",
     Event.REGIME_REFRESH_ERROR: "both",
     Event.REGIME_EXPIRING: "both",
+    Event.MACRO_CALENDAR_STALE: "both",
 }
 
 LABELS: dict[Event, str] = {
@@ -38,6 +40,7 @@ LABELS: dict[Event, str] = {
     Event.REGIME_VALIDATION_FAILED: "Regime revalidation failed (bounds kept)",
     Event.REGIME_REFRESH_ERROR: "Regime refresh job error",
     Event.REGIME_EXPIRING: "Regime bounds expiring / expired",
+    Event.MACRO_CALENDAR_STALE: "Economic calendar unavailable (macro gate)",
 }
 
 

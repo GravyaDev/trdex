@@ -58,6 +58,9 @@ class GateConfig:
     # regardless of CV: invalid bounds, or in live missing/stale ones.
     regime: RegimeBounds = field(default_factory=RegimeBounds)
     regime_blocker: str | None = None
+    # Macro event gate (trdex.market.macro_calendar), evaluated when the
+    # config is built for this signal: the reason entries must wait, if any.
+    macro_blocker: str | None = None
 
     def __post_init__(self) -> None:
         # Misconfig from RuntimeConfig must fail loud at build time, not
@@ -239,6 +242,13 @@ async def gate_stop_loss(
     return GateResult(passed=True, reason="")
 
 
+def gate_macro(signal: TelegramSignal, *, config: GateConfig) -> GateResult:
+    """Same rule as Risk Gate 4d: no new entries around high-impact events."""
+    if config.macro_blocker:
+        return GateResult(passed=False, reason=f"macro event gate: {config.macro_blocker}")
+    return GateResult(passed=True, reason="")
+
+
 def gate_regime(
     signal: TelegramSignal,
     *,
@@ -313,6 +323,10 @@ async def run_all_gates(
     DB reads, then the price-dependent drift gate last (assumes caller
     already fetched current_price; that call is the most expensive).
     """
+    result = gate_macro(signal, config=config)  # no I/O: first
+    if not result.passed:
+        return result
+
     result = await gate_position_dedup(signal, portfolio_repo=portfolio_repo)
     if not result.passed:
         return result

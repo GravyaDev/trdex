@@ -188,8 +188,8 @@ async def risk_node(state: AgentState) -> AgentState:
 
     # Gate 4c: volatility regime — OPEN intents only (CLOSE must always
     # pass). Entries outside the CV range the strategy was backtested on
-    # are blocked; bounds come from scripts/backtest/regime_range.py via
-    # Runtime Config (thresholds.regime_cv_min / regime_cv_max).
+    # are blocked; bounds are written to Runtime Config (thresholds.
+    # regime_cv_min / regime_cv_max) by the weekly regime refresher.
     # Simulation: unset bounds = gate off, to keep collecting data.
     # Live: unset bounds = fail-closed (untested conditions).
     if intent.is_open:
@@ -202,12 +202,33 @@ async def risk_node(state: AgentState) -> AgentState:
             if regime_block is None and not bounds.configured and settings.mode.value == "live":
                 regime_block = (
                     "regime bounds not configured — live mode requires "
-                    "thresholds.regime_cv_min/regime_cv_max from scripts/backtest/regime_range.py"
+                    "thresholds.regime_cv_min/regime_cv_max (set by the weekly regime refresher)"
                 )
         except Exception as exc:
             regime_block = f"invalid regime bounds (fail-closed): {exc}"
         if regime_block is not None:
             reason = f"Volatility regime gate: {regime_block}."
+            state.risk = RiskDecision(approved=False, reason=reason)
+            logger.info("[Risk] BLOCKED — %s", reason)
+            await _write_last_signal(state, approved=False, reason=reason)
+            return state
+
+    # Gate 4d: macro events — OPEN intents only. No new entries around
+    # high-impact releases (thresholds.macro_gate_*); in live a stale
+    # economic calendar blocks too (fail-closed), in simulation it is off.
+    if intent.is_open:
+        from datetime import UTC, datetime
+
+        from trdex.market.macro_calendar import get_macro_calendar, macro_gate_config
+
+        try:
+            macro_block = get_macro_calendar().block_reason(
+                datetime.now(tz=UTC), macro_gate_config(_cfg), live=settings.mode.value == "live"
+            )
+        except Exception as exc:
+            macro_block = f"macro gate error (fail-closed): {exc}"
+        if macro_block is not None:
+            reason = f"Macro event gate: {macro_block}."
             state.risk = RiskDecision(approved=False, reason=reason)
             logger.info("[Risk] BLOCKED — %s", reason)
             await _write_last_signal(state, approved=False, reason=reason)

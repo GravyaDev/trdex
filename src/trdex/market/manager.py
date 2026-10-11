@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import statistics
+import time
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from trdex.market.rate_limiter import RateLimiter
 
@@ -26,6 +30,80 @@ _DEFAULT_RPM: dict[str, int] = {
     "forex": 1,             # Free: 100 req/MONTH — must be extremely conservative
     "freecryptoapi": 50,    # Unverified; conservative default
 }
+
+
+# ── Per-feed health ────────────────────────────────────────────────────
+
+_SECRET_IN_TEXT = re.compile(
+    r"(?i)(api[_-]?key|apikey|access[_-]?key|token|secret|signature|key)=([^&\s'\"]+)"
+)
+DOWN_AFTER_FAILURES = 5  # consecutive failures before a feed reads "down"
+
+
+def _redact(message: str) -> str:
+    """Error text without credentials that some libraries put in URLs."""
+    return _SECRET_IN_TEXT.sub(r"\1=***", message)[:200]
+
+
+@dataclass
+class FeedStats:
+    """Call outcomes and latency of one feed, as seen by this process."""
+
+    name: str
+    ok: int = 0
+    failed: int = 0
+    rate_limited: int = 0
+    consecutive_failures: int = 0
+    last_latency_ms: float | None = None
+    avg_latency_ms: float | None = None  # EWMA, alpha 0.2
+    last_error: str | None = None
+    last_success_at: datetime | None = None
+    last_failure_at: datetime | None = None
+
+    def record_success(self, latency_ms: float) -> None:
+        self.ok += 1
+        self.consecutive_failures = 0
+        self.last_latency_ms = round(latency_ms, 1)
+        self.avg_latency_ms = round(
+            latency_ms if self.avg_latency_ms is None
+            else self.avg_latency_ms * 0.8 + latency_ms * 0.2,
+            1,
+        )
+        self.last_success_at = datetime.now(tz=UTC)
+
+    def record_failure(self, exc: BaseException, *, rate_limited: bool) -> None:
+        self.failed += 1
+        self.consecutive_failures += 1
+        self.rate_limited += int(rate_limited)
+        self.last_error = _redact(f"{type(exc).__name__}: {exc}")
+        self.last_failure_at = datetime.now(tz=UTC)
+
+    @property
+    def status(self) -> str:
+        """idle (never called) | ok | degraded (recent failures) | down."""
+        if self.ok == 0 and self.failed == 0:
+            return "idle"
+        if self.consecutive_failures == 0:
+            return "ok"
+        if self.consecutive_failures >= DOWN_AFTER_FAILURES or self.ok == 0:
+            return "down"
+        return "degraded"
+
+    def as_dict(self, circuit: str | None = None) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "status": self.status,
+            "circuit": circuit,
+            "ok": self.ok,
+            "failed": self.failed,
+            "rate_limited": self.rate_limited,
+            "consecutive_failures": self.consecutive_failures,
+            "last_latency_ms": self.last_latency_ms,
+            "avg_latency_ms": self.avg_latency_ms,
+            "last_error": self.last_error,
+            "last_success_at": self.last_success_at.isoformat() if self.last_success_at else None,
+            "last_failure_at": self.last_failure_at.isoformat() if self.last_failure_at else None,
+        }
 
 
 # ── Runtime-configurable feed selection for aggregation ────────────────
@@ -66,6 +144,7 @@ class PriceFeedManager:
     def __init__(self) -> None:
         self._feeds: dict[str, PriceFeed] = {}
         self._limiters: dict[str, RateLimiter] = {}
+        self._stats: dict[str, FeedStats] = {}
 
     def register(self, feed: PriceFeed, rpm: int | None = None) -> None:
         """Register a price feed with its rate limiter.
@@ -114,19 +193,36 @@ class PriceFeedManager:
             raise ConfigurationError(msg)
 
     async def _rate_limited_call(self, feed_name: str, coro):
-        """Wrap an async feed call with rate limiter acquire/report."""
+        """Wrap an async feed call with rate limiter acquire/report and health stats.
+
+        Latency is measured on the call itself, not on the limiter wait.
+        """
         limiter = self._limiters.get(feed_name)
+        stats = self._stats.setdefault(feed_name, FeedStats(feed_name))
         if limiter:
             await limiter.acquire()
+        t0 = time.perf_counter()
         try:
             result = await coro
-            if limiter:
-                limiter.report_success()
-            return result
         except Exception as e:
-            if limiter and _is_rate_limit_error(e):
+            rate_limited = _is_rate_limit_error(e)
+            stats.record_failure(e, rate_limited=rate_limited)
+            if limiter and rate_limited:
                 limiter.report_rate_limit()
             raise
+        stats.record_success((time.perf_counter() - t0) * 1000)
+        if limiter:
+            limiter.report_success()
+        return result
+
+    def health(self) -> list[dict[str, Any]]:
+        """Per-feed health for /v1/status, registered feeds first, by name."""
+        out = []
+        for name in sorted(self._feeds):
+            limiter = self._limiters.get(name)
+            stats = self._stats.get(name, FeedStats(name))
+            out.append(stats.as_dict(limiter.circuit_state.value if limiter else None))
+        return out
 
     async def get_ticker(self, symbol: str, source: str | None = None) -> Ticker:
         """Get ticker from a specific source, or try all feeds."""
