@@ -59,7 +59,7 @@ class _FeedLike(Protocol):
 class _GatewayLike(Protocol):
     async def place(
         self, *, symbol: str, direction: str, qty: float, price: float,
-        idempotency_key: str | None = None, leverage: int = 1,
+        idempotency_key: str | None = None, leverage: int = 1, venue: str = "spot",
     ) -> Any: ...
 
 
@@ -225,6 +225,7 @@ class TelegramSignalExecutor:
                 price=current_price,
                 idempotency_key=f"telegram:{outcome_id}",
                 leverage=leverage,
+                venue=self._config.derivatives.venue,
             )
         except Exception as exc:
             logger.exception("[telegram-exec] gateway failed for %s %s",
@@ -297,6 +298,7 @@ class TelegramSignalExecutor:
                 stop_loss_pct=stop_loss_pct,
                 take_profit_pct=take_profit_pct,
                 leverage=leverage,
+                venue=self._config.derivatives.venue,
             )
         except Exception as exc:
             logger.exception("[telegram-exec] persistence failed after fill")

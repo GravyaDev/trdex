@@ -225,6 +225,7 @@ class _SymbolState:
     margin: float = 0.0
     entry_fee: float = 0.0
     liq_price: float = 0.0
+    funding: float = 0.0  # funding cash booked while open (in the trade's net P&L)
 
 
 def run_backtest(
@@ -367,10 +368,15 @@ def _step(
 ) -> None:
     ts, o, h, l, _c, _v = st.bars[i]
 
-    # 0) Funding at 00/08/16 UTC on perps carried into this bar.
-    if st.leverage and params.funding_rate_8h and ts % _FUNDING_MS == 0:
-        side = "BUY" if st.position_state == "long" else "SELL"
-        account.cash += funding_cash(side, st.entry_qty, o, params.funding_rate_8h)
+    # 0) Funding at every 00/08/16 UTC boundary since the previous bar,
+    #    on perps carried into this bar (three per day on 1d bars too).
+    if st.leverage and params.funding_rate_8h:
+        crossed = ts // _FUNDING_MS - st.bars[i - 1][0] // _FUNDING_MS
+        if crossed > 0:
+            side = "BUY" if st.position_state == "long" else "SELL"
+            cash = crossed * funding_cash(side, st.entry_qty, o, params.funding_rate_8h)
+            account.cash += cash
+            st.funding += cash
 
     # 1) Exits for a position carried into this bar (gap-aware).
     exited_intrabar = False
@@ -561,13 +567,13 @@ def _close(st, ts, exit_price, reason, params, account, trades) -> None:
         # Cash P&L of the round trip: includes BOTH fees (the entry fee is
         # the budget not converted into qty), so per-symbol/quarter sums
         # and win rate match the change in equity.
-        "net_pnl": proceeds - cost,
+        "net_pnl": proceeds - cost + st.funding,
         "reason": reason,
         "leverage": st.leverage or 1,
     })
     st.position_state = "flat"
     st.budget = 0.0
-    st.leverage, st.margin, st.entry_fee, st.liq_price = 0, 0.0, 0.0, 0.0
+    st.leverage, st.margin, st.entry_fee, st.liq_price, st.funding = 0, 0.0, 0.0, 0.0, 0.0
 
 
 def _mark_to_market(account: _Account, states: list[_SymbolState]) -> float:

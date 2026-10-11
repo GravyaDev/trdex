@@ -52,12 +52,16 @@ class LivePerpExecutor(ExecutionGateway):
             "enableRateLimit": True,
             "options": {"defaultType": "future"},
         }
+        exchange = ccxt.binanceusdm(config)
         if settings.binance_testnet:
-            config["sandbox"] = True
-            logger.info("[LivePerp] using Binance USDⓈ-M TESTNET (sandbox mode)")
+            # The USDⓈ-M sandbox (testnet) is gone: CCXT refuses it for
+            # futures. Binance's demo trading replaces it and needs API keys
+            # created on demo.binance.com.
+            exchange.enable_demo_trading(True)
+            logger.info("[LivePerp] using Binance USDⓈ-M DEMO TRADING (demo.binance.com keys)")
         else:
             logger.warning("[LivePerp] using Binance USDⓈ-M PRODUCTION — real money at risk")
-        return cls(ccxt.binanceusdm(config))
+        return cls(exchange)
 
     async def _load_markets(self) -> None:
         if not self._markets_loaded:

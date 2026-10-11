@@ -1274,7 +1274,7 @@ with st.expander("Risk Thresholds"):
             ("max_positions_per_cluster", "Max open positions per correlated cluster", "3"),
             ("correlation_threshold", "Correlation threshold for clusters (weekly)", "0.8"),
             ("min_reward_risk", "Min reward/risk (take-profit / stop)", "1.5"),
-            ("execution_venue", "Execution venue: usdm (perps: shorts + leverage) | spot (long-only; live: restart)", "usdm"),
+            ("execution_venue", "Execution venue for new entries: usdm (perps: shorts + leverage) | spot (long-only)", "usdm"),
             ("max_leverage", "Max leverage (isolated, perps)", "3"),
             ("maintenance_margin_rate", "Maintenance margin rate (liquidation estimate)", "0.005"),
             ("liquidation_buffer", "Stop must stay within this share of the liquidation distance", "0.5"),

@@ -46,7 +46,7 @@ Formulas:
 | Risk node | OPEN_SHORT only on `usdm`. Opposite-side guard (any source). Cluster cap counts the same direction. The leverage/liquidation gate sets `RiskDecision.leverage`. |
 | Executor | OPEN_SHORT → SELL, CLOSE_SHORT → BUY; all closes `reduce_only`; leverage passed to the gateway. |
 | Runner / PortfolioService | Records SELL opens with `leverage`; closes are already side-aware. |
-| Migration 017 | `positions.leverage` (default 1) and `positions.funding_paid_until`. |
+| Migration 017 | `positions.venue` (old rows `spot`; closes are routed by it), `positions.leverage` (default 1) and `positions.funding_paid_until`. |
 | StopLossMonitor | Already side-aware. Adds simulated liquidation and funding accrual (ledger `funding` events) on `usdm`. |
 | Live | `LivePerpExecutor` through ccxt `binanceusdm`, with rate limiting. Isolated margin and leverage are set per symbol before the first order; closes are reduce-only; amounts use the exchange's precision. |
 | Telegram | SELL signals open shorts on `usdm`, with the same leverage/liquidation gate, opposite-side guard and directional clusters. |

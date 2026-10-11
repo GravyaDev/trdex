@@ -292,6 +292,7 @@ class AgentRunner:
             stop_loss_pct=state.risk.stop_loss_pct,
             take_profit_pct=state.risk.take_profit_pct,
             leverage=state.risk.leverage,
+            venue=state.risk.venue,
         )
 
     async def _record_close(self, state: AgentState) -> None:

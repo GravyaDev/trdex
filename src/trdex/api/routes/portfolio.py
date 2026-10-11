@@ -88,13 +88,14 @@ async def open_positions(_key: str = Depends(verify_api_key)) -> dict:
         r = rec_by_id.get(pos_id) if pos_id is not None else None
         lev = float(getattr(r, "leverage", 1) or 1) if r is not None else 1.0
         if r is None:
-            return {"leverage": None, "margin": None, "liquidation_price": None}
+            return {"venue": None, "leverage": None, "margin": None, "liquidation_price": None}
         liq = (
             liquidation_price(float(r.entry_price), str(r.side), lev, mmr)
-            if lev > 1 and mmr is not None
+            if lev > 1 and mmr is not None and getattr(r, "venue", "spot") == "usdm"
             else None
         )
         return {
+            "venue": str(getattr(r, "venue", None) or "spot"),
             "leverage": lev,
             "margin": str(Decimal(str(r.budget)) / Decimal(str(lev))),
             "liquidation_price": None if liq is None else f"{liq:.8g}",
@@ -191,6 +192,31 @@ async def manual_open(
         raise HTTPException(422, f"Leverage {req.leverage}x above max_leverage {venue.max_leverage}")
     async with _session_factory() as session:
         open_now = await PortfolioRepository(session).get_open_positions()
+        if req.leverage > 1:
+            # Same liquidation rule as agent and Telegram entries, on the
+            # stop the StopLossMonitor will apply to this symbol.
+            from trdex.config import get_settings
+            from trdex.risk.leverage import choose_leverage
+            from trdex.risk.open_risk import exit_bases, monitor_cv
+            from trdex.risk.stop_loss import effective_thresholds
+            from trdex.storage.symbol_config_repo import SymbolConfigRepository
+
+            base_sl, base_tp, base_trail = exit_bases(get_config_service(), get_settings())
+            stop, _, _ = effective_thresholds(
+                None,
+                await SymbolConfigRepository(session).get(req.symbol),
+                await monitor_cv(session, req.symbol),
+                base_sl=base_sl,
+                base_tp=base_tp,
+                base_trail=base_trail,
+            )
+            allowed, why = choose_leverage(stop, venue)
+            if allowed is None or req.leverage > allowed:
+                raise HTTPException(
+                    422,
+                    f"Leverage {req.leverage}x too high for {req.symbol}: its stop is {stop:.2%}"
+                    + (f"; max {allowed}x keeps it inside the liquidation buffer" if allowed else f"; {why}"),
+                )
     if any(p.symbol == req.symbol and str(p.side) != req.side for p in open_now):
         raise HTTPException(409, f"The opposite side is already open on {req.symbol}")
 
@@ -214,6 +240,7 @@ async def manual_open(
         price=float(price),
         idempotency_key=None,
         leverage=req.leverage,
+        venue=venue.venue,
     )
     if result.status != "filled":
         raise HTTPException(422, f"Order rejected: {result.message}")
@@ -234,6 +261,7 @@ async def manual_open(
             source="manual",
             signal_id=None,
             leverage=req.leverage,
+            venue=venue.venue,
         )
     if record is None:
         raise HTTPException(422, "Open rejected by portfolio service (unknown side)")
@@ -282,6 +310,7 @@ async def manual_close(
         price=float(price),
         idempotency_key=f"manual_close:{pos.id}",
         reduce_only=True,  # closing must stay possible with the kill switch active
+        venue=str(getattr(pos, "venue", None) or "spot"),  # where the position lives
     )
     if result.status != "filled":
         raise HTTPException(422, f"Close order rejected: {result.message}")

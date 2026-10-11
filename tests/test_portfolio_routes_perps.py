@@ -20,6 +20,9 @@ class _Cfg:
     def get(self, category, key, default=""):
         return str(self.t.get(key, default)) if category == "thresholds" else default
 
+    def get_typed(self, category, key, default=None):
+        return default
+
 
 @pytest.fixture
 def wired(monkeypatch):
@@ -61,6 +64,37 @@ def _venue(w, **t):
     w.monkeypatch.setattr("trdex.services.runtime_config.get_config_service", lambda: _Cfg(**t))
 
 
+@pytest.fixture(autouse=True)
+def _monitor_inputs(monkeypatch):
+    """No symbol override; CV 0 unless a test sets it (stop = base 2%)."""
+    repo = MagicMock(get=AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        "trdex.storage.symbol_config_repo.SymbolConfigRepository", MagicMock(return_value=repo)
+    )
+    cv = {"value": 0.0}
+
+    async def fake_cv(session, symbol):
+        return cv["value"]
+
+    monkeypatch.setattr("trdex.risk.open_risk.monitor_cv", fake_cv)
+    return cv
+
+
+@pytest.mark.asyncio
+async def test_manual_leverage_must_keep_the_monitor_stop_inside_liquidation(
+    wired, _monitor_inputs
+):
+    _venue(wired)
+    _monitor_inputs["value"] = 0.14  # stop 2.5 x 14% = 35%: only 1x keeps it inside
+    req = routes.ManualOpenRequest(
+        symbol="BTC/USDT", side="SELL", amount=Decimal("500"), leverage=3
+    )
+    with pytest.raises(HTTPException) as exc:
+        await routes.manual_open(req, _key="k")
+    assert exc.value.status_code == 422 and "max 1x" in exc.value.detail
+    wired.gw.place.assert_not_awaited()
+
+
 @pytest.mark.asyncio
 async def test_manual_short_on_perps_carries_its_leverage(wired):
     _venue(wired)
@@ -70,6 +104,8 @@ async def test_manual_short_on_perps_carries_its_leverage(wired):
     await routes.manual_open(req, _key="k")
     assert wired.gw.place.await_args.kwargs["leverage"] == 2
     assert wired.svc.record_open_fill.await_args.kwargs["leverage"] == 2
+    assert wired.gw.place.await_args.kwargs["venue"] == "usdm"
+    assert wired.svc.record_open_fill.await_args.kwargs["venue"] == "usdm"
 
 
 @pytest.mark.asyncio
@@ -114,6 +150,7 @@ async def test_positions_show_leverage_margin_and_liquidation_price(wired):
         leverage=3.0,
         budget=Decimal("600"),
         entry_price=Decimal("100"),
+        venue="usdm",
     )
     pos = SimpleNamespace(
         symbol="BTC/USDT",
@@ -128,5 +165,6 @@ async def test_positions_show_leverage_margin_and_liquidation_price(wired):
     wired.svc.mark_to_market = AsyncMock(return_value=[pos])
     wired.svc._repo = MagicMock(get_open_positions=AsyncMock(return_value=[rec]))
     (row,) = (await routes.open_positions(_key="k"))["positions"]
-    assert row["leverage"] == 3.0 and Decimal(row["margin"]) == Decimal("200")
+    assert row["venue"] == "usdm" and row["leverage"] == 3.0
+    assert Decimal(row["margin"]) == Decimal("200")
     assert float(row["liquidation_price"]) == pytest.approx(100 * (1 + 1 / 3 - 0.005))

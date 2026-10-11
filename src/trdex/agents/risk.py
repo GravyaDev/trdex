@@ -260,10 +260,12 @@ async def risk_node(state: AgentState) -> AgentState:
 
     open_risk = OpenRisk(0.0, ())
     entry_side = "SELL" if intent == Intent.OPEN_SHORT else "BUY"
+    entry_venue = "spot"
     if intent.is_open:
         try:
             rules = portfolio_rules(_cfg)
             venue = derivatives_config(_cfg)
+            entry_venue = venue.venue
             if state.session_factory is not None:
                 open_risk = await load_open_risk(state.session_factory, _cfg, settings)
             portfolio_block = None
@@ -438,6 +440,7 @@ async def risk_node(state: AgentState) -> AgentState:
         take_profit_pct=final_tp,
         drawdown_warning=dd_warning,
         leverage=leverage,
+        venue=entry_venue,
     )
     logger.info("[Risk] APPROVED — position_size=%.3f dd_warning=%s", position_size, dd_warning)
     await _write_last_signal(state, approved=True, reason=approved_reason)

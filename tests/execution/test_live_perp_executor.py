@@ -96,34 +96,49 @@ async def test_amount_rounding_to_zero_is_refused():
         await LivePerpExecutor(_exchange()).execute(_order(amount="0.0001"))
 
 
-def test_gateway_picks_the_executor_for_the_venue(monkeypatch):
-    from trdex.config import TrdexMode, get_settings
+@pytest.mark.asyncio
+async def test_gateway_routes_each_order_to_the_market_of_its_venue():
+    from trdex.config import TrdexMode
     from trdex.execution.default_gateway import DefaultExecutionGateway
+    from trdex.execution.simulator import Simulator
+
+    fill = SimpleNamespace(
+        order_id="1",
+        symbol="BTC/USDT",
+        side=Side.SELL,
+        filled_amount=Decimal("1"),
+        filled_price=Decimal("1"),
+        fee=Decimal("0"),
+        timestamp=None,
+        simulated=False,
+    )
+    spot, perp = MagicMock(), MagicMock()
+    spot.execute = AsyncMock(return_value=fill)
+    perp.execute = AsyncMock(return_value=fill)
+    gw = DefaultExecutionGateway(
+        mode=TrdexMode.LIVE,
+        simulator=Simulator(),
+        live_executor=spot,
+        kill_switch=SimpleNamespace(active=False),
+        perp_executor=perp,
+    )
+    await gw.execute(_order())  # Order.venue defaults to spot
+    await gw.execute(_order().model_copy(update={"venue": "usdm"}))
+    assert spot.execute.await_count == 1 and perp.execute.await_count == 1
+    with pytest.raises(ValueError, match="unknown venue"):
+        await gw.execute(_order().model_copy(update={"venue": "margin"}))
+
+
+@pytest.mark.asyncio
+async def test_testnet_means_binance_demo_trading_not_the_retired_sandbox():
+    from trdex.config import get_settings
 
     settings = get_settings().model_copy(
-        update={"mode": TrdexMode.LIVE, "binance_api_key": "k", "binance_api_secret": "s"}
+        update={"binance_api_key": "k", "binance_api_secret": "s", "binance_testnet": True}
     )
-    built = []
-    monkeypatch.setattr(
-        "trdex.execution.live_perp_executor.LivePerpExecutor.from_settings",
-        classmethod(lambda cls, s: built.append("perp") or SimpleNamespace(kind="perp")),
-    )
-    monkeypatch.setattr(
-        "trdex.execution.live_executor.LiveExecutor.from_settings",
-        classmethod(lambda cls, s: built.append("spot") or SimpleNamespace(kind="spot")),
-    )
-
-    class Cfg:
-        def __init__(self, venue):
-            self.venue = venue
-
-        def get(self, category, key, default=""):
-            return self.venue if key == "execution_venue" else default
-
-    for venue, kind in (("usdm", "perp"), ("spot", "spot")):
-        monkeypatch.setattr(
-            "trdex.services.runtime_config.get_config_service", lambda v=venue: Cfg(v)
-        )
-        assert DefaultExecutionGateway.create(settings)._live_executor.kind == kind
-    monkeypatch.setattr("trdex.services.runtime_config.get_config_service", lambda: Cfg("margin"))
-    assert DefaultExecutionGateway.create(settings)._live_executor is None  # fail closed
+    executor = LivePerpExecutor.from_settings(settings)
+    try:
+        assert executor._exchange.options.get("enableDemoTrading") is True
+        assert not executor._exchange.isSandboxModeEnabled
+    finally:
+        await executor.close()

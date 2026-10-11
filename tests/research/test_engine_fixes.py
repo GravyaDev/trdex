@@ -367,6 +367,17 @@ def test_funding_is_paid_by_longs_and_received_by_shorts_every_8h():
     notional = 10_000 * 0.05
     assert long_eq == pytest.approx(10_000 - 6 * notional * 0.0001)
     assert short_eq == pytest.approx(10_000 + 6 * notional * 0.0001)
+    # funding is part of the trade's P&L, so trades still sum to the equity change
+    (trade,) = run_backtest(BuyAt(), {"A": days}, params).trades
+    assert trade["net_pnl"] == pytest.approx(long_eq - 10_000)
+
+
+def test_daily_bars_pay_funding_three_times_a_day():
+    params = replace(PERPS, funding_rate_8h=0.0001)
+    week = _flat(8, step=DAY)
+    result = run_backtest(BuyAt(timeframe="1d"), {"A": week}, params)
+    # entry at day 2's open; days 3..7 carried -> 5 days x 3 boundaries
+    assert result.final_equity == pytest.approx(10_000 - 15 * 10_000 * 0.05 * 0.0001)
 
 
 def test_a_gap_through_liquidation_loses_the_whole_margin_and_no_more():

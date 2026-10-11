@@ -124,6 +124,7 @@ class PortfolioService:
         stop_loss_pct: float | None = None,
         take_profit_pct: float | None = None,
         leverage: float = 1.0,
+        venue: str = "spot",
     ) -> PositionRecord | None:
         """Persist an open position after a successful fill.
 
@@ -131,7 +132,8 @@ class PortfolioService:
         and we now own a position". ``BUY`` opens a long, ``SELL`` a short
         (perpetual futures; callers only send a SELL open when the venue
         allows shorts). ``budget`` is the notional; the margin locked is
-        ``budget / leverage``.
+        ``budget / leverage``; ``venue`` (spot | usdm) is where the position
+        lives, and where its close will be sent.
 
         Returns the newly created ``PositionRecord`` or ``None`` if the
         fill was skipped.
@@ -157,6 +159,7 @@ class PortfolioService:
         record.stop_loss_pct = stop_loss_pct
         record.take_profit_pct = take_profit_pct
         record.leverage = float(leverage)
+        record.venue = venue
         session = self._repo._session
         await session.commit()
         await session.refresh(record)

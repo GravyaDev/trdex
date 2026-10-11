@@ -159,7 +159,8 @@ The refresher's backtest replays all three rules, so the bounds are validated on
   - Shorts are allowed: a SELL when flat opens a short and a BUY closes it, with no flip within one cycle. The Analyst prompt and the rule engine both follow this.
   - Leverage uses isolated margin.
   - Funding is charged.
-- **`spot`**: long-only at 1x, the previous behaviour. In live, changing the venue needs a restart.
+- **`spot`**: long-only at 1x, the previous behaviour.
+- **Switching venue**: possible at any time. Each position records its venue, and its close is sent there (positions from before this change are spot).
 
 Rules:
 - **Leverage never changes what a stop-out loses.** Sizing stays risk-based (notional = risk / stop); leverage only reduces the margin locked.
@@ -167,8 +168,11 @@ Rules:
 - **No opposite sides on one symbol**, whatever the source (agent, Telegram, manual): one-way accounts would net them.
 - **Telegram** SELL signals open shorts under the same rules.
 - **Closes are always reduce-only.**
-- **Simulation**: the StopLossMonitor charges funding at `funding_rate_8h` (00/08/16 UTC, as `funding` ledger rows, never twice) and liquidates a position that gaps through its liquidation price.
+- **Stop cap**: if volatility or an override widens a leveraged position's stop after entry, the StopLossMonitor caps it inside the same buffer, so the stop always comes before liquidation.
+- **Manual opens** with leverage are checked against the stop the monitor will apply.
+- **Simulation**: the StopLossMonitor charges funding on `usdm` positions at `funding_rate_8h` (00/08/16 UTC, as `funding` ledger rows; the row lock means it is never charged twice). A position that gaps through its liquidation price loses its whole margin.
 - **Live**: the exchange does both. They are not reconciled into the ledger yet; a position liquidated on the exchange makes its close fail, which trips the kill switch.
+- **Binance testnet**: USDⓈ-M has no sandbox any more. With `binance_testnet=true`, perpetual orders go to Binance **demo trading**, which needs API keys created on demo.binance.com.
 - **Backtest and refresher** replay the venue: margin, funding, liquidation (whole margin lost) and shorts, so long and short rules are revalidated together.
 - **Dashboard**: each position shows side, leverage, margin and liquidation price.
 

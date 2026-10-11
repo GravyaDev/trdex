@@ -41,10 +41,10 @@ class FakeGateway:
 
     async def place(
         self, *, symbol: str, direction: str, qty: float, price: float, idempotency_key: str | None = None,
-        leverage: int = 1,
+        leverage: int = 1, venue: str = "spot",
     ) -> FakeOrderResult:
         self.calls.append({"symbol": symbol, "direction": direction, "qty": qty, "price": price, "key": idempotency_key,
-                           "leverage": leverage})
+                           "leverage": leverage, "venue": venue})
         if self._raises:
             raise self._raises
         return self._result

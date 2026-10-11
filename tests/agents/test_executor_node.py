@@ -83,6 +83,7 @@ async def test_executor_open_long_uses_buy_and_run_scoped_key():
         idempotency_key="agent:test-run",
         reduce_only=False,
         leverage=1,
+        venue="spot",
     )
     assert result.order.status == "filled"
     assert result.order.order_id == "gw-001"
@@ -170,10 +171,11 @@ async def test_executor_open_short_sells_with_leverage():
     mock_gw.place.return_value = OrderResult(status="filled", filled_price=90_000.0,
                                              filled_qty=0.00222, message="sim")
     state = _make_state(intent=Intent.OPEN_SHORT, gateway=mock_gw)
-    state.risk.leverage = 3
+    state.risk.leverage, state.risk.venue = 3, "usdm"
     await executor_node(state)
     kwargs = mock_gw.place.call_args.kwargs
     assert kwargs["direction"] == "SELL" and kwargs["leverage"] == 3
+    assert kwargs["venue"] == "usdm"
     assert kwargs["reduce_only"] is False
     assert kwargs["qty"] == pytest.approx(10_000.0 * 0.02 / 90_000.0)  # notional, not margin
 
@@ -183,7 +185,8 @@ async def test_executor_close_short_buys_back_reduce_only():
     mock_gw = AsyncMock()
     mock_gw.place.return_value = OrderResult(status="filled", filled_price=89_000.0,
                                              filled_qty=0.00222, message="sim")
-    fake_position = MagicMock(id=7, symbol="BTC/USDT", source="agent", amount=0.00222)
+    fake_position = MagicMock(id=7, symbol="BTC/USDT", source="agent", amount=0.00222,
+                              venue="usdm")
     fake_session_cm = AsyncMock()
     fake_session_cm.__aenter__.return_value = AsyncMock()
     with patch(
@@ -196,6 +199,7 @@ async def test_executor_close_short_buys_back_reduce_only():
     kwargs = mock_gw.place.call_args.kwargs
     assert kwargs["direction"] == "BUY" and kwargs["reduce_only"] is True
     assert kwargs["idempotency_key"] == "close:7" and kwargs["leverage"] == 1
+    assert kwargs["venue"] == "usdm"  # where the position lives, not the current setting
 
 
 # ── Falls back to DefaultExecutionGateway when no gateway injected ────────────

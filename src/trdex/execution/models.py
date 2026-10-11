@@ -31,6 +31,7 @@ class Order(BaseModel):
     # isolated leverage of an entry is set on the symbol before the order.
     reduce_only: bool = False
     leverage: int = 1
+    venue: str = "spot"  # spot | usdm: which live executor gets the order
 
 
 class ExecutionResult(BaseModel):

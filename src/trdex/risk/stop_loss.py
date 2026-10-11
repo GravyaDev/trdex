@@ -307,20 +307,22 @@ class StopLossMonitor:
         self._trailing_highs: dict[int, float] = {}  # position_id → high-water mark price
 
     @staticmethod
-    def _perps_simulation() -> DerivativesConfig | None:
-        """DerivativesConfig when positions are simulated perpetuals, else None."""
-        from trdex.config import TrdexMode, get_settings
-        from trdex.risk.leverage import derivatives_config
+    def _venue_config() -> DerivativesConfig:
+        """Margin settings for leveraged positions; defaults if unreadable."""
+        from trdex.risk.leverage import DerivativesConfig, derivatives_config
         from trdex.services.runtime_config import get_config_service
 
-        if get_settings().mode != TrdexMode.SIMULATION:
-            return None
         try:
-            dc = derivatives_config(get_config_service())
+            return derivatives_config(get_config_service())
         except Exception:
-            logger.exception("[StopLoss] venue config unreadable — no funding/liquidation this cycle")
-            return None
-        return dc if dc.perps else None
+            logger.exception("[StopLoss] venue config unreadable — using default margin settings")
+            return DerivativesConfig()
+
+    @staticmethod
+    def _simulation() -> bool:
+        from trdex.config import TrdexMode, get_settings
+
+        return get_settings().mode == TrdexMode.SIMULATION
 
     def on_event(self, callback) -> None:
         """Register an async callback fired on every StopLossEvent."""
@@ -426,7 +428,14 @@ class StopLossMonitor:
         except Exception:
             logger.exception("[StopLoss] could not load peak_equity from DB — will derive from current positions")
 
-    async def _auto_close(self, position, price: float, reason: str, price_age: datetime | None = None) -> None:
+    async def _auto_close(
+        self,
+        position,
+        price: float,
+        reason: str,
+        price_age: datetime | None = None,
+        fee_rate: float = 0.001,
+    ) -> None:
         """Attempt to close a position via the execution gateway.
 
         If no gateway is injected, logs a warning with manual close instruction.
@@ -474,6 +483,7 @@ class StopLossMonitor:
                 price=price,
                 idempotency_key=f"close:{position.id}",
                 reduce_only=True,
+                venue=str(getattr(position, "venue", None) or "spot"),
             )
             if result.status == "filled":
                 logger.info(
@@ -507,7 +517,9 @@ class StopLossMonitor:
                     # the exchange response. We approximate here because
                     # _auto_close does not go through the Simulator — it
                     # closes the position directly via the gateway.
-                    close_fee = fill_price * Decimal(str(float(position.amount))) * Decimal("0.001")
+                    close_fee = (
+                        fill_price * Decimal(str(float(position.amount))) * Decimal(str(fee_rate))
+                    )
                     async with self._session_factory() as session:
                         repo = PortfolioRepository(session)
                         service = PortfolioService(repo, self._feeds)
@@ -666,14 +678,15 @@ class StopLossMonitor:
 
         # Perpetuals in simulation: funding is booked and isolated-margin
         # liquidation emulated here (live: the exchange does both).
-        perps_sim = self._perps_simulation()
-        if perps_sim is not None and open_positions:
+        venue_cfg = self._venue_config()
+        simulation = self._simulation()
+        if simulation and open_positions:
             from trdex.risk.funding import accrue_funding
 
-            try:
+            try:  # only positions on usdm pay (accrue_funding filters by venue)
                 await accrue_funding(
                     self._session_factory, open_positions, prices,
-                    perps_sim.funding_rate_8h, now,
+                    venue_cfg.funding_rate_8h, now,
                 )
             except Exception:
                 logger.exception("[StopLoss] funding accrual failed this cycle")
@@ -755,31 +768,37 @@ class StopLossMonitor:
                     self._trailing_highs[pos_id] = price
                     hwm = price
 
-            # Simulated liquidation (perps, isolated): the Risk node keeps
-            # stops well inside the liquidation distance, so only a gap gets
-            # here; the loss is capped at the liquidation price.
             lev = float(getattr(pos, "leverage", 1) or 1)
-            if perps_sim is not None and lev > 1:
-                from trdex.risk.leverage import liquidation_distance, liquidation_price
+            leveraged = lev > 1 and str(getattr(pos, "venue", "spot") or "spot") == "usdm"
+            if leveraged:
+                from trdex.risk.leverage import liquidation_distance
 
-                liq = liquidation_distance(lev, perps_sim.mmr)
-                if pnl_pct <= -liq:
-                    liq_price = liquidation_price(entry, str(pos.side), lev, perps_sim.mmr)
+                liq = liquidation_distance(lev, venue_cfg.mmr)
+                # The stop must fire before liquidation even if volatility
+                # (or an override) widened it after entry: cap it inside the
+                # same buffer the Risk node chose the leverage with.
+                eff_sl = min(eff_sl, venue_cfg.buffer * liq)
+                # Simulated liquidation (live: the exchange's). Only a gap
+                # gets here; isolated margin loses the whole margin: exit at
+                # the bankruptcy price (entry -/+ 1/L) with no further fee.
+                if simulation and pnl_pct <= -liq:
+                    move = 1.0 / lev
+                    bankrupt = entry * (1 - move) if pos.side == "BUY" else entry * (1 + move)
                     event = StopLossEvent(
                         reason=StopReason.LIQUIDATION,
                         symbol=pos.symbol,
                         position_id=pos.id,
                         trigger_price=price,
                         entry_price=entry,
-                        loss_pct=-liq,
+                        loss_pct=-move,
                         message=(
-                            f"{pos.symbol} position {pos.id} liquidated at {liq_price:.6g} "
+                            f"{pos.symbol} position {pos.id} liquidated: whole margin lost "
                             f"({lev:.0f}x isolated, price {price:.6g}, move {pnl_pct:.2%})"
                         ),
                     )
                     new_events.append(event)
                     logger.critical("[StopLoss] LIQUIDATION: %s", event.message)
-                    await self._auto_close(pos, liq_price, "liquidation")
+                    await self._auto_close(pos, bankrupt, "liquidation", fee_rate=0.0)
                     continue
 
             # Per-position stop-loss (adaptive)

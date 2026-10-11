@@ -49,6 +49,49 @@ async def accrue_funding(
         return total
     for pos in positions:
         price = prices.get(pos.symbol)
+        if price is None or str(getattr(pos, "venue", "spot") or "spot") != "usdm":
+            continue  # spot positions pay no funding; unpriced ones wait
+        try:
+            async with session_factory() as session:
+                # Lock the row and start from ITS funding_paid_until: two
+                # overlapping checks (loop + /risk/check_now) never book the
+                # same funding time twice.
+                live = (
+                    await session.execute(
+                        select(PositionRecord).where(PositionRecord.id == pos.id).with_for_update()
+                    )
+                ).scalar_one_or_none()
+                if live is None or live.status != "open" or live.venue != "usdm":
+                    continue
+                start = live.funding_paid_until or live.opened_at
+                if start is None:
+                    continue
+                times = funding_times(_aware(start), now)
+                if not times:
+                    continue
+                cash = funding_cash(str(live.side), float(live.amount), price, rate) * len(times)
+                balance = await BalanceRepository(session).current_balance()
+                amount = Decimal(str(round(cash, 8)))
+                session.add(
+                    BalanceRecord(
+                        event_type="funding",
+                        amount=amount,
+                        balance_after=balance + amount,
+                        note=(
+                            f"funding {live.side} {live.symbol} position {live.id}: "
+                            f"{len(times)} x {rate:.4%} on {float(live.amount)} @ {price}"
+                        ),
+                        recorded_at=now.astimezone(UTC).replace(tzinfo=None),
+                    )
+                )
+                live.funding_paid_until = times[-1].replace(tzinfo=None)
+                await session.commit()
+            total += cash
+        except Exception:
+            logger.exception("[funding] could not book funding for position %s", pos.id)
+    return total
+    for pos in positions:
+        price = prices.get(pos.symbol)
         if price is None:
             continue
         start = getattr(pos, "funding_paid_until", None) or getattr(pos, "opened_at", None)

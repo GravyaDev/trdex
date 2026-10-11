@@ -68,6 +68,7 @@ class RiskDecision:
     take_profit_pct: float | None = None
     annotation: str | None = None     # LLM risk commentary (observability-only, Task 7)
     leverage: int = 1                 # isolated leverage for an OPEN (trdex.risk.leverage)
+    venue: str = "spot"               # market an OPEN goes to: spot | usdm (perpetuals)
     drawdown_warning: bool = False    # True when approved above 10% dd (sim mode override)
 
 

@@ -11,9 +11,11 @@ from trdex.agents.state import AgentState, OrderResult
 logger = logging.getLogger(__name__)
 
 
-async def _resolve_close_idempotency_key(state: AgentState) -> tuple[str, int | None]:
+async def _resolve_close_idempotency_key(
+    state: AgentState,
+) -> tuple[str, int | None, str]:
     """Look up the agent-owned open position on ``state.symbol`` and
-    return ``(idempotency_key, position_id)``.
+    return ``(idempotency_key, position_id, venue)``.
 
     D19: the close path must use the same idempotency key shape that
     the StopLossMonitor uses — ``close:{position_id}`` — so the
@@ -29,7 +31,7 @@ async def _resolve_close_idempotency_key(state: AgentState) -> tuple[str, int | 
 
     fallback = f"agent:{state.run_id}"
     if state.session_factory is None:
-        return fallback, None
+        return fallback, None, "spot"
     try:
         async with state.session_factory() as session:
             repo = PortfolioRepository(session)
@@ -37,12 +39,12 @@ async def _resolve_close_idempotency_key(state: AgentState) -> tuple[str, int | 
             for p in positions:
                 # D21 mirror: only close positions the agent owns.
                 if p.symbol == state.symbol and p.source == "agent":
-                    return f"close:{p.id}", p.id
+                    return f"close:{p.id}", p.id, str(getattr(p, "venue", None) or "spot")
     except Exception:
         logger.exception(
             "[Executor] failed to resolve position id for close on %s", state.symbol
         )
-    return fallback, None
+    return fallback, None, "spot"
 
 
 async def executor_node(state: AgentState) -> AgentState:
@@ -90,9 +92,10 @@ async def executor_node(state: AgentState) -> AgentState:
         logger.warning("[Executor] skipped — unsupported intent %s", intent.value)
         return state
     if qty_basis == "equity":
-        idempotency_key = f"agent:{state.run_id}"
+        idempotency_key, venue = f"agent:{state.run_id}", state.risk.venue
     else:
-        idempotency_key, _pos_id = await _resolve_close_idempotency_key(state)
+        # A close goes to the market its position lives on.
+        idempotency_key, _pos_id, venue = await _resolve_close_idempotency_key(state)
 
     if qty_basis == "equity":
         equity = state.portfolio.equity if state.portfolio.equity > 0 else 10_000.0
@@ -134,6 +137,7 @@ async def executor_node(state: AgentState) -> AgentState:
         idempotency_key=idempotency_key,
         reduce_only=intent.is_close,
         leverage=state.risk.leverage if intent.is_open else 1,
+        venue=venue,
     )
     logger.info("[Executor] result: status=%s %s", state.order.status, state.order.message)
     return state
