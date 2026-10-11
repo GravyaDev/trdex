@@ -72,6 +72,11 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str | None, type]] = {
     ("thresholds", "macro_gate_after_min"): (None, float),
     ("thresholds", "macro_gate_impacts"): (None, str),  # e.g. "High" or "High,Medium"
     ("thresholds", "macro_gate_currencies"): (None, str),  # e.g. "USD,EUR" or "ALL"
+    ("thresholds", "execution_venue"): (None, str),  # usdm (perps) | spot — trdex.risk.leverage
+    ("thresholds", "max_leverage"): (None, float),
+    ("thresholds", "maintenance_margin_rate"): (None, float),
+    ("thresholds", "liquidation_buffer"): (None, float),
+    ("thresholds", "funding_rate_8h"): (None, float),  # simulation and backtest
     # Scheduler
     ("scheduler", "agent_scheduler_enabled"): ("agent_scheduler_enabled", bool),
     ("scheduler", "agent_scheduler_interval"): ("agent_scheduler_interval", int),

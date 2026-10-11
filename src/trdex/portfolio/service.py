@@ -42,6 +42,7 @@ ClosedBy = Literal[
     "trailing_stop",
     "kill_switch",
     "manual",
+    "liquidation",
 ]
 
 

@@ -31,6 +31,7 @@ class StopReason(StrEnum):
     OPEN_POSITIONS_LOSS = "open_positions_loss"   # unrealised loss / cost of the open book exceeded
     MAX_DRAWDOWN = "max_drawdown"                 # mark-to-market peak-to-trough exceeded limit
     KILL_SWITCH = "kill_switch"                   # manual override via API
+    LIQUIDATION = "liquidation"                   # simulated isolated-margin liquidation (perps)
 
 
 @dataclass
@@ -301,6 +302,22 @@ class StopLossMonitor:
         self._last_check: datetime | None = None
         self._trailing_highs: dict[int, float] = {}  # position_id → high-water mark price
 
+    @staticmethod
+    def _perps_simulation():
+        """DerivativesConfig when positions are simulated perpetuals, else None."""
+        from trdex.config import TrdexMode, get_settings
+        from trdex.risk.leverage import derivatives_config
+        from trdex.services.runtime_config import get_config_service
+
+        if get_settings().mode != TrdexMode.SIMULATION:
+            return None
+        try:
+            dc = derivatives_config(get_config_service())
+        except Exception:
+            logger.exception("[StopLoss] venue config unreadable — no funding/liquidation this cycle")
+            return None
+        return dc if dc.perps else None
+
     def on_event(self, callback) -> None:
         """Register an async callback fired on every StopLossEvent."""
         self._callbacks.append(callback)
@@ -477,6 +494,7 @@ class StopLossMonitor:
                         "stop_loss" if reason == "stop_loss"
                         else "take_profit" if reason == "take_profit"
                         else "trailing_stop" if reason == "trailing_stop"
+                        else "liquidation" if reason == "liquidation"
                         else "kill_switch"
                     )
                     # Estimate close fee from fill: 0.1% taker (Binance standard).
@@ -642,6 +660,20 @@ class StopLossMonitor:
             except Exception:
                 logger.warning("[StopLoss] could not fetch Binance price for %s — skipping SL check", sym)
 
+        # Perpetuals in simulation: funding is booked and isolated-margin
+        # liquidation emulated here (live: the exchange does both).
+        perps_sim = self._perps_simulation()
+        if perps_sim is not None and open_positions:
+            from trdex.risk.funding import accrue_funding
+
+            try:
+                await accrue_funding(
+                    self._session_factory, open_positions, prices,
+                    perps_sim.funding_rate_8h, now,
+                )
+            except Exception:
+                logger.exception("[StopLoss] funding accrual failed this cycle")
+
         # Load per-symbol volatility CV from entity graph so that
         # SL/TP/trailing thresholds adapt to the coin's natural price
         # swings. A fixed 5% SL is fine for BTC (CV~0.4%) but suicidal
@@ -718,6 +750,33 @@ class StopLossMonitor:
                 if price < hwm:
                     self._trailing_highs[pos_id] = price
                     hwm = price
+
+            # Simulated liquidation (perps, isolated): the Risk node keeps
+            # stops well inside the liquidation distance, so only a gap gets
+            # here; the loss is capped at the liquidation price.
+            lev = float(getattr(pos, "leverage", 1) or 1)
+            if perps_sim is not None and lev > 1:
+                from trdex.risk.leverage import liquidation_distance, liquidation_price
+
+                liq = liquidation_distance(lev, perps_sim.mmr)
+                if pnl_pct <= -liq:
+                    liq_price = liquidation_price(entry, str(pos.side), lev, perps_sim.mmr)
+                    event = StopLossEvent(
+                        reason=StopReason.LIQUIDATION,
+                        symbol=pos.symbol,
+                        position_id=pos.id,
+                        trigger_price=price,
+                        entry_price=entry,
+                        loss_pct=-liq,
+                        message=(
+                            f"{pos.symbol} position {pos.id} liquidated at {liq_price:.6g} "
+                            f"({lev:.0f}x isolated, price {price:.6g}, move {pnl_pct:.2%})"
+                        ),
+                    )
+                    new_events.append(event)
+                    logger.critical("[StopLoss] LIQUIDATION: %s", event.message)
+                    await self._auto_close(pos, liq_price, "liquidation")
+                    continue
 
             # Per-position stop-loss (adaptive)
             if pnl_pct <= -eff_sl:
