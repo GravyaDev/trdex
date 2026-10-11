@@ -1,7 +1,7 @@
 """TelegramSignalExecutor — orchestrates gate → fetch → place → persist.
 
 Zero business logic here. This file is a sequencer:
-  0. Normalise direction; reject SELL (long-only) before any I/O.
+  0. Normalise direction; reject SELL on spot (long-only there) before any I/O.
   1. Route the symbol (may raise SymbolNotRoutable → skip).
   2. Fetch current price from the routed feed.
   3. Run all gates in order. First failure → skip with reason. The
@@ -25,7 +25,12 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Literal, Protocol
 
 from trdex.execution.symbol_router import SymbolNotRoutable, route
-from trdex.execution.telegram_gates import GateConfig, run_all_gates, telegram_budget
+from trdex.execution.telegram_gates import (
+    GateConfig,
+    run_all_gates,
+    telegram_budget,
+    telegram_leverage,
+)
 from trdex.risk.sizing import VOL_WINDOW, recent_cv
 from trdex.telegram.parser import TelegramSignal
 
@@ -54,7 +59,7 @@ class _FeedLike(Protocol):
 class _GatewayLike(Protocol):
     async def place(
         self, *, symbol: str, direction: str, qty: float, price: float,
-        idempotency_key: str | None = None,
+        idempotency_key: str | None = None, leverage: int = 1,
     ) -> Any: ...
 
 
@@ -117,17 +122,16 @@ class TelegramSignalExecutor:
         if direction != signal.direction:
             signal = replace(signal, direction=direction)  # type: ignore[arg-type]
 
-        # 0b. Long-only. A SELL signal is a short entry, which trdex cannot
-        # track (PortfolioService.record_open_fill returns None for SELL).
-        # Reject it BEFORE any order: previously the order was placed and
-        # only then refused by the portfolio, leaving an untracked fill —
-        # in live on spot that sells coins held by other positions.
-        if direction == "SELL":
-            logger.info("[telegram-exec] skip SELL %s from %s: long-only, shorts not supported",
+        # 0b. Shorts only on the perpetual futures venue. On spot a SELL
+        # entry cannot be tracked as a position and, in live, would sell
+        # coins held by other positions: reject it before any order.
+        if direction == "SELL" and not self._config.derivatives.perps:
+            logger.info("[telegram-exec] skip SELL %s from %s: spot venue is long-only",
                         signal.symbol, signal.source)
             return ExecuteOutcome(
                 status="skipped",
-                reason="SELL not supported: trdex is long-only",
+                reason="SELL not supported on spot: trdex is long-only there "
+                "(thresholds.execution_venue=usdm enables shorts)",
             )
 
         # 1. Route
@@ -187,6 +191,15 @@ class TelegramSignalExecutor:
             return ExecuteOutcome(status="skipped", reason=budget_note)
         if budget_note:
             logger.info("[telegram-exec] %s %s: %s", direction, signal.symbol, budget_note)
+        # Leverage on perps: the largest whose liquidation distance keeps
+        # the stop well inside it; skipped when not even 1x does.
+        leverage, lev_note = telegram_leverage(
+            signal, current_price=current_price, config=self._config
+        )
+        if leverage is None:
+            logger.info("[telegram-exec] skip %s %s from %s: %s",
+                        direction, signal.symbol, signal.source, lev_note)
+            return ExecuteOutcome(status="skipped", reason=f"leverage gate: {lev_note}")
         qty = float(budget) / current_price
 
         # 5. SL/TP percentages — always positive, relative to entry price.
@@ -211,6 +224,7 @@ class TelegramSignalExecutor:
                 qty=qty,
                 price=current_price,
                 idempotency_key=f"telegram:{outcome_id}",
+                leverage=leverage,
             )
         except Exception as exc:
             logger.exception("[telegram-exec] gateway failed for %s %s",
@@ -282,13 +296,14 @@ class TelegramSignalExecutor:
                 signal_id=str(outcome_id),
                 stop_loss_pct=stop_loss_pct,
                 take_profit_pct=take_profit_pct,
+                leverage=leverage,
             )
         except Exception as exc:
             logger.exception("[telegram-exec] persistence failed after fill")
             return ExecuteOutcome(status="error", reason=f"persistence failed: {exc}")
 
-        # 7b. Defence in depth: SELL is rejected at step 0b, so the portfolio
-        # should never refuse a fill here. If it does, the order has already
+        # 7b. Defence in depth: unsupported sides are rejected at step 0, so
+        # the portfolio should never refuse a fill here. If it does, the order has already
         # filled and is untracked — surface it loudly for manual reconciliation.
         if position is None:
             logger.error(

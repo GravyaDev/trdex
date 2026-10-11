@@ -120,6 +120,7 @@ async def build_telegram_gate_config(
         monitor_cv,
         unrealized_pnl,
     )
+    from trdex.risk.leverage import derivatives_config
     from trdex.risk.portfolio_budget import portfolio_rules
     from trdex.storage.balance_repo import BalanceRepository
     from trdex.storage.symbol_config_repo import SymbolConfigRepository
@@ -176,7 +177,8 @@ async def build_telegram_gate_config(
         exit_cv=await monitor_cv(session, sig.symbol),
         clusters=rules.clusters,
         max_per_cluster=rules.max_per_cluster,
-        open_symbols=open_risk.symbols,
+        open_positions=open_risk.positions,
+        derivatives=derivatives_config(svc),
         portfolio_risk_cap=rules.risk_cap,
         open_risk_fraction=open_risk.fraction(equity),
         portfolio_equity=Decimal(str(equity)),

@@ -40,9 +40,11 @@ class FakeGateway:
         self.calls: list[dict] = []
 
     async def place(
-        self, *, symbol: str, direction: str, qty: float, price: float, idempotency_key: str | None = None
+        self, *, symbol: str, direction: str, qty: float, price: float, idempotency_key: str | None = None,
+        leverage: int = 1,
     ) -> FakeOrderResult:
-        self.calls.append({"symbol": symbol, "direction": direction, "qty": qty, "price": price, "key": idempotency_key})
+        self.calls.append({"symbol": symbol, "direction": direction, "qty": qty, "price": price, "key": idempotency_key,
+                           "leverage": leverage})
         if self._raises:
             raise self._raises
         return self._result

@@ -16,6 +16,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from trdex.risk.leverage import SPOT, DerivativesConfig
 from trdex.risk.sizing import RegimeBounds, check_regime
 
 if TYPE_CHECKING:
@@ -73,7 +74,10 @@ class GateConfig:
     exit_cv: float = 0.0
     clusters: tuple[frozenset[str], ...] = ()
     max_per_cluster: int = 0
-    open_symbols: tuple[str, ...] = ()
+    open_positions: tuple[str | tuple[str, str], ...] = ()  # (symbol, side); bare = long
+    # Venue (trdex.risk.leverage): spot = long-only 1x (the default for
+    # unit tests and old callers); usdm = shorts and leverage.
+    derivatives: DerivativesConfig = SPOT
     portfolio_risk_cap: float | None = None
     open_risk_fraction: float = 0.0  # of portfolio_equity
     # Ledger balance + unrealised P&L at current prices; None -> the cash
@@ -140,6 +144,39 @@ async def gate_position_dedup(
             reason=f"position already open for {signal.symbol} {signal.direction}",
         )
     return GateResult(passed=True, reason="")
+
+
+async def gate_opposite_side(
+    signal: TelegramSignal,
+    *,
+    portfolio_repo: PortfolioRepository,
+) -> GateResult:
+    """Block if the other side is open on this symbol, from any source.
+
+    One-way perpetual accounts net positions per symbol: a short against
+    an open long would just shrink it on the exchange while the DB books
+    two positions. Same rule as the Risk node's opposite-side guard.
+    """
+    for pos in await portfolio_repo.get_open_positions():
+        if pos.symbol == signal.symbol and str(pos.side) != signal.direction:
+            return GateResult(
+                passed=False,
+                reason=(
+                    f"{'long' if str(pos.side) == 'BUY' else 'short'} already open on "
+                    f"{signal.symbol} ({pos.source}); opposite sides on one symbol are not allowed"
+                ),
+            )
+    return GateResult(passed=True, reason="")
+
+
+def telegram_leverage(
+    signal: TelegramSignal, *, current_price: float, config: GateConfig
+) -> tuple[int | None, str]:
+    """Leverage for this signal (``trdex.risk.leverage``); None = skip, with the reason."""
+    from trdex.risk.leverage import choose_leverage
+
+    stop, _ = signal_exit_pcts(signal, current_price=current_price, config=config)
+    return choose_leverage(stop, config.derivatives)
 
 
 async def gate_asset_class_cap(
@@ -310,11 +347,15 @@ def gate_reward_risk(
 
 
 def gate_cluster(signal: TelegramSignal, *, config: GateConfig) -> GateResult:
-    """Same rule as Risk Gate 4e: cap open positions per correlated cluster."""
+    """Same rule as Risk Gate 4e: cap same-direction positions per correlated cluster."""
     from trdex.risk.portfolio_budget import cluster_block
 
     reason = cluster_block(
-        signal.symbol, config.open_symbols, config.clusters, config.max_per_cluster
+        signal.symbol,
+        config.open_positions,
+        config.clusters,
+        config.max_per_cluster,
+        side=signal.direction,
     )
     if reason is not None:
         return GateResult(passed=False, reason=reason)
@@ -442,6 +483,10 @@ async def run_all_gates(
         return result
 
     result = await gate_position_dedup(signal, portfolio_repo=portfolio_repo)
+    if not result.passed:
+        return result
+
+    result = await gate_opposite_side(signal, portfolio_repo=portfolio_repo)
     if not result.passed:
         return result
 

@@ -51,8 +51,10 @@ async def accrue_funding(
         price = prices.get(pos.symbol)
         if price is None:
             continue
-        since = _aware(pos.funding_paid_until or pos.opened_at)
-        times = funding_times(since, now)
+        start = getattr(pos, "funding_paid_until", None) or getattr(pos, "opened_at", None)
+        if start is None:
+            continue
+        times = funding_times(_aware(start), now)
         if not times:
             continue
         cash = funding_cash(str(pos.side), float(pos.amount), price, rate) * len(times)

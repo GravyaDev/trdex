@@ -26,6 +26,7 @@ from trdex.execution.telegram_gates import (
     signal_exit_pcts,
     telegram_budget,
 )
+from trdex.risk.leverage import DerivativesConfig
 from trdex.telegram.parser import TelegramSignal
 
 MAJORS = (frozenset({"BTC/USDT", "ETH/USDT", "SOL/USDT"}),)
@@ -57,10 +58,10 @@ def test_reward_risk_gate():
 
 
 def test_cluster_gate():
-    full = GateConfig(clusters=MAJORS, max_per_cluster=2, open_symbols=("ETH/USDT", "SOL/USDT"))
+    full = GateConfig(clusters=MAJORS, max_per_cluster=2, open_positions=("ETH/USDT", "SOL/USDT"))
     result = gate_cluster(make_signal(), config=full)
     assert not result.passed and "correlation limit: 2 longs" in result.reason
-    room = GateConfig(clusters=MAJORS, max_per_cluster=3, open_symbols=("ETH/USDT", "SOL/USDT"))
+    room = GateConfig(clusters=MAJORS, max_per_cluster=3, open_positions=("ETH/USDT", "SOL/USDT"))
     assert gate_cluster(make_signal(), config=room).passed
 
 
@@ -112,7 +113,7 @@ async def test_reduced_budget_is_what_gets_ordered_and_recorded():
         ),
         (GateConfig(min_reward_risk=2.0), "reward/risk 1.67 < 2.00"),
         (
-            GateConfig(clusters=MAJORS, max_per_cluster=1, open_symbols=("ETH/USDT",)),
+            GateConfig(clusters=MAJORS, max_per_cluster=1, open_positions=("ETH/USDT",)),
             "correlation limit",
         ),
     ],
@@ -231,9 +232,66 @@ async def test_gate_config_uses_ledger_plus_unrealised_as_equity(monkeypatch):
     )
     assert cash == Decimal("10000") and config.portfolio_equity == Decimal("10000.0")
     assert config.open_risk_fraction == pytest.approx(48 / 10_000)  # 2,400 x 2%
-    assert config.open_symbols == ("ETH/USDT",) and config.exit_cv == 0.004
+    assert config.open_positions == (("ETH/USDT", "BUY"),) and config.exit_cv == 0.004
+    assert config.derivatives.perps  # default venue: usdm
     feeds.price = 90.0  # -240 unrealised
     config, _ = await build_telegram_gate_config(
         make_signal(), session=object(), svc=_Svc(), settings=settings, feed_manager=feeds
     )
     assert config.portfolio_equity == Decimal("9760.0")
+
+
+# ── shorts and leverage ───────────────────────────────────────────────────
+
+PERPS = GateConfig(derivatives=DerivativesConfig())
+
+
+def _short(**over):
+    base = dict(
+        source="chat-1", symbol="BTC/USDT", direction="SELL", entry=90000.0,
+        targets=[85500.0], stop_loss=92700.0, raw_text="SELL BTC",
+    )
+    return TelegramSignal(**{**base, **over})
+
+
+@pytest.mark.asyncio
+async def test_sell_signal_opens_a_leveraged_short_on_perps():
+    gw, svc = FakeGateway(), FakePortfolioService()
+    outcome = await _make_executor(gateway=gw, portfolio_service=svc, config=PERPS).execute(
+        _short(), outcome_id=11
+    )
+    assert outcome.status == "executed"
+    assert gw.calls[0]["direction"] == "SELL" and gw.calls[0]["leverage"] == 3
+    assert svc.calls[0]["side"] == "SELL" and svc.calls[0]["leverage"] == 3
+    assert svc.calls[0]["stop_loss_pct"] == pytest.approx(0.03)
+
+
+@pytest.mark.asyncio
+async def test_short_against_an_open_long_on_the_same_symbol_is_skipped():
+    from tests.execution.test_telegram_executor import FakePortfolioRepo, FakePosition
+
+    repo = FakePortfolioRepo([FakePosition(symbol="BTC/USDT", side="BUY", source="agent")])
+    gw = FakeGateway()
+    outcome = await _make_executor(gateway=gw, portfolio_repo=repo, config=PERPS).execute(
+        _short(), outcome_id=12
+    )
+    assert outcome.status == "skipped" and "opposite sides" in outcome.reason
+    assert gw.calls == []
+
+
+@pytest.mark.asyncio
+async def test_stop_beyond_liquidation_reach_is_skipped():
+    cfg = replace(PERPS, max_stop_distance=0.9)
+    gw = FakeGateway()
+    outcome = await _make_executor(gateway=gw, config=cfg).execute(
+        _short(stop_loss=140000.0), outcome_id=13  # +55% stop
+    )
+    assert outcome.status == "skipped" and outcome.reason.startswith("leverage gate:")
+    assert gw.calls == []
+
+
+def test_cluster_cap_for_telegram_counts_the_same_direction():
+    cfg = replace(PERPS, clusters=MAJORS, max_per_cluster=1,
+                  open_positions=(("ETH/USDT", "BUY"),))
+    assert gate_cluster(_short(), config=cfg).passed  # a short against longs: a hedge
+    assert not gate_cluster(make_signal(), config=cfg).passed
