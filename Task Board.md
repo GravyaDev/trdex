@@ -1,10 +1,10 @@
 # Task Board
 
-## ⚠️ Branch `llm-agents` (worktree `trdex-llm/`)
+## ▶ Roadmap attuale: [`docs/ROADMAP.md`](docs/ROADMAP.md)
 
-Rifacimento Phase 2 con LLM veri dentro Scout/Analyst/Risk/Executor.
-Design doc: `.claude/reports/llm-agents-design-2026-04-08.md`
-Workflow: fix su main → merge forward nel branch. Mai il contrario.
+Lì trovi l'ordine di merge delle PR aperte, le decisioni prese, i prossimi lavori con i criteri di accettazione e i limiti noti. Tienila aggiornata nella stessa PR che chiude una voce.
+
+main e llm-agents sono unificati (#14): il workflow "fix su main → merge forward nel branch" non vale più. Le sezioni qui sotto sono storia (aprile 2026).
 
 ---
 
