@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from decimal import Decimal
-from typing import TYPE_CHECKING, AsyncIterator
+from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from trdex.api.app import verify_api_key
 from trdex.api.validators import DaysParam
 from trdex.portfolio.service import PortfolioService
+from trdex.risk.leverage import liquidation_price
 from trdex.storage.portfolio_repo import PortfolioRepository
 
 if TYPE_CHECKING:
@@ -80,6 +81,25 @@ async def open_positions(_key: str = Depends(verify_api_key)) -> dict:
     meta_by_key = {
         (r.symbol, r.side, r.opened_at): (r.id, r.source) for r in raw_records
     }
+    rec_by_id = {r.id: r for r in raw_records}
+    mmr = _maintenance_margin_rate()
+
+    def _perp_fields(pos_id: int | None) -> dict[str, Any]:
+        r = rec_by_id.get(pos_id) if pos_id is not None else None
+        lev = float(getattr(r, "leverage", 1) or 1) if r is not None else 1.0
+        if r is None:
+            return {"leverage": None, "margin": None, "liquidation_price": None}
+        liq = (
+            liquidation_price(float(r.entry_price), str(r.side), lev, mmr)
+            if lev > 1 and mmr is not None
+            else None
+        )
+        return {
+            "leverage": lev,
+            "margin": str(Decimal(str(r.budget)) / Decimal(str(lev))),
+            "liquidation_price": None if liq is None else f"{liq:.8g}",
+        }
+
     return {
         "positions": [
             {
@@ -97,10 +117,25 @@ async def open_positions(_key: str = Depends(verify_api_key)) -> dict:
                 "unrealized_pnl": str(p.unrealized_pnl),
                 "unrealized_pnl_pct": str(p.unrealized_pnl_pct),
                 "opened_at": p.opened_at.isoformat(),
+                **_perp_fields(
+                    meta_by_key.get(
+                        (p.symbol, "BUY" if p.side == "long" else "SELL", p.opened_at), (None, "")
+                    )[0]
+                ),
             }
             for p in positions
         ]
     }
+
+
+def _maintenance_margin_rate() -> float | None:
+    from trdex.risk.leverage import derivatives_config
+    from trdex.services.runtime_config import get_config_service
+
+    try:
+        return derivatives_config(get_config_service()).mmr
+    except Exception:
+        return None
 
 
 @router.get("/pnl_by_source")
@@ -122,6 +157,7 @@ class ManualOpenRequest(BaseModel):
     symbol: str = Field(..., min_length=3, max_length=20)
     side: str = Field(..., pattern="^(BUY|SELL)$")
     amount: Decimal = Field(..., gt=0, description="Quote amount in USDT (e.g. 500 = $500)")
+    leverage: int = Field(1, ge=1, description="Isolated leverage (perps venue only)")
 
 
 @router.post("/open")
@@ -137,6 +173,26 @@ async def manual_open(
     """
     if _gateway is None or _feed_manager is None or _session_factory is None:
         raise HTTPException(503, "Portfolio service not initialised")
+
+    # 0. Venue rules, before any order: shorts and leverage only on perps,
+    # never the opposite side of an open position on the same symbol.
+    from trdex.risk.leverage import derivatives_config
+    from trdex.services.runtime_config import get_config_service
+
+    try:
+        venue = derivatives_config(get_config_service())
+    except ValueError as exc:
+        raise HTTPException(503, f"Invalid venue settings: {exc}") from exc
+    if not venue.perps and (req.side == "SELL" or req.leverage > 1):
+        raise HTTPException(
+            422, "Shorts and leverage need the perpetual futures venue (execution_venue=usdm)"
+        )
+    if req.leverage > venue.max_leverage:
+        raise HTTPException(422, f"Leverage {req.leverage}x above max_leverage {venue.max_leverage}")
+    async with _session_factory() as session:
+        open_now = await PortfolioRepository(session).get_open_positions()
+    if any(p.symbol == req.symbol and str(p.side) != req.side for p in open_now):
+        raise HTTPException(409, f"The opposite side is already open on {req.symbol}")
 
     # 1. Fetch current price
     try:
@@ -157,6 +213,7 @@ async def manual_open(
         qty=float(qty),
         price=float(price),
         idempotency_key=None,
+        leverage=req.leverage,
     )
     if result.status != "filled":
         raise HTTPException(422, f"Order rejected: {result.message}")
@@ -165,7 +222,7 @@ async def manual_open(
     fill_qty = Decimal(str(result.filled_qty)) if result.filled_qty else qty
     fee = Decimal(str(result.fee)) if result.fee else Decimal("0")
 
-    # 3. Persist the open via PortfolioService (long-only today)
+    # 3. Persist the open via PortfolioService
     async with _service() as svc:
         record = await svc.record_open_fill(
             symbol=req.symbol,
@@ -176,9 +233,10 @@ async def manual_open(
             fee=fee,
             source="manual",
             signal_id=None,
+            leverage=req.leverage,
         )
     if record is None:
-        raise HTTPException(422, "Open rejected by portfolio service (SHORT not supported)")
+        raise HTTPException(422, "Open rejected by portfolio service (unknown side)")
 
     return {
         "position_id": record.id,

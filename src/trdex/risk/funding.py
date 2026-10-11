@@ -61,7 +61,9 @@ async def accrue_funding(
         try:
             async with session_factory() as session:
                 live = (
-                    await session.execute(select(PositionRecord).where(PositionRecord.id == pos.id))
+                    await session.execute(
+                        select(PositionRecord).where(PositionRecord.id == pos.id)
+                    )
                 ).scalar_one_or_none()
                 if live is None or live.status != "open":
                     continue

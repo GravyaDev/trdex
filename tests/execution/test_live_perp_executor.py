@@ -12,8 +12,14 @@ from trdex.execution.live_perp_executor import LivePerpExecutor, perp_symbol
 from trdex.execution.models import Order, OrderType, Side
 
 FILLED = {
-    "id": "p-1", "symbol": "BTC/USDT:USDT", "side": "sell", "amount": 0.012, "filled": 0.012,
-    "average": 90_000.0, "fee": {"cost": 0.43}, "timestamp": 1_760_000_000_000,
+    "id": "p-1",
+    "symbol": "BTC/USDT:USDT",
+    "side": "sell",
+    "amount": 0.012,
+    "filled": 0.012,
+    "average": 90_000.0,
+    "fee": {"cost": 0.43},
+    "timestamp": 1_760_000_000_000,
 }
 
 
@@ -31,8 +37,15 @@ def _exchange(**over):
 
 
 def _order(side=Side.SELL, amount="0.0123", reduce_only=False, leverage=3):
-    return Order(symbol="BTC/USDT", side=side, type=OrderType.MARKET, amount=Decimal(amount),
-                 price=Decimal("90000"), reduce_only=reduce_only, leverage=leverage)
+    return Order(
+        symbol="BTC/USDT",
+        side=side,
+        type=OrderType.MARKET,
+        amount=Decimal(amount),
+        price=Decimal("90000"),
+        reduce_only=reduce_only,
+        leverage=leverage,
+    )
 
 
 def test_perp_symbol_mapping():
@@ -66,7 +79,9 @@ async def test_close_is_reduce_only_and_never_touches_leverage():
 
 @pytest.mark.asyncio
 async def test_already_isolated_is_fine_other_errors_are_not():
-    ok = _exchange(set_margin_mode=AsyncMock(side_effect=Exception("-4046 No need to change margin type.")))
+    ok = _exchange(
+        set_margin_mode=AsyncMock(side_effect=Exception("-4046 No need to change margin type."))
+    )
     await LivePerpExecutor(ok).execute(_order())
     ok.create_order.assert_awaited_once()
     bad = _exchange(set_margin_mode=AsyncMock(side_effect=Exception("-2015 Invalid API-key")))
@@ -106,7 +121,9 @@ def test_gateway_picks_the_executor_for_the_venue(monkeypatch):
             return self.venue if key == "execution_venue" else default
 
     for venue, kind in (("usdm", "perp"), ("spot", "spot")):
-        monkeypatch.setattr("trdex.services.runtime_config.get_config_service", lambda v=venue: Cfg(v))
+        monkeypatch.setattr(
+            "trdex.services.runtime_config.get_config_service", lambda v=venue: Cfg(v)
+        )
         assert DefaultExecutionGateway.create(settings)._live_executor.kind == kind
     monkeypatch.setattr("trdex.services.runtime_config.get_config_service", lambda: Cfg("margin"))
     assert DefaultExecutionGateway.create(settings)._live_executor is None  # fail closed

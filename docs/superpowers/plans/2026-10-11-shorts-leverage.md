@@ -1,6 +1,6 @@
 # Shorts and leverage — design
 
-Status: in progress on `feat/shorts-leverage`, stacked on #17.
+Status: implemented on `feat/shorts-leverage` (PR #18), stacked on #17.
 Decisions by the operator (2026-10-11):
 - live venue is Binance USDⓈ-M perpetuals;
 - default max leverage is 3x, isolated margin, editable in the dashboard;

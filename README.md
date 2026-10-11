@@ -149,9 +149,28 @@ Per-symbol overrides are available via the `/v1/risk/symbol-config` API and the 
 
 - *Reward/risk*: the take-profit the monitor will apply must be at least `min_reward_risk` (default 1.5) times the stop it will apply. For Telegram signals too, that is the monitor's own `effective_thresholds`: the symbol override first, then the signal's stop and target, then the CV floor. With the default floors (2 % / 4 %, 2.5× / 5× CV) the rule engine is always at 2.0. In practice it rejects LLM or Telegram stops that are too wide for their target.
 - *Portfolio risk budget*: the equity lost if every open position (agent, Telegram, manual) and the new one hit their effective stops stays under `portfolio_risk_max_pct` (default 0.5 %, about five full positions at the default 0.1 % per trade). An entry that does not fit is **reduced** to the room left, and rejected only if less than 25 % of its planned size would remain. Equity is the ledger balance (realised only; opening a position does not debit it) plus unrealised P&L at current prices; a position whose price cannot be fetched counts at its entry price. The backtest uses cash plus committed notional, i.e. it ignores unrealised P&L.
-- *Correlated clusters*: at most `max_positions_per_cluster` (default 3) open positions among symbols whose daily returns over the last 90 days correlate at or above `correlation_threshold` (default 0.8, single linkage). The weekly regime refresher recomputes the clusters from the data it syncs and stores them read-only (`correlation_clusters`), even when revalidation fails. Each pair is compared on the days both symbols have in the window and needs at least 30 returns, so a newly listed or stale symbol is left out instead of emptying the clusters; with too little data for any pair the stored clusters stay. Unlisted symbols are unconstrained.
+- *Correlated clusters*: at most `max_positions_per_cluster` (default 3) open positions **in the same direction** (a long and a short on correlated symbols offset each other) among symbols whose daily returns over the last 90 days correlate at or above `correlation_threshold` (default 0.8, single linkage). The weekly regime refresher recomputes the clusters from the data it syncs and stores them read-only (`correlation_clusters`), even when revalidation fails. Each pair is compared on the days both symbols have in the window and needs at least 30 returns, so a newly listed or stale symbol is left out instead of emptying the clusters; with too little data for any pair the stored clusters stay. Unlisted symbols are unconstrained.
 
 The refresher's backtest replays all three rules, so the bounds are validated on the strategy as live will trade it. One caveat: the clusters are computed on the latest 90 days and applied to the whole window, a mild look-ahead. The positions' risk is read from the DB on every entry; if it cannot be read, the entry is rejected (fail-closed).
+
+**Shorts and leverage** (`trdex.risk.leverage`). `thresholds.execution_venue` selects the mode:
+
+- **`usdm`** (default): every crypto position is a Binance USDⓈ-M perpetual.
+  - Shorts are allowed: a SELL when flat opens a short and a BUY closes it, with no flip within one cycle. The Analyst prompt and the rule engine both follow this.
+  - Leverage uses isolated margin.
+  - Funding is charged.
+- **`spot`**: long-only at 1x, the previous behaviour. In live, changing the venue needs a restart.
+
+Rules:
+- **Leverage never changes what a stop-out loses.** Sizing stays risk-based (notional = risk / stop); leverage only reduces the margin locked.
+- **Liquidation gate.** Each entry gets the largest leverage up to `max_leverage` (default 3) whose liquidation distance `1/L − maintenance_margin_rate` keeps the stop within `liquidation_buffer` (default 50 %) of it. With the defaults that is 3x for stops up to 16.4 %, 2x up to 24.7 % and 1x up to 49.7 %. If not even 1x works, the entry is rejected.
+- **No opposite sides on one symbol**, whatever the source (agent, Telegram, manual): one-way accounts would net them.
+- **Telegram** SELL signals open shorts under the same rules.
+- **Closes are always reduce-only.**
+- **Simulation**: the StopLossMonitor charges funding at `funding_rate_8h` (00/08/16 UTC, as `funding` ledger rows, never twice) and liquidates a position that gaps through its liquidation price.
+- **Live**: the exchange does both. They are not reconciled into the ledger yet; a position liquidated on the exchange makes its close fail, which trips the kill switch.
+- **Backtest and refresher** replay the venue: margin, funding, liquidation (whole margin lost) and shorts, so long and short rules are revalidated together.
+- **Dashboard**: each position shows side, leverage, margin and liquidation price.
 
 ## Notifications
 

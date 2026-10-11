@@ -220,6 +220,16 @@ if positions_data and positions_data.get("positions"):
             df[col] = df[col].map(lambda x: f"{x:.8g}" if x is not None else "")
     if "amount" in df.columns:
         df["amount"] = df["amount"].map(lambda x: f"{x:,.2f}" if x is not None else "")
+    if "side" in df.columns:
+        df["side"] = df["side"].map(lambda s: {"long": "🟢 long", "short": "🔴 short"}.get(s, s))
+    if "leverage" in df.columns:
+        df["leverage"] = df["leverage"].map(lambda x: f"{x:.0f}x" if x else "")
+    if "margin" in df.columns:
+        df["margin"] = pd.to_numeric(df["margin"], errors="coerce").map(
+            lambda x: f"${x:,.2f}" if x == x else ""
+        )
+    if "liquidation_price" in df.columns:
+        df["liquidation_price"] = df["liquidation_price"].fillna("—")
     if "unrealized_pnl" in df.columns:
         df["unrealized_pnl"] = df["unrealized_pnl"].map(lambda x: f"${x:+,.4f}" if x is not None else "")
     if "unrealized_pnl_pct" in df.columns:
@@ -250,8 +260,15 @@ else:
 with st.expander("Manual Open Position"):
     with st.form("manual_open_form", clear_on_submit=True):
         mo_symbol = st.text_input("Symbol (e.g. BTC/USDT)", key="mo_symbol")
-        mo_side = st.selectbox("Side", options=["BUY", "SELL"], key="mo_side")
-        mo_amount = st.text_input("Amount (USDT quote — e.g. 500)", key="mo_amount", value="500")
+        mo_side = st.selectbox(
+            "Side", options=["BUY", "SELL"], key="mo_side",
+            help="SELL opens a short (perpetual futures venue only).",
+        )
+        mo_amount = st.text_input("Notional (USDT quote — e.g. 500)", key="mo_amount", value="500")
+        mo_leverage = st.number_input(
+            "Leverage (isolated, perps only)", min_value=1, max_value=20, value=1, step=1,
+            key="mo_leverage",
+        )
         if st.form_submit_button("Open Position"):
             try:
                 amt = float(mo_amount)
@@ -261,7 +278,10 @@ with st.expander("Manual Open Position"):
             if amt is not None and mo_symbol:
                 result = post(
                     "/v1/portfolio/open",
-                    json_body={"symbol": mo_symbol.upper(), "side": mo_side, "amount": str(amt)},
+                    json_body={
+                        "symbol": mo_symbol.upper(), "side": mo_side, "amount": str(amt),
+                        "leverage": int(mo_leverage),
+                    },
                 )
                 if result:
                     st.success(
@@ -1254,6 +1274,11 @@ with st.expander("Risk Thresholds"):
             ("max_positions_per_cluster", "Max open positions per correlated cluster", "3"),
             ("correlation_threshold", "Correlation threshold for clusters (weekly)", "0.8"),
             ("min_reward_risk", "Min reward/risk (take-profit / stop)", "1.5"),
+            ("execution_venue", "Execution venue: usdm (perps: shorts + leverage) | spot (long-only; live: restart)", "usdm"),
+            ("max_leverage", "Max leverage (isolated, perps)", "3"),
+            ("maintenance_margin_rate", "Maintenance margin rate (liquidation estimate)", "0.005"),
+            ("liquidation_buffer", "Stop must stay within this share of the liquidation distance", "0.5"),
+            ("funding_rate_8h", "Funding rate per 8h (simulation and backtest)", "0.0001"),
             ("macro_gate_enabled", "Macro gate enabled (true/false)", "true"),
             ("macro_gate_before_min", "Macro gate: minutes before event", "30"),
             ("macro_gate_after_min", "Macro gate: minutes after event", "60"),

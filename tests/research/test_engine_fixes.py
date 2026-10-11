@@ -370,7 +370,7 @@ def test_funding_is_paid_by_longs_and_received_by_shorts_every_8h():
 
 
 def test_a_gap_through_liquidation_loses_the_whole_margin_and_no_more():
-    bars = _flat(4) + [[4 * H, 300.0, 300.0, 300.0, 300.0, 10.0]] + _flat(2, t0=5 * H)
+    bars = [*_flat(4), [4 * H, 300.0, 300.0, 300.0, 300.0, 10.0], *_flat(2, t0=5 * H)]
     wide = replace(PERPS, sl_pct=0.15)  # 3x allowed (<= 16.4%)
     result = run_backtest(SellAt(), {"A": bars}, wide)
     (trade,) = result.trades

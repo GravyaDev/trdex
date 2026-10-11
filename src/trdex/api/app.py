@@ -113,6 +113,7 @@ async def build_telegram_gate_config(
     """
     from trdex.execution.telegram_gates import GateConfig, regime_gate_settings
     from trdex.market.macro_calendar import get_macro_calendar, macro_gate_config
+    from trdex.risk.leverage import derivatives_config
     from trdex.risk.open_risk import (
         exit_bases,
         fetch_prices,
@@ -120,7 +121,6 @@ async def build_telegram_gate_config(
         monitor_cv,
         unrealized_pnl,
     )
-    from trdex.risk.leverage import derivatives_config
     from trdex.risk.portfolio_budget import portfolio_rules
     from trdex.storage.balance_repo import BalanceRepository
     from trdex.storage.symbol_config_repo import SymbolConfigRepository

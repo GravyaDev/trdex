@@ -95,7 +95,12 @@ class LivePerpExecutor(ExecutionGateway):
         order_id = str(raw["id"])
         logger.info(
             "[LivePerp] market order id=%s %s %s qty=%s lev=%sx reduce_only=%s",
-            order_id, order.side.value.upper(), symbol, amount, order.leverage, order.reduce_only,
+            order_id,
+            order.side.value.upper(),
+            symbol,
+            amount,
+            order.leverage,
+            order.reduce_only,
         )
         filled = await self._exchange.fetch_order(order_id, symbol)
         result = _parse_ccxt_result(filled, simulated=False)

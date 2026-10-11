@@ -14,6 +14,7 @@ Aggiornata al 2026-10-11. Questo file è la fonte unica per sapere cosa c'è da 
 | 2 | #15 | Regime refresher settimanale (ricalcola e rivalida) e notifiche Telegram + email instradabili per tipo di evento | `unify/agent-driven` |
 | 3 | #16 | Salute dei feed in `/v1/status` e nella dashboard; gate macro (niente ingressi a ridosso di FOMC/CPI/NFP) | #15 |
 | 4 | #17 | Budget di rischio di portafoglio (riduce prima di rifiutare), tetto per cluster correlati, rendimento/rischio minimo | #16 |
+| 5 | #18 | Short e leva: perpetual Binance USDⓈ-M, margine isolato, gate di liquidazione, funding, replay nel backtest | #17 |
 | poi | #10 | Baseline CI: va rigenerata dopo i merge sopra | `main` |
 | poi | #3 | Dependabot: dopo #10 | `main` |
 
@@ -34,9 +35,9 @@ Aggiornata al 2026-10-11. Questo file è la fonte unica per sapere cosa c'è da 
 
 ## 3. Prossimi lavori, in ordine
 
-### A. Short e leva — in corso
+### A. Short e leva — fatto, PR #18 (da mergiare dopo #17)
 
-Branch `feat/shorts-leverage`, impilato su #17.
+Branch `feat/shorts-leverage`, impilato su #17. Dettagli in `docs/superpowers/plans/2026-10-11-shorts-leverage.md` e nel README (Shorts and leverage).
 
 Criteri di accettazione:
 

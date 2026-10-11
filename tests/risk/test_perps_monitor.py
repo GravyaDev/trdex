@@ -35,9 +35,16 @@ class _Session:
 
 def _position(side="BUY", **kw):
     base = dict(
-        id=1, symbol="BTC/USDT", side=side, amount=Decimal("2"), entry_price=Decimal("100"),
-        status="open", opened_at=datetime(2026, 10, 11, 7, 30), funding_paid_until=None,
-        source="agent", leverage=3.0,
+        id=1,
+        symbol="BTC/USDT",
+        side=side,
+        amount=Decimal("2"),
+        entry_price=Decimal("100"),
+        status="open",
+        opened_at=datetime(2026, 10, 11, 7, 30),
+        funding_paid_until=None,
+        source="agent",
+        leverage=3.0,
     )
     return SimpleNamespace(**{**base, **kw})
 
@@ -56,7 +63,9 @@ async def test_funding_is_booked_once_per_8h_boundary(monkeypatch, side, sign):
     pos = _position(side)
     session = _Session(_position(side))
     bal = MagicMock(current_balance=AsyncMock(return_value=Decimal("10000")))
-    monkeypatch.setattr("trdex.storage.balance_repo.BalanceRepository", MagicMock(return_value=bal))
+    monkeypatch.setattr(
+        "trdex.storage.balance_repo.BalanceRepository", MagicMock(return_value=bal)
+    )
 
     total = await accrue_funding(_factory(session), [pos], {"BTC/USDT": 100.0}, 0.0001, NOW)
     # 08:00, 16:00, 00:00 -> 3 x 2 x 100 x 0.01%
@@ -71,17 +80,29 @@ async def test_funding_is_booked_once_per_8h_boundary(monkeypatch, side, sign):
 @pytest.mark.asyncio
 async def test_closed_or_unpriced_positions_pay_nothing(monkeypatch):
     bal = MagicMock(current_balance=AsyncMock(return_value=Decimal("10000")))
-    monkeypatch.setattr("trdex.storage.balance_repo.BalanceRepository", MagicMock(return_value=bal))
+    monkeypatch.setattr(
+        "trdex.storage.balance_repo.BalanceRepository", MagicMock(return_value=bal)
+    )
     closed = _Session(_position(status="closed"))
-    assert await accrue_funding(_factory(closed), [_position()], {"BTC/USDT": 100.0}, 0.0001, NOW) == 0
+    assert (
+        await accrue_funding(_factory(closed), [_position()], {"BTC/USDT": 100.0}, 0.0001, NOW)
+        == 0
+    )
     assert await accrue_funding(_factory(closed), [_position()], {}, 0.0001, NOW) == 0
     assert closed.added == []
 
 
 def _leveraged(side, entry="10000"):
     return SimpleNamespace(
-        id=9, symbol="BTC/USDT", side=side, amount=Decimal("0.1"), entry_price=Decimal(entry),
-        source="agent", leverage=3.0, stop_loss_pct=0.5, take_profit_pct=None,
+        id=9,
+        symbol="BTC/USDT",
+        side=side,
+        amount=Decimal("0.1"),
+        entry_price=Decimal(entry),
+        source="agent",
+        leverage=3.0,
+        stop_loss_pct=0.5,
+        take_profit_pct=None,
     )
 
 

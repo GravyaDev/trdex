@@ -18,7 +18,11 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from trdex.portfolio.service import ClosedBy
+    from trdex.risk.leverage import DerivativesConfig
 
 logger = logging.getLogger(__name__)
 
@@ -303,7 +307,7 @@ class StopLossMonitor:
         self._trailing_highs: dict[int, float] = {}  # position_id → high-water mark price
 
     @staticmethod
-    def _perps_simulation():
+    def _perps_simulation() -> DerivativesConfig | None:
         """DerivativesConfig when positions are simulated perpetuals, else None."""
         from trdex.config import TrdexMode, get_settings
         from trdex.risk.leverage import derivatives_config
@@ -490,7 +494,7 @@ class StopLossMonitor:
                     # D20: map SL reason string to the ClosedBy enum
                     # literal so inspect_runs can break down closes by
                     # trigger subsystem.
-                    closed_by_value = (
+                    closed_by_value: ClosedBy = (
                         "stop_loss" if reason == "stop_loss"
                         else "take_profit" if reason == "take_profit"
                         else "trailing_stop" if reason == "trailing_stop"
