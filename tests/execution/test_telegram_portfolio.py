@@ -59,7 +59,7 @@ def test_reward_risk_gate():
 def test_cluster_gate():
     full = GateConfig(clusters=MAJORS, max_per_cluster=2, open_symbols=("ETH/USDT", "SOL/USDT"))
     result = gate_cluster(make_signal(), config=full)
-    assert not result.passed and "correlation limit: 2 positions" in result.reason
+    assert not result.passed and "correlation limit: 2 longs" in result.reason
     room = GateConfig(clusters=MAJORS, max_per_cluster=3, open_symbols=("ETH/USDT", "SOL/USDT"))
     assert gate_cluster(make_signal(), config=room).passed
 

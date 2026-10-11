@@ -98,8 +98,8 @@ async def test_open_fill_buy_creates_position() -> None:
     assert kwargs["source"] == "agent"
 
 
-async def test_open_fill_sell_is_refused_long_only() -> None:
-    """A SELL fill without an existing long position must not open a short."""
+async def test_open_fill_sell_opens_a_short_with_its_leverage() -> None:
+    """Perps: a SELL open is a short; the leverage is stored with it."""
     repo = _make_repo_mock()
     feeds = MagicMock()
     service = PortfolioService(repo, feeds)
@@ -110,10 +110,11 @@ async def test_open_fill_sell_is_refused_long_only() -> None:
         amount=Decimal("0.001"),
         entry_price=Decimal("90000"),
         budget=Decimal("90"),
+        leverage=3,
     )
 
-    assert out is None
-    repo.open_position.assert_not_called()
+    assert out is not None and out.leverage == 3.0
+    assert repo.open_position.call_args.kwargs["side"] == "SELL"
 
 
 async def test_open_fill_unknown_side_is_refused() -> None:

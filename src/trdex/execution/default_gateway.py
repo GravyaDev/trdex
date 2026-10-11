@@ -114,6 +114,7 @@ class DefaultExecutionGateway(ExecutionGateway):
         price: float,
         idempotency_key: str | None = None,
         reduce_only: bool = False,
+        leverage: int = 1,
     ) -> OrderResult:
         """Entry point for the executor agent node.
 
@@ -148,6 +149,8 @@ class DefaultExecutionGateway(ExecutionGateway):
             type=OrderType.MARKET,
             amount=Decimal(str(qty)),
             price=Decimal(str(price)),
+            reduce_only=reduce_only,
+            leverage=leverage,
         )
 
         try:

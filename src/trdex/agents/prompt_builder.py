@@ -37,6 +37,12 @@ Your job is to analyze technical indicators and market context, then produce a t
 - Never emit BUY or SELL with confidence below 0.40. If unsure, output HOLD.
 - You do NOT decide execution. The Risk Manager gates your signal independently.
 
+## Signal Semantics
+- BUY: open a long when flat, or close an open short. BUY while already long does nothing.
+- SELL: close an open long, or — when shorts are enabled (perpetual futures) and you are flat — open a short. SELL while already short does nothing.
+- Shorts are as legitimate as longs: a bearish setup is an opportunity, not only a reason to stay out. The user message says whether shorts are enabled and which position you hold.
+- Leverage, size, stop and liquidation checks are decided by the Risk Manager, not by you.
+
 ## Indicator Reference (what the numbers mean — NOT prescriptive rules)
 - **RSI(14)**: momentum oscillator, 0-100. Below 30 = oversold, above 70 = overbought. Zones of interest, not automatic signals.
 - **SMA(9) vs SMA(21)**: short crosses above long = bullish shift; below = bearish. Lagging signal.
@@ -64,6 +70,7 @@ def build_analyst_messages(
     cv: float | None,
     price: float,
     max_prompt_tokens: int = 4096,
+    shorts: bool = False,
 ) -> list[SystemMessage | HumanMessage]:
     """Assemble the messages list for the Analyst LLM call.
 
@@ -95,6 +102,16 @@ def build_analyst_messages(
     ind_lines.append(f"- Volatility regime: {regime} (CV={cv:.4f})" if cv else f"- Volatility regime: {regime}")
     ind_section = "\n".join(ind_lines)
     sections.append(ind_section)
+
+    # 1b. Position and venue (decides what BUY / SELL will do)
+    held = None
+    if state.symbol in state.portfolio.open_position_symbols_by_agent:
+        held = state.portfolio.agent_position_sides.get(state.symbol, "BUY")
+    position = {"BUY": "long", "SELL": "short"}.get(held or "", "none (flat)")
+    sections.append(
+        f"\n## Position\n- Your open position on {state.symbol}: {position}\n"
+        f"- Shorts enabled: {'yes (perpetual futures)' if shorts else 'no (spot, long-only)'}"
+    )
 
     # 2. Sentiment context (sanitized)
     sent_lines = ["\n## Market Context (from Scout)"]

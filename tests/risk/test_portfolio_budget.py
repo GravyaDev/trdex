@@ -57,9 +57,18 @@ def test_cluster_cap_counts_open_positions_in_the_same_cluster():
     open_syms = ["BTC/USDT", "ETH/USDT", "XAU/USD"]
     assert cluster_block("SOL/USDT", open_syms, [MAJORS], 3) is None
     reason = cluster_block("SOL/USDT", [*open_syms, "AVAX/USDT"], [MAJORS], 3)
-    assert reason.startswith("correlation limit: 3 positions already open")
+    assert reason.startswith("correlation limit: 3 longs already open")
     assert cluster_block("DOGE/USDT", [*open_syms, "AVAX/USDT"], [MAJORS], 3) is None
     assert cluster_block("SOL/USDT", MAJORS, [MAJORS], 0) is None  # off
+
+
+def test_cluster_cap_counts_only_the_same_direction():
+    longs = [("BTC/USDT", "BUY"), ("ETH/USDT", "BUY"), ("AVAX/USDT", "BUY")]
+    assert cluster_block("SOL/USDT", longs, [MAJORS], 3, side="BUY") is not None
+    assert cluster_block("SOL/USDT", longs, [MAJORS], 3, side="SELL") is None  # a hedge
+    shorts = [("BTC/USDT", "SELL"), ("ETH/USDT", "SELL")]
+    reason = cluster_block("SOL/USDT", shorts, [MAJORS], 2, side="SELL")
+    assert reason.startswith("correlation limit: 2 shorts already open")
 
 
 def test_clusters_parse_from_json_and_garbage_raises_so_callers_fail_closed():

@@ -71,23 +71,28 @@ async def executor_node(state: AgentState) -> AgentState:
         logger.warning("[Executor] rejected — price=0 for %s", state.symbol)
         return state
 
-    # Intent → exchange direction. SHORT intents are reserved vocabulary
-    # for a future iteration; if one ever reaches here, skip defensively.
+    # Intent → exchange direction. Opens are sized from equity; closes
+    # use the open position's amount and are reduce-only (on perps a close
+    # must never open the other side; the kill switch lets them through).
     if intent == Intent.OPEN_LONG:
-        direction = "BUY"
-        idempotency_key = f"agent:{state.run_id}"
-        qty_basis = "equity"  # sized from equity
+        direction, qty_basis = "BUY", "equity"
+    elif intent == Intent.OPEN_SHORT:
+        direction, qty_basis = "SELL", "equity"
     elif intent == Intent.CLOSE_LONG:
-        direction = "SELL"
-        idempotency_key, _pos_id = await _resolve_close_idempotency_key(state)
-        qty_basis = "position"  # sized from the open position amount
+        direction, qty_basis = "SELL", "position"
+    elif intent == Intent.CLOSE_SHORT:
+        direction, qty_basis = "BUY", "position"
     else:
         state.order = OrderResult(
             status="skipped",
-            message=f"Executor does not handle intent {intent.value} (short side not enabled).",
+            message=f"Executor does not handle intent {intent.value}.",
         )
         logger.warning("[Executor] skipped — unsupported intent %s", intent.value)
         return state
+    if qty_basis == "equity":
+        idempotency_key = f"agent:{state.run_id}"
+    else:
+        idempotency_key, _pos_id = await _resolve_close_idempotency_key(state)
 
     if qty_basis == "equity":
         equity = state.portfolio.equity if state.portfolio.equity > 0 else 10_000.0
@@ -100,11 +105,13 @@ async def executor_node(state: AgentState) -> AgentState:
         if qty <= 0:
             state.order = OrderResult(
                 status="skipped",
-                message=f"CLOSE_LONG on {state.symbol}: no open agent position found (possibly closed by SL).",
+                message=(
+                    f"{intent.name} on {state.symbol}: no open agent position found "
+                    "(possibly closed by SL)."
+                ),
             )
             logger.warning(
-                "[Executor] CLOSE_LONG skipped — no open position for %s",
-                state.symbol,
+                "[Executor] %s skipped — no open position for %s", intent.name, state.symbol
             )
             return state
 
@@ -125,6 +132,8 @@ async def executor_node(state: AgentState) -> AgentState:
         qty=qty,
         price=price,
         idempotency_key=idempotency_key,
+        reduce_only=intent.is_close,
+        leverage=state.risk.leverage if intent.is_open else 1,
     )
     logger.info("[Executor] result: status=%s %s", state.order.status, state.order.message)
     return state

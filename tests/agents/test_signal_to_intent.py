@@ -52,18 +52,45 @@ def test_unknown_signal_raises() -> None:
         signal_to_intent("MAYBE", "BTC/USDT", _ctx())
 
 
-def test_today_never_emits_short_intents() -> None:
-    """Pins the long-only policy of the current iteration.
-
-    If a future change adds short support, this test must be updated
-    intentionally — it's a tripwire, not a limitation.
-    """
+def test_spot_venue_never_emits_short_intents() -> None:
+    """Long-only on spot (shorts=False, the default): a tripwire."""
     for signal in ("BUY", "SELL", "HOLD"):
         for ctx in (_ctx(), _ctx(["BTC/USDT"])):
             intent = signal_to_intent(signal, "BTC/USDT", ctx)
             assert intent not in (Intent.OPEN_SHORT, Intent.CLOSE_SHORT), (
                 f"signal={signal} ctx={ctx} leaked short intent {intent}"
             )
+
+
+@pytest.mark.parametrize(
+    ("signal", "side", "expected"),
+    [
+        ("BUY", None, Intent.OPEN_LONG),
+        ("BUY", "BUY", Intent.HOLD),
+        ("BUY", "SELL", Intent.CLOSE_SHORT),
+        ("SELL", None, Intent.OPEN_SHORT),
+        ("SELL", "BUY", Intent.CLOSE_LONG),
+        ("SELL", "SELL", Intent.HOLD),
+        ("HOLD", "SELL", Intent.HOLD),
+    ],
+)
+def test_perps_truth_table(signal, side, expected) -> None:
+    ctx = (
+        PortfolioContext(
+            open_position_symbols_by_agent=["BTC/USDT"],
+            agent_position_sides={"BTC/USDT": side},
+        )
+        if side
+        else _ctx()
+    )
+    assert signal_to_intent(signal, "BTC/USDT", ctx, shorts=True) == expected
+
+
+def test_position_without_recorded_side_is_a_long() -> None:
+    """Rows from before shorts existed: SELL closes them, never opens a short."""
+    assert signal_to_intent("SELL", "BTC/USDT", _ctx(["BTC/USDT"]), shorts=True) == (
+        Intent.CLOSE_LONG
+    )
 
 
 def test_filters_telegram_positions_by_symbol_only() -> None:
