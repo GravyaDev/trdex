@@ -131,6 +131,18 @@ def _rule_based_signal(
     return "HOLD", 0.0, "; ".join(notes)
 
 
+def _shorts_enabled() -> bool:
+    """True when the venue is perpetual futures; unreadable config -> long-only."""
+    from trdex.risk.leverage import derivatives_config
+    from trdex.services.runtime_config import get_config_service
+
+    try:
+        return derivatives_config(get_config_service()).perps
+    except Exception:
+        logger.exception("[Analyst] venue config unreadable — long-only this cycle")
+        return False
+
+
 # ── LLM path ────────────────────────────────────────────────────────────────
 
 
@@ -140,6 +152,7 @@ async def _llm_analyst_signal(
     regime: str,
     cv: float | None,
     price: float,
+    shorts: bool = False,
 ) -> tuple[str, float, str, float | None, float | None] | None:
     """Call the LLM via LLMCaller and return (signal, confidence, reasoning, sl, tp).
 
@@ -167,6 +180,7 @@ async def _llm_analyst_signal(
         cv=cv,
         price=price,
         max_prompt_tokens=settings.llm_max_prompt_tokens,
+        shorts=shorts,
     )
 
     result = await state.llm_caller.invoke("analyst", messages, AnalystOutput)
@@ -240,8 +254,10 @@ async def analyst_node(state: AgentState) -> AgentState:
     if sentiment_avg is not None:
         indicators["sentiment_avg"] = sentiment_avg
 
+    shorts = _shorts_enabled()
+
     # ── Try LLM path first ──────────────────────────────────────────────
-    llm_result = await _llm_analyst_signal(state, indicators, regime, cv, price)
+    llm_result = await _llm_analyst_signal(state, indicators, regime, cv, price, shorts)
 
     if llm_result is not None:
         signal, confidence, reasoning, suggested_sl, suggested_tp = llm_result
@@ -259,7 +275,7 @@ async def analyst_node(state: AgentState) -> AgentState:
 
     # D5: rule engine stays portfolio-ignorant. Translation to Intent
     # happens here, downstream, with the live portfolio context.
-    intent = signal_to_intent(signal, state.symbol, state.portfolio)
+    intent = signal_to_intent(signal, state.symbol, state.portfolio, shorts=shorts)
 
     state.analysis = AnalysisResult(
         intent=intent,

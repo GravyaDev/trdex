@@ -27,6 +27,11 @@ class Order(BaseModel):
     type: OrderType
     amount: Decimal
     price: Decimal | None = None  # None for market orders
+    # Perpetual futures: closes must never open the other side, and the
+    # isolated leverage of an entry is set on the symbol before the order.
+    reduce_only: bool = False
+    leverage: int = 1
+    venue: str = "spot"  # spot | usdm: which live executor gets the order
 
 
 class ExecutionResult(BaseModel):

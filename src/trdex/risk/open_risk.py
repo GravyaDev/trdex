@@ -61,6 +61,18 @@ class OpenRisk:
     symbols: tuple[str, ...]  # symbols with an open position, any source
     exposures: tuple[Exposure, ...] = ()
 
+    @property
+    def positions(self) -> tuple[tuple[str, str], ...]:
+        """(symbol, side) of every open position, for directional checks."""
+        return tuple((e.symbol, e.side) for e in self.exposures)
+
+    def opposite_side(self, symbol: str, side: str) -> str | None:
+        """Side of an open position on ``symbol`` opposite to ``side``, if any."""
+        for e in self.exposures:
+            if e.symbol == symbol and e.side != side:
+                return e.side
+        return None
+
     def fraction(self, equity: float) -> float:
         """Equity fraction at stake; raises if equity is unknown with risk open."""
         if self.risk_cash <= 0:

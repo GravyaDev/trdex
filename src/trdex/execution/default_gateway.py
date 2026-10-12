@@ -18,7 +18,6 @@ _IDEMPOTENCY_TTL = 300.0  # 5 minutes
 
 if TYPE_CHECKING:
     from trdex.config import Settings
-    from trdex.execution.live_executor import LiveExecutor
     from trdex.risk.stop_loss import KillSwitch
 
 logger = logging.getLogger(__name__)
@@ -56,12 +55,14 @@ class DefaultExecutionGateway(ExecutionGateway):
         self,
         mode: TrdexMode,
         simulator: Simulator,
-        live_executor: LiveExecutor | None,
+        live_executor: ExecutionGateway | None,
         kill_switch: KillSwitch,
+        perp_executor: ExecutionGateway | None = None,
     ) -> None:
         self._mode = mode
         self._simulator = simulator
-        self._live_executor = live_executor
+        self._live_executor = live_executor  # Binance spot
+        self._perp_executor = perp_executor  # Binance USDⓈ-M perpetuals
         self._kill_switch = kill_switch
         self._idempotency_cache: dict[str, float] = {}  # key → timestamp
 
@@ -77,11 +78,17 @@ class DefaultExecutionGateway(ExecutionGateway):
         simulator = Simulator()
         live_executor = None
 
+        perp_executor = None
         if s.mode == TrdexMode.LIVE:
             if s.binance_api_key and s.binance_api_secret:
+                # Both markets: each order says where it goes (opens: the
+                # configured venue; closes: the venue of their position).
                 from trdex.execution.live_executor import LiveExecutor
+                from trdex.execution.live_perp_executor import LivePerpExecutor
+
                 live_executor = LiveExecutor.from_settings(s)
-                logger.info("[Gateway] live executor initialised (Binance testnet)")
+                perp_executor = LivePerpExecutor.from_settings(s)
+                logger.info("[Gateway] live executors initialised: Binance spot + USDⓈ-M")
             else:
                 logger.warning(
                     "[Gateway] mode=live but TRDEX_BINANCE_API_KEY / TRDEX_BINANCE_API_SECRET "
@@ -93,6 +100,7 @@ class DefaultExecutionGateway(ExecutionGateway):
             simulator=simulator,
             live_executor=live_executor,
             kill_switch=get_kill_switch(),
+            perp_executor=perp_executor,
         )
 
     # ── High-level agent interface ──────────────────────────────────────────
@@ -114,6 +122,8 @@ class DefaultExecutionGateway(ExecutionGateway):
         price: float,
         idempotency_key: str | None = None,
         reduce_only: bool = False,
+        leverage: int = 1,
+        venue: str = "spot",
     ) -> OrderResult:
         """Entry point for the executor agent node.
 
@@ -148,6 +158,9 @@ class DefaultExecutionGateway(ExecutionGateway):
             type=OrderType.MARKET,
             amount=Decimal(str(qty)),
             price=Decimal(str(price)),
+            reduce_only=reduce_only,
+            leverage=leverage,
+            venue=venue,
         )
 
         try:
@@ -168,18 +181,24 @@ class DefaultExecutionGateway(ExecutionGateway):
         if self._mode == TrdexMode.SIMULATION:
             return await self._simulator.execute(order)
 
-        # Live mode
-        if self._live_executor is None:
+        # Live mode: the order's venue picks the market.
+        if order.venue not in ("spot", "usdm"):
+            raise ValueError(f"unknown venue {order.venue!r}")
+        executor = self._perp_executor if order.venue == "usdm" else self._live_executor
+        if executor is None:
             raise RuntimeError(
-                "Live executor not configured. Set TRDEX_BINANCE_API_KEY and "
+                f"Live {order.venue} executor not configured. Set TRDEX_BINANCE_API_KEY and "
                 "TRDEX_BINANCE_API_SECRET in your .env file."
             )
-        return await self._live_executor.execute(order)
+        return await executor.execute(order)
 
-    async def cancel(self, order_id: str) -> bool:
-        """Route cancellation to the appropriate executor."""
+    async def cancel(
+        self, order_id: str, symbol: str | None = None, venue: str = "spot"
+    ) -> bool:
+        """Route cancellation to the executor of the order's venue."""
         if self._mode == TrdexMode.SIMULATION:
-            return await self._simulator.cancel(order_id)
-        if self._live_executor is None:
+            return await self._simulator.cancel(order_id, symbol)
+        executor = self._perp_executor if venue == "usdm" else self._live_executor
+        if executor is None:
             return False
-        return await self._live_executor.cancel(order_id)
+        return await executor.cancel(order_id, symbol)

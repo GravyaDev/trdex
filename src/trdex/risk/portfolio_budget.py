@@ -104,19 +104,28 @@ def parse_clusters(raw: Any) -> list[frozenset[str]]:
 
 def cluster_block(
     symbol: str,
-    open_symbols: Iterable[str],
+    open_positions: Iterable[str | tuple[str, str]],
     clusters: Sequence[frozenset[str]],
     max_per_cluster: int,
+    *,
+    side: str = "BUY",
 ) -> str | None:
-    """Why ``symbol`` may not be opened because of its cluster, or None."""
+    """Why ``symbol`` may not be opened on ``side`` because of its cluster, or None.
+
+    Only positions in the same direction count: a long and a short on
+    correlated symbols offset each other. ``open_positions`` holds
+    ``(symbol, side)`` pairs; a bare symbol is a long (pre-shorts rows).
+    """
     if max_per_cluster <= 0:
         return None
+    pairs = [(p, "BUY") if isinstance(p, str) else p for p in open_positions]
+    word = "longs" if side == "BUY" else "shorts"
     for cluster in clusters:
         if symbol in cluster:
-            peers = sorted({s for s in open_symbols if s in cluster})
+            peers = sorted({s for s, sd in pairs if s in cluster and sd == side})
             if len(peers) >= max_per_cluster:
                 return (
-                    f"correlation limit: {len(peers)} positions already open in "
+                    f"correlation limit: {len(peers)} {word} already open in "
                     f"{symbol}'s cluster ({', '.join(peers)}), max {max_per_cluster}"
                 )
     return None

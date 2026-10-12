@@ -58,7 +58,8 @@ class LiveExecutor(ExecutionGateway):
     def from_settings(cls, settings: Settings) -> LiveExecutor:
         """Build a LiveExecutor from Settings.
 
-        Uses Binance testnet by default (TRDEX_BINANCE_TESTNET=true).
+        Uses Binance demo trading by default (TRDEX_BINANCE_TESTNET=true;
+        keys from demo.binance.com, shared with the USDⓈ-M executor).
         Set to false for production Binance (requires real API keys
         and real money — never do this without passing the readiness
         gate first).
@@ -79,20 +80,18 @@ class LiveExecutor(ExecutionGateway):
         if is_pem:
             logger.info("[Live] using Ed25519 PEM key for authentication")
 
-        if settings.binance_testnet:
-            # Use CCXT's built-in sandbox mode instead of manually
-            # overriding URLs. CCXT knows the correct testnet endpoints
-            # and path structure for each API version.
-            config["sandbox"] = True
-            # Testnet does not support /sapi endpoints (capital config,
-            # deposit/withdraw, etc). Skip fetch_currencies to avoid
-            # AuthenticationError on load_markets().
-            config["options"]["fetchCurrencies"] = False
-            logger.info("[Live] using Binance TESTNET (sandbox mode)")
-        else:
+        if not settings.binance_testnet:
             logger.warning("[Live] using Binance PRODUCTION — real money at risk")
+        else:
+            # Testnet = Binance demo trading for spot too: one key set
+            # (demo.binance.com) serves spot and USDⓈ-M, whose sandbox
+            # CCXT no longer supports. Demo has no /sapi: skip currencies.
+            config["options"]["fetchCurrencies"] = False
 
         exchange = ccxt.binance(config)
+        if settings.binance_testnet:
+            exchange.enable_demo_trading(True)
+            logger.info("[Live] using Binance spot DEMO TRADING (demo.binance.com keys)")
         return cls(exchange)
 
     async def execute(self, order: Order) -> ExecutionResult:
@@ -136,9 +135,9 @@ class LiveExecutor(ExecutionGateway):
             logger.exception("[Live] order failed for %s: %s", order.symbol, exc)
             raise
 
-    async def cancel(self, order_id: str) -> bool:
+    async def cancel(self, order_id: str, symbol: str | None = None) -> bool:
         try:
-            await self._exchange.cancel_order(order_id)
+            await self._exchange.cancel_order(order_id, symbol)
             logger.info("[Live] cancelled order %s", order_id)
             return True
         except Exception:

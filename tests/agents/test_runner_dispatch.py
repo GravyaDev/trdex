@@ -146,11 +146,9 @@ async def test_dispatch_close_long_ignores_non_agent_positions_D21():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("intent", [Intent.OPEN_SHORT, Intent.CLOSE_SHORT, Intent.HOLD])
-async def test_dispatch_short_or_hold_intents_are_noops(intent):
-    """Short intents are reserved vocabulary; HOLD doesn't fill anyway."""
+async def test_dispatch_hold_is_a_noop():
     runner = _runner()
-    state = _state(intent)
+    state = _state(Intent.HOLD)
 
     with patch(
         "trdex.portfolio.service.PortfolioService.record_open_fill",
@@ -163,6 +161,35 @@ async def test_dispatch_short_or_hold_intents_are_noops(intent):
 
     mock_open.assert_not_awaited()
     mock_close.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_open_short_records_a_sell_with_its_leverage():
+    runner = _runner()
+    state = _state(Intent.OPEN_SHORT)
+    state.risk.leverage = 3
+    with patch(
+        "trdex.portfolio.service.PortfolioService.record_open_fill",
+        new=AsyncMock(return_value=None),
+    ) as mock_open:
+        await runner._dispatch_fill(state)
+    kwargs = mock_open.call_args.kwargs
+    assert kwargs["side"] == "SELL" and kwargs["leverage"] == 3
+
+
+@pytest.mark.asyncio
+async def test_dispatch_close_short_closes_the_agent_position():
+    runner = _runner()
+    fake_pos = MagicMock(id=5, symbol="BTC/USDT", source="agent")
+    with patch(
+        "trdex.storage.portfolio_repo.PortfolioRepository.get_open_positions",
+        new=AsyncMock(return_value=[fake_pos]),
+    ), patch(
+        "trdex.portfolio.service.PortfolioService.record_close_fill",
+        new=AsyncMock(return_value=(MagicMock(), MagicMock())),
+    ) as mock_close:
+        await runner._dispatch_fill(_state(Intent.CLOSE_SHORT))
+    assert mock_close.call_args.kwargs["position"] is fake_pos
 
 
 @pytest.mark.asyncio

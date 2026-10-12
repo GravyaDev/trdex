@@ -67,6 +67,8 @@ class RiskDecision:
     stop_loss_pct: float | None = None
     take_profit_pct: float | None = None
     annotation: str | None = None     # LLM risk commentary (observability-only, Task 7)
+    leverage: int = 1                 # isolated leverage for an OPEN (trdex.risk.leverage)
+    venue: str = "spot"               # market an OPEN goes to: spot | usdm (perpetuals)
     drawdown_warning: bool = False    # True when approved above 10% dd (sim mode override)
 
 
@@ -93,6 +95,8 @@ class PortfolioContext:
     # consults THIS list (not the full one) so the agent never tries to
     # close a position opened by another source (e.g. Telegram tracker).
     open_position_symbols_by_agent: list[str] = field(default_factory=list)
+    # Side ("BUY" long / "SELL" short) of the agent's open position per symbol.
+    agent_position_sides: dict[str, str] = field(default_factory=dict)
     unrealized_pnl: float = 0.0        # aggregate unrealized P&L across all open positions
     realized_pnl: float = 0.0          # total realized P&L (session)
     drawdown_pct: float = 0.0          # current drawdown from peak equity (0.0–1.0)

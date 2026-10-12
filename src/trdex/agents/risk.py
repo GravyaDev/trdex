@@ -246,8 +246,10 @@ async def risk_node(state: AgentState) -> AgentState:
             await _write_last_signal(state, approved=False, reason=reason)
             return state
 
-    # Portfolio rules (trdex.risk.portfolio_budget): loaded once for the
-    # cluster gate and the budget fit below. Fail-closed for entries.
+    # Portfolio rules (trdex.risk.portfolio_budget) and the venue
+    # (trdex.risk.leverage): loaded once for the gates below and the
+    # budget fit / leverage choice in sizing. Fail-closed for entries.
+    from trdex.risk.leverage import choose_leverage, derivatives_config
     from trdex.risk.open_risk import OpenRisk, load_open_risk
     from trdex.risk.portfolio_budget import (
         cluster_block,
@@ -257,16 +259,38 @@ async def risk_node(state: AgentState) -> AgentState:
     )
 
     open_risk = OpenRisk(0.0, ())
+    entry_side = "SELL" if intent == Intent.OPEN_SHORT else "BUY"
+    entry_venue = "spot"
     if intent.is_open:
         try:
             rules = portfolio_rules(_cfg)
+            venue = derivatives_config(_cfg)
+            entry_venue = venue.venue
             if state.session_factory is not None:
                 open_risk = await load_open_risk(state.session_factory, _cfg, settings)
-            # Gate 4e: correlated cluster — at most max_positions_per_cluster
-            # open positions among symbols that move together.
-            portfolio_block = cluster_block(
-                state.symbol, open_risk.symbols, rules.clusters, rules.max_per_cluster
-            )
+            portfolio_block = None
+            if intent == Intent.OPEN_SHORT and not venue.perps:
+                portfolio_block = (
+                    "shorts need the perpetual futures venue "
+                    "(thresholds.execution_venue=usdm; current: spot)"
+                )
+            elif (other := open_risk.opposite_side(state.symbol, entry_side)) is not None:
+                # One-way perp accounts net per symbol: opposite sides
+                # (agent, Telegram or manual) would cancel on the exchange.
+                portfolio_block = (
+                    f"a {'long' if other == 'BUY' else 'short'} is already open on "
+                    f"{state.symbol} (any source); opposite sides on one symbol are not allowed"
+                )
+            else:
+                # Gate 4e: correlated cluster — at most max_positions_per_cluster
+                # open positions in the same direction among symbols that move together.
+                portfolio_block = cluster_block(
+                    state.symbol,
+                    open_risk.positions,
+                    rules.clusters,
+                    rules.max_per_cluster,
+                    side=entry_side,
+                )
         except Exception as exc:
             logger.exception("[Risk] portfolio rules unavailable")
             portfolio_block = f"portfolio risk check failed (fail-closed): {exc}"
@@ -330,6 +354,7 @@ async def risk_node(state: AgentState) -> AgentState:
     # positions instead of more risk. CLOSE sells the whole position
     # (executor), so its size is informational only.
     sizing_note = ""
+    leverage = 1
     try:
         max_fraction = min(
             _cfg_float(_cfg, "max_position_pct", settings.max_position_pct) or 0.0,
@@ -357,6 +382,16 @@ async def risk_node(state: AgentState) -> AgentState:
                 logger.info("[Risk] BLOCKED — %s", reason)
                 await _write_last_signal(state, approved=False, reason=reason)
                 return state
+            # Leverage: the largest (<= max_leverage) whose liquidation
+            # distance keeps the stop well inside it; none -> reject.
+            chosen, lev_note = choose_leverage(stop_pct, venue)
+            if chosen is None:
+                reason = f"Leverage gate: {lev_note}."
+                state.risk = RiskDecision(approved=False, reason=reason)
+                logger.info("[Risk] BLOCKED — %s", reason)
+                await _write_last_signal(state, approved=False, reason=reason)
+                return state
+            leverage = chosen
             risk_per_trade = _cfg_float(_cfg, "risk_per_trade_pct", settings.risk_per_trade_pct) or 0.0
             position_size = risk_position_fraction(
                 risk_per_trade=risk_per_trade, stop_pct=stop_pct, max_fraction=max_fraction,
@@ -379,7 +414,7 @@ async def risk_node(state: AgentState) -> AgentState:
                 await _write_last_signal(state, approved=False, reason=reason)
                 return state
             position_size = fit.size
-            sizing_note += fit.note
+            sizing_note += fit.note + lev_note
     except Exception as exc:
         reason = f"Position sizing failed (fail-closed): {exc}"
         state.risk = RiskDecision(approved=False, reason=reason)
@@ -404,6 +439,8 @@ async def risk_node(state: AgentState) -> AgentState:
         stop_loss_pct=final_sl,
         take_profit_pct=final_tp,
         drawdown_warning=dd_warning,
+        leverage=leverage,
+        venue=entry_venue,
     )
     logger.info("[Risk] APPROVED — position_size=%.3f dd_warning=%s", position_size, dd_warning)
     await _write_last_signal(state, approved=True, reason=approved_reason)

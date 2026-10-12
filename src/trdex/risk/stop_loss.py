@@ -18,7 +18,11 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from trdex.portfolio.service import ClosedBy
+    from trdex.risk.leverage import DerivativesConfig
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +35,7 @@ class StopReason(StrEnum):
     OPEN_POSITIONS_LOSS = "open_positions_loss"   # unrealised loss / cost of the open book exceeded
     MAX_DRAWDOWN = "max_drawdown"                 # mark-to-market peak-to-trough exceeded limit
     KILL_SWITCH = "kill_switch"                   # manual override via API
+    LIQUIDATION = "liquidation"                   # simulated isolated-margin liquidation (perps)
 
 
 @dataclass
@@ -301,6 +306,24 @@ class StopLossMonitor:
         self._last_check: datetime | None = None
         self._trailing_highs: dict[int, float] = {}  # position_id → high-water mark price
 
+    @staticmethod
+    def _venue_config() -> DerivativesConfig:
+        """Margin settings for leveraged positions; defaults if unreadable."""
+        from trdex.risk.leverage import DerivativesConfig, derivatives_config
+        from trdex.services.runtime_config import get_config_service
+
+        try:
+            return derivatives_config(get_config_service())
+        except Exception:
+            logger.exception("[StopLoss] venue config unreadable — using default margin settings")
+            return DerivativesConfig()
+
+    @staticmethod
+    def _simulation() -> bool:
+        from trdex.config import TrdexMode, get_settings
+
+        return get_settings().mode == TrdexMode.SIMULATION
+
     def on_event(self, callback) -> None:
         """Register an async callback fired on every StopLossEvent."""
         self._callbacks.append(callback)
@@ -405,7 +428,14 @@ class StopLossMonitor:
         except Exception:
             logger.exception("[StopLoss] could not load peak_equity from DB — will derive from current positions")
 
-    async def _auto_close(self, position, price: float, reason: str, price_age: datetime | None = None) -> None:
+    async def _auto_close(
+        self,
+        position,
+        price: float,
+        reason: str,
+        price_age: datetime | None = None,
+        fee_rate: float = 0.001,
+    ) -> None:
         """Attempt to close a position via the execution gateway.
 
         If no gateway is injected, logs a warning with manual close instruction.
@@ -453,6 +483,7 @@ class StopLossMonitor:
                 price=price,
                 idempotency_key=f"close:{position.id}",
                 reduce_only=True,
+                venue=str(getattr(position, "venue", None) or "spot"),
             )
             if result.status == "filled":
                 logger.info(
@@ -473,10 +504,11 @@ class StopLossMonitor:
                     # D20: map SL reason string to the ClosedBy enum
                     # literal so inspect_runs can break down closes by
                     # trigger subsystem.
-                    closed_by_value = (
+                    closed_by_value: ClosedBy = (
                         "stop_loss" if reason == "stop_loss"
                         else "take_profit" if reason == "take_profit"
                         else "trailing_stop" if reason == "trailing_stop"
+                        else "liquidation" if reason == "liquidation"
                         else "kill_switch"
                     )
                     # Estimate close fee from fill: 0.1% taker (Binance standard).
@@ -485,7 +517,9 @@ class StopLossMonitor:
                     # the exchange response. We approximate here because
                     # _auto_close does not go through the Simulator — it
                     # closes the position directly via the gateway.
-                    close_fee = fill_price * Decimal(str(float(position.amount))) * Decimal("0.001")
+                    close_fee = (
+                        fill_price * Decimal(str(float(position.amount))) * Decimal(str(fee_rate))
+                    )
                     async with self._session_factory() as session:
                         repo = PortfolioRepository(session)
                         service = PortfolioService(repo, self._feeds)
@@ -642,6 +676,21 @@ class StopLossMonitor:
             except Exception:
                 logger.warning("[StopLoss] could not fetch Binance price for %s — skipping SL check", sym)
 
+        # Perpetuals in simulation: funding is booked and isolated-margin
+        # liquidation emulated here (live: the exchange does both).
+        venue_cfg = self._venue_config()
+        simulation = self._simulation()
+        if simulation and open_positions:
+            from trdex.risk.funding import accrue_funding
+
+            try:  # only positions on usdm pay (accrue_funding filters by venue)
+                await accrue_funding(
+                    self._session_factory, open_positions, prices,
+                    venue_cfg.funding_rate_8h, now,
+                )
+            except Exception:
+                logger.exception("[StopLoss] funding accrual failed this cycle")
+
         # Load per-symbol volatility CV from entity graph so that
         # SL/TP/trailing thresholds adapt to the coin's natural price
         # swings. A fixed 5% SL is fine for BTC (CV~0.4%) but suicidal
@@ -718,6 +767,39 @@ class StopLossMonitor:
                 if price < hwm:
                     self._trailing_highs[pos_id] = price
                     hwm = price
+
+            lev = float(getattr(pos, "leverage", 1) or 1)
+            leveraged = lev > 1 and str(getattr(pos, "venue", "spot") or "spot") == "usdm"
+            if leveraged:
+                from trdex.risk.leverage import liquidation_distance
+
+                liq = liquidation_distance(lev, venue_cfg.mmr)
+                # The stop must fire before liquidation even if volatility
+                # (or an override) widened it after entry: cap it inside the
+                # same buffer the Risk node chose the leverage with.
+                eff_sl = min(eff_sl, venue_cfg.buffer * liq)
+                # Simulated liquidation (live: the exchange's). Only a gap
+                # gets here; isolated margin loses the whole margin: exit at
+                # the bankruptcy price (entry -/+ 1/L) with no further fee.
+                if simulation and pnl_pct <= -liq:
+                    move = 1.0 / lev
+                    bankrupt = entry * (1 - move) if pos.side == "BUY" else entry * (1 + move)
+                    event = StopLossEvent(
+                        reason=StopReason.LIQUIDATION,
+                        symbol=pos.symbol,
+                        position_id=pos.id,
+                        trigger_price=price,
+                        entry_price=entry,
+                        loss_pct=-move,
+                        message=(
+                            f"{pos.symbol} position {pos.id} liquidated: whole margin lost "
+                            f"({lev:.0f}x isolated, price {price:.6g}, move {pnl_pct:.2%})"
+                        ),
+                    )
+                    new_events.append(event)
+                    logger.critical("[StopLoss] LIQUIDATION: %s", event.message)
+                    await self._auto_close(pos, bankrupt, "liquidation", fee_rate=0.0)
+                    continue
 
             # Per-position stop-loss (adaptive)
             if pnl_pct <= -eff_sl:

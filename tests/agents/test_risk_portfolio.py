@@ -26,9 +26,11 @@ async def _factory():
     yield MagicMock()
 
 
-def _open(monkeypatch, risk_cash=0.0, symbols=()):
+def _open(monkeypatch, risk_cash=0.0, symbols=(), side="BUY"):
+    exposures = tuple(Exposure(s, side, 100.0, 1.0) for s in symbols)
+
     async def fake(*a, **k):
-        return OpenRisk(risk_cash, tuple(symbols))
+        return OpenRisk(risk_cash, tuple(symbols), exposures)
 
     monkeypatch.setattr("trdex.risk.open_risk.load_open_risk", fake)
 
@@ -74,7 +76,7 @@ async def test_correlated_cluster_cap_blocks_the_entry(monkeypatch):
     cfg = _Cfg(correlation_clusters=clusters, max_positions_per_cluster=2)
     result = await _run(_state(FLAT, session_factory=_factory), cfg=cfg)
     assert result.risk.approved is False
-    assert result.risk.reason.startswith("Portfolio gate: correlation limit: 2 positions")
+    assert result.risk.reason.startswith("Portfolio gate: correlation limit: 2 longs")
     roomier = _Cfg(correlation_clusters=clusters, max_positions_per_cluster=3)
     assert (await _run(_state(FLAT, session_factory=_factory), cfg=roomier)).risk.approved
 
@@ -230,3 +232,49 @@ async def test_agent_equity_no_longer_books_open_positions_as_losses(monkeypatch
     assert ctx.equity == pytest.approx(10_050.0)  # +50 unrealised on BTC
     assert ctx.drawdown_pct == 0.0
     assert ctx.open_position_symbols_by_agent == ["BTC/USDT"]
+
+
+# ── shorts and leverage ───────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_short_is_approved_with_leverage_on_perps():
+    result = await _run(_state(FLAT, Intent.OPEN_SHORT))
+    assert result.risk.approved is True and result.risk.leverage == 3
+    assert result.risk.position_size == pytest.approx(0.05)  # same risk-based size
+    assert "Leverage 3x" in result.risk.reason
+
+
+@pytest.mark.asyncio
+async def test_short_on_spot_is_blocked_but_closing_one_is_not():
+    spot = _Cfg(execution_venue="spot")
+    result = await _run(_state(FLAT, Intent.OPEN_SHORT), cfg=spot)
+    assert result.risk.approved is False
+    assert "shorts need the perpetual futures venue" in result.risk.reason
+    long_on_spot = await _run(_state(FLAT), cfg=spot)
+    assert long_on_spot.risk.approved is True and long_on_spot.risk.leverage == 1
+    close = await _run(_state(FLAT, Intent.CLOSE_SHORT, positions=["ENJ/USDT"]), cfg=spot)
+    assert close.risk.approved is True
+
+
+@pytest.mark.asyncio
+async def test_opposite_side_on_the_same_symbol_is_blocked_whatever_the_source(monkeypatch):
+    _open(monkeypatch, symbols=["ENJ/USDT"], side="BUY")  # e.g. a Telegram long
+    result = await _run(_state(FLAT, Intent.OPEN_SHORT, session_factory=_factory))
+    assert result.risk.approved is False
+    assert "a long is already open on ENJ/USDT" in result.risk.reason
+
+
+@pytest.mark.asyncio
+async def test_stop_too_wide_for_any_leverage_is_rejected():
+    wild = [100.0, 300.0] * 15  # CV ~ 50%: adaptive stop far beyond liquidation at 1x
+    result = await _run(_state(wild, Intent.OPEN_SHORT))
+    assert result.risk.approved is False
+    assert result.risk.reason.startswith("Leverage gate:")
+
+
+@pytest.mark.asyncio
+async def test_wide_stop_gets_lower_leverage():
+    wild = [100.0, 130.0] * 15  # CV ~13%: stop ~33% -> 1x
+    result = await _run(_state(wild, Intent.OPEN_LONG))
+    assert result.risk.approved is True and result.risk.leverage == 1

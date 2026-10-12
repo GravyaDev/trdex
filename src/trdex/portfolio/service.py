@@ -42,6 +42,7 @@ ClosedBy = Literal[
     "trailing_stop",
     "kill_switch",
     "manual",
+    "liquidation",
 ]
 
 
@@ -122,26 +123,22 @@ class PortfolioService:
         signal_id: str | None = None,
         stop_loss_pct: float | None = None,
         take_profit_pct: float | None = None,
+        leverage: float = 1.0,
+        venue: str = "spot",
     ) -> PositionRecord | None:
         """Persist an open position after a successful fill.
 
         This is the single write path for "the executor filled an order
-        and we now own a position". Long-only by design: a ``SELL`` fill
-        without an existing open position is logged as a warning and
-        ignored (opening a short is out of scope for the current system).
+        and we now own a position". ``BUY`` opens a long, ``SELL`` a short
+        (perpetual futures; callers only send a SELL open when the venue
+        allows shorts). ``budget`` is the notional; the margin locked is
+        ``budget / leverage``; ``venue`` (spot | usdm) is where the position
+        lives, and where its close will be sent.
 
         Returns the newly created ``PositionRecord`` or ``None`` if the
         fill was skipped.
         """
-        if side == "SELL":
-            logger.warning(
-                "[PortfolioService] refusing to open SHORT position on %s "
-                "(sell fill without existing long) — system is long-only",
-                symbol,
-            )
-            return None
-
-        if side != "BUY":
+        if side not in ("BUY", "SELL"):
             logger.warning(
                 "[PortfolioService] unknown side %r for %s — ignoring fill",
                 side, symbol,
@@ -161,17 +158,20 @@ class PortfolioService:
         record.fee_open = float(fee)
         record.stop_loss_pct = stop_loss_pct
         record.take_profit_pct = take_profit_pct
+        record.leverage = float(leverage)
+        record.venue = venue
         session = self._repo._session
         await session.commit()
         await session.refresh(record)
         logger.info(
-            "[PortfolioService] opened %s position %d: %s qty=%s @ %s fee=%s (source=%s)",
+            "[PortfolioService] opened %s position %d: %s qty=%s @ %s fee=%s %sx (source=%s)",
             symbol,
             record.id,
             side,
             amount,
             entry_price,
             fee,
+            leverage,
             source,
         )
         return record
@@ -245,7 +245,7 @@ class PortfolioService:
         fee_open = Decimal(str(live.fee_open or 0))
         if live.side == "BUY":
             gross = (exit_price - entry) * amt
-        else:  # SELL / short leg (kept for completeness, not reachable today)
+        else:  # SELL: short
             gross = (entry - exit_price) * amt
         pnl = gross - fee - fee_open
 

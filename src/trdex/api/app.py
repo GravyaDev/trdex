@@ -113,6 +113,7 @@ async def build_telegram_gate_config(
     """
     from trdex.execution.telegram_gates import GateConfig, regime_gate_settings
     from trdex.market.macro_calendar import get_macro_calendar, macro_gate_config
+    from trdex.risk.leverage import derivatives_config
     from trdex.risk.open_risk import (
         exit_bases,
         fetch_prices,
@@ -176,7 +177,8 @@ async def build_telegram_gate_config(
         exit_cv=await monitor_cv(session, sig.symbol),
         clusters=rules.clusters,
         max_per_cluster=rules.max_per_cluster,
-        open_symbols=open_risk.symbols,
+        open_positions=open_risk.positions,
+        derivatives=derivatives_config(svc),
         portfolio_risk_cap=rules.risk_cap,
         open_risk_fraction=open_risk.fraction(equity),
         portfolio_equity=Decimal(str(equity)),

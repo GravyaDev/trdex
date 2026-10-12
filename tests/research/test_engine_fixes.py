@@ -331,3 +331,65 @@ def test_reward_risk_rule_skips_entries_whose_target_is_too_close():
 
 def test_portfolio_rules_off_by_default():
     assert len(_notionals(BASE)) == 4
+
+
+# ── 14. perpetuals: shorts, leverage, funding, liquidation ────────────────
+
+
+def test_live_rule_engine_opens_shorts_only_on_perps():
+    bear = _ind(rsi=40.0, s9=99.0, s21=100.0)
+    bull = _ind(rsi=60.0, s9=101.0, s21=100.0)
+    spot, perps = LiveRuleEngine(), LiveRuleEngine(shorts=True)
+    assert spot.generate_signal(1, None, bear, "flat") == "HOLD"
+    assert perps.generate_signal(1, None, bear, "flat") == "SELL"
+    assert perps.generate_signal(1, None, bear, "long") == "CLOSE_LONG"
+    assert perps.generate_signal(1, None, bull, "short") == "CLOSE_SHORT"
+    assert perps.generate_signal(1, None, bear, "short") == "HOLD"
+
+
+PERPS = EngineParams(
+    fee_pct=0.0, sl_pct=0.02, tp_pct=0.9, trail_pct=0.0, perps=True, max_leverage=3.0
+)
+
+
+def test_perps_lock_only_the_margin_and_keep_equity_at_flat_prices():
+    result = run_backtest(SellAt(), {"A": _flat(6)}, PERPS)
+    (trade,) = result.trades
+    assert trade["side"] == "short" and trade["leverage"] == 3
+    assert result.final_equity == pytest.approx(10_000.0)
+
+
+def test_funding_is_paid_by_longs_and_received_by_shorts_every_8h():
+    params = replace(PERPS, funding_rate_8h=0.0001)
+    days = _flat(49)  # bars at 00:00 ... 48:00 UTC -> boundaries 8,16,24,32,40,48 after entry
+    long_eq = run_backtest(BuyAt(), {"A": days}, params).final_equity
+    short_eq = run_backtest(SellAt(), {"A": days}, params).final_equity
+    notional = 10_000 * 0.05
+    assert long_eq == pytest.approx(10_000 - 6 * notional * 0.0001)
+    assert short_eq == pytest.approx(10_000 + 6 * notional * 0.0001)
+    # funding is part of the trade's P&L, so trades still sum to the equity change
+    (trade,) = run_backtest(BuyAt(), {"A": days}, params).trades
+    assert trade["net_pnl"] == pytest.approx(long_eq - 10_000)
+
+
+def test_daily_bars_pay_funding_three_times_a_day():
+    params = replace(PERPS, funding_rate_8h=0.0001)
+    week = _flat(8, step=DAY)
+    result = run_backtest(BuyAt(timeframe="1d"), {"A": week}, params)
+    # entry at day 2's open; days 3..7 carried -> 5 days x 3 boundaries
+    assert result.final_equity == pytest.approx(10_000 - 15 * 10_000 * 0.05 * 0.0001)
+
+
+def test_a_gap_through_liquidation_loses_the_whole_margin_and_no_more():
+    bars = [*_flat(4), [4 * H, 300.0, 300.0, 300.0, 300.0, 10.0], *_flat(2, t0=5 * H)]
+    wide = replace(PERPS, sl_pct=0.15)  # 3x allowed (<= 16.4%)
+    result = run_backtest(SellAt(), {"A": bars}, wide)
+    (trade,) = result.trades
+    assert trade["reason"] == "LIQ" and trade["leverage"] == 3
+    margin = 10_000 * 0.05 / 3
+    assert trade["net_pnl"] == pytest.approx(-margin)
+    assert result.final_equity == pytest.approx(10_000 - margin)
+
+
+def test_entry_whose_stop_no_leverage_can_protect_is_skipped():
+    assert run_backtest(SellAt(), {"A": _flat(6)}, replace(PERPS, sl_pct=0.6)).trades == []

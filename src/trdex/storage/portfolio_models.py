@@ -50,6 +50,12 @@ class PositionRecord(Base):
     fee_open: Mapped[float] = mapped_column(Float, default=0.0)
     stop_loss_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     take_profit_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Migration 017: market the position lives on (closes are routed by it),
+    # isolated leverage at open (1 on spot) and the last funding time booked
+    # to the ledger (simulation, perps).
+    venue: Mapped[str] = mapped_column(String(8), nullable=False, default="spot")
+    leverage: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    funding_paid_until: Mapped[datetime | None] = mapped_column(nullable=True)
 
     def __repr__(self) -> str:
         return f"<Position {self.symbol} {self.side} {self.status} entry={self.entry_price}>"

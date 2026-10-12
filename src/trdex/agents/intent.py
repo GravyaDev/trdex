@@ -83,60 +83,51 @@ def signal_to_intent(
     signal: str,
     symbol: str,
     portfolio_ctx: PortfolioContext,
+    *,
+    shorts: bool = False,
 ) -> Intent:
-    """Translate rule-engine output (``BUY`` / ``SELL`` / ``HOLD``) to an Intent.
+    """Translate rule-engine / LLM output (``BUY`` / ``SELL`` / ``HOLD``) to an Intent.
 
-    Consults ``portfolio_ctx.open_position_symbols_by_agent`` (D21) to
-    decide whether a ``SELL`` signal means "close an existing long" or
-    "open a short". Today the system is long-only by policy, so
-    ``BUY`` + has-position and ``SELL`` + no-position both degrade to
-    ``HOLD`` rather than attempting to open a short or pyramid.
+    Consults the agent's own open position on ``symbol`` (D21: positions
+    opened by other sources are ignored here; the Risk node guards
+    against opposite sides across sources). ``shorts`` is true when the
+    venue is perpetual futures (``trdex.risk.leverage``); on spot the
+    system stays long-only.
 
-    Truth table:
+    Truth table (no pyramiding, no flip within one cycle):
 
-        signal   has_long    intent
-        ──────   ─────────   ────────────
-        BUY      False       OPEN_LONG
-        BUY      True        HOLD         (no pyramiding)
-        SELL     True        CLOSE_LONG   ← THE FIX
-        SELL     False       HOLD         (long-only, no shorting)
-        HOLD     any         HOLD
+        signal   agent position   intent
+        ──────   ──────────────   ──────────────────────────────
+        BUY      none             OPEN_LONG
+        BUY      long             HOLD
+        BUY      short            CLOSE_SHORT
+        SELL     none             OPEN_SHORT if shorts else HOLD
+        SELL     long             CLOSE_LONG
+        SELL     short            HOLD
+        HOLD     any              HOLD
 
-    Args:
-        signal: raw rule-engine output. Must be one of ``"BUY"``,
-            ``"SELL"`` or ``"HOLD"``. Any other value raises
-            ``ValueError`` — unknown signals are programmer errors,
-            not run-time ambiguity.
-        symbol: the symbol being analysed. Passed explicitly so the
-            has-position check is always computed for the right symbol
-            (Skeptic S4 — protects against call-site confusion when
-            multiple symbols are cycled).
-        portfolio_ctx: the live ``PortfolioContext`` with
-            ``open_position_symbols_by_agent`` populated upstream.
-
-    Returns:
-        The resolved ``Intent``. The system is long-only today so the
-        returned intent is always one of ``OPEN_LONG``, ``CLOSE_LONG``
-        or ``HOLD`` — ``OPEN_SHORT`` / ``CLOSE_SHORT`` are reserved
-        vocabulary for a future short-enabled iteration and pinned by
-        the ``test_today_never_emits_short_intents`` test.
+    Raises ``ValueError`` on any other signal (a programmer error).
     """
     if signal == "HOLD":
         return Intent.HOLD
+    if signal not in ("BUY", "SELL"):
+        raise ValueError(
+            f"signal_to_intent: unknown signal {signal!r} (expected BUY/SELL/HOLD)"
+        )
 
-    has_long = symbol in portfolio_ctx.open_position_symbols_by_agent
+    side = None
+    if symbol in portfolio_ctx.open_position_symbols_by_agent:
+        # Positions recorded before shorts existed carry no side: long.
+        side = portfolio_ctx.agent_position_sides.get(symbol, "BUY")
 
     if signal == "BUY":
-        if has_long:
-            return Intent.HOLD  # no pyramiding
-        return Intent.OPEN_LONG
+        if side == "SELL":
+            return Intent.CLOSE_SHORT
+        return Intent.HOLD if side == "BUY" else Intent.OPEN_LONG
 
-    if signal == "SELL":
-        if has_long:
-            return Intent.CLOSE_LONG  # THE FIX
-        return Intent.HOLD  # long-only, refuse to open a short
-
-    raise ValueError(
-        f"signal_to_intent: unknown signal {signal!r} "
-        f"(expected BUY/SELL/HOLD)"
-    )
+    # SELL
+    if side == "BUY":
+        return Intent.CLOSE_LONG
+    if side == "SELL":
+        return Intent.HOLD
+    return Intent.OPEN_SHORT if shorts else Intent.HOLD

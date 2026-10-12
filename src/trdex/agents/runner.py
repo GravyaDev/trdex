@@ -84,6 +84,9 @@ class AgentRunner:
             open_symbols_by_agent = [
                 p.symbol for p in open_positions if p.source == "agent"
             ]
+            agent_sides = {
+                p.symbol: str(p.side) for p in open_positions if p.source == "agent"
+            }
 
             # Mark to market at current prices. (Open positions have no
             # exit_price: the old formula used 0 and booked their whole
@@ -111,6 +114,7 @@ class AgentRunner:
                 equity=equity,
                 open_position_symbols=open_symbols,
                 open_position_symbols_by_agent=open_symbols_by_agent,
+                agent_position_sides=agent_sides,
                 unrealized_pnl=unrealized,
                 realized_pnl=balance - peak_balance,  # net change from peak
                 drawdown_pct=drawdown_pct,
@@ -246,13 +250,11 @@ class AgentRunner:
 
         intent = state.analysis.intent
         try:
-            if intent == Intent.OPEN_LONG:
-                await self._record_open_long(state)
-            elif intent == Intent.CLOSE_LONG:
-                await self._record_close_long(state)
+            if intent.is_open:
+                await self._record_open(state)
+            elif intent.is_close:
+                await self._record_close(state)
             else:
-                # OPEN_SHORT / CLOSE_SHORT are reserved vocabulary and
-                # the Risk gate should never let them reach here today;
                 # HOLD never reaches the executor at all. Log+skip.
                 logger.warning(
                     "[runner] _dispatch_fill: unsupported intent %s for %s — skipping",
@@ -264,8 +266,8 @@ class AgentRunner:
                 state.symbol, intent.value,
             )
 
-    async def _record_open_long(self, state: AgentState) -> None:
-        """Persist an OPEN_LONG fill as a new position row."""
+    async def _record_open(self, state: AgentState) -> None:
+        """Persist an OPEN_LONG / OPEN_SHORT fill as a new position row."""
         from decimal import Decimal
 
         from trdex.portfolio.service import PortfolioService
@@ -280,7 +282,7 @@ class AgentRunner:
 
         await service.record_open_fill(
             symbol=state.symbol,
-            side="BUY",  # PositionSide.BUY
+            side="SELL" if state.analysis.intent == Intent.OPEN_SHORT else "BUY",
             amount=filled_qty_dec,
             entry_price=filled_price_dec,
             budget=budget,
@@ -289,10 +291,12 @@ class AgentRunner:
             signal_id=state.run_id,
             stop_loss_pct=state.risk.stop_loss_pct,
             take_profit_pct=state.risk.take_profit_pct,
+            leverage=state.risk.leverage,
+            venue=state.risk.venue,
         )
 
-    async def _record_close_long(self, state: AgentState) -> None:
-        """Persist a CLOSE_LONG fill as an update to the existing position
+    async def _record_close(self, state: AgentState) -> None:
+        """Persist a CLOSE_LONG / CLOSE_SHORT fill as an update to the existing position
         plus a ``trade_fill`` row in the balance ledger.
 
         D13: re-reads the live DB for the agent-owned open position on
@@ -314,7 +318,7 @@ class AgentRunner:
         )
         if match is None:
             logger.warning(
-                "[runner] fill_orphan_warning: CLOSE_LONG filled for %s "
+                "[runner] fill_orphan_warning: close filled for %s "
                 "(run_id=%s) but no open agent position found — possibly "
                 "closed by StopLossMonitor mid-cycle. Ledger not written.",
                 state.symbol, state.run_id,
