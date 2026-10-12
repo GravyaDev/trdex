@@ -33,7 +33,21 @@ Aggiornata al 2026-10-12. Questo file è la fonte unica per sapere cosa c'è da 
   - Leva massima di default **3x**, margine **isolato**, modificabile dalla dashboard.
   - Si fanno **prima** della conferma d'ingresso (voce B).
 
-## 3. Prossimi lavori, in ordine
+## 3. Prossimi lavori
+
+Le lettere sono identificativi stabili; l'ordine di lavoro è questo, e le sezioni sotto lo seguono:
+
+| # | Voce | Stato |
+|---|---|---|
+| — | A. Short e leva | fatto, PR #18 |
+| 1 | B. Conferma d'ingresso, protezioni e scheda decisione | da fare (prossima) |
+| 2 | F. Dati dei derivati Binance | da fare |
+| 3 | C. Edge misurato e validazione più severa | da fare |
+| 4 | G. Validare le decisioni dell'LLM | da fare |
+| 5 | D. Grafici (lightweight-charts) e grafico del trade nelle notifiche | da fare |
+| ∥ | E. Manutenzione | in parallelo, quando serve |
+
+Chi prende una voce aggiorna la colonna Stato (in corso, branch, PR) nella stessa PR.
 
 ### A. Short e leva — fatto, PR #18 (da mergiare dopo #17)
 
@@ -71,7 +85,7 @@ Criteri di accettazione:
   - Per ogni posizione: lato, margine e prezzo di liquidazione.
 - **Go-live**: gli short devono superare la stessa rivalidazione dei long prima del live.
 
-### B. Conferma d'ingresso e scheda decisione
+### B. Conferma d'ingresso, protezioni e scheda decisione
 
 - **ENTER / WAIT / SKIP.** Quando l'Analyst dice OPEN, l'ingresso resta *pending*.
   - Lo conferma la chiusura della barra 1h successiva oltre il livello del segnale (sopra per un long, sotto per uno short), con volume sopra la media a 20 barre.
@@ -91,6 +105,15 @@ Criteri di accettazione:
     - rendimenti mensili, Sharpe mobile;
     - risultati separati per long/short e per fonte (agente, Telegram, manuale).
   - Barra di stato della pipeline.
+
+### F. Dati dei derivati Binance (via ccxt, già rate-limited)
+
+Origine: awesome-systematic-trading (2026-10-12), in particolare FundingRadar, ByKaranteli e 0xArchive come esempi. I dati però si prendono da Binance stesso.
+
+- **Funding storico reale**: sostituisce il tasso fisso `funding_rate_8h` nel backtest e in simulazione. Chiude un limite noto di #18.
+- **Open interest, rapporto long/short e liquidazioni**:
+  - Come input per Scout/Analyst, a indicare l'affollamento del mercato.
+  - Come filtri candidati, ad esempio niente long con funding molto alto. Un filtro si adotta solo se migliora la rivalidazione.
 
 ### C. Edge misurato: finestre temporali, Kelly frazionario, stime bayesiane
 
@@ -120,6 +143,15 @@ Origine: post "framework dato a Claude" (video seb.ai, 2026-10-11). Delle sue 4 
   - **Monte Carlo sull'ordine dei trade** per la distribuzione del max drawdown; il criterio usa il 95° percentile, non il valore singolo.
 - **Esponente di Hurst come candidato filtro di regime**: la strategia RSI/SMA segue il trend, quindi H > 0,5 dovrebbe aiutarla. Si adotta solo se la rivalidazione migliora.
 
+### G. Validare le decisioni dell'LLM
+
+Origine: TraderHarness. Oggi la validazione copre solo il fallback a regole, perché l'LLM "conosce" la storia e un suo replay sarebbe contaminato.
+
+- **Replay a campione su dati anonimizzati**: simbolo e date nascosti, prezzi normalizzati.
+- **Obiettivo**: stimare l'edge dell'Analyst LLM rispetto alle regole.
+- **Costo**: budget fisso per run.
+- **Uso del risultato**: decide se l'LLM resta il decisore principale o diventa solo annotazione.
+
 ### D. Frontend grafici con lightweight-charts
 
 - Candele per simbolo con ingressi, uscite e linee di stop/target, servite dall'API.
@@ -132,29 +164,7 @@ Origine: post "framework dato a Claude" (video seb.ai, 2026-10-11). Delle sue 4 
 - `tests/test_audit_fixes.py`: 29 errori preesistenti dovuti a percorsi Windows assoluti (`c:/Users/...`). Vanno resi relativi al repo.
 - Rotazione delle credenziali Telegram al go-live (vedi `Task Board.md`).
 
-### F. Dati dei derivati Binance (via ccxt, già rate-limited)
-
-Origine: awesome-systematic-trading (2026-10-12), in particolare FundingRadar, ByKaranteli e 0xArchive come esempi. I dati però si prendono da Binance stesso.
-
-- **Funding storico reale**: sostituisce il tasso fisso `funding_rate_8h` nel backtest e in simulazione. Chiude un limite noto di #18.
-- **Open interest, rapporto long/short e liquidazioni**:
-  - Come input per Scout/Analyst, a indicare l'affollamento del mercato.
-  - Come filtri candidati, ad esempio niente long con funding molto alto. Un filtro si adotta solo se migliora la rivalidazione.
-
-### G. Validare le decisioni dell'LLM
-
-Origine: TraderHarness. Oggi la validazione copre solo il fallback a regole, perché l'LLM "conosce" la storia e un suo replay sarebbe contaminato.
-
-- **Replay a campione su dati anonimizzati**: simbolo e date nascosti, prezzi normalizzati.
-- **Obiettivo**: stimare l'edge dell'Analyst LLM rispetto alle regole.
-- **Costo**: budget fisso per run.
-- **Uso del risultato**: decide se l'LLM resta il decisore principale o diventa solo annotazione.
-
-### Ordine consigliato
-
-B → F → C → G → D, con E in parallelo quando serve.
-
-### Scartati dalla stessa lista (fuori dal perimetro di trdex)
+### Idee scartate (da awesome-systematic-trading: fuori dal perimetro di trdex)
 
 - Mercati predittivi (Polymarket, Kalshi).
 - Arbitraggio, market making e funding carry spot/perp. Il carry è una classe di strategia diversa e oggi è bloccato di proposito dalla guardia sui lati opposti.
