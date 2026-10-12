@@ -1,6 +1,6 @@
 # Roadmap trdex
 
-Aggiornata al 2026-10-11. Questo file è la fonte unica per sapere cosa c'è da fare e in che ordine; `Task Board.md` rimanda qui.
+Aggiornata al 2026-10-12. Questo file è la fonte unica per sapere cosa c'è da fare e in che ordine; `Task Board.md` rimanda qui.
 
 **Regola**: chi chiude una voce aggiorna questo file nella stessa PR. Lo stato, le decisioni e i limiti noti stanno qui, non nella memoria di chi ci ha lavorato.
 
@@ -79,9 +79,17 @@ Criteri di accettazione:
   - La regola va riprodotta in `LiveRuleEngine` e nel backtest.
 - **News "watch"**: una news classificata come "da osservare" sul simbolo porta a WAIT invece di ENTER.
 - **Completezza**: se manca un input essenziale (prezzo, candele, CV di regime, calendario macro in live), la decisione è HOLD con il motivo.
+- **Protezioni** (da Freqtrade): gate deterministici nel Risk node, riprodotti nel backtest.
+  - Cooldown per simbolo dopo uno stop-loss: niente nuovo ingresso su quel simbolo per N ore.
+  - Pausa globale dopo N stop in X ore (StoplossGuard).
+- **Time-stop, da testare**: chiusura di una posizione ferma da N ore senza progressi (idea del TrendRider). Si adotta solo se il backtest del refresher migliora.
 - **Dashboard**
   - Scheda decisione per ciclo: Scout → News → Analyst → Risk → Executor, con esito e motivi.
   - Tile KPI di rischio: rischio per posizione, rischio di portafoglio, max drawdown, VaR 95%, esposizione.
+  - **Rapporto settimanale** allegato alla notifica del refresher, con le metriche dei tearsheet tipo quantstats/pyfolio calcolate in casa, senza nuove dipendenze:
+    - Sortino, Calmar, VaR/CVaR 95%;
+    - rendimenti mensili, Sharpe mobile;
+    - risultati separati per long/short e per fonte (agente, Telegram, manuale).
   - Barra di stato della pipeline.
 
 ### C. Edge misurato: finestre temporali, Kelly frazionario, stime bayesiane
@@ -106,10 +114,16 @@ Origine: post "framework dato a Claude" (video seb.ai, 2026-10-11). Delle sue 4 
     - la rivalidazione del backtest con il filtro attivo.
   - Il conteggio dei test cresce a ogni run, così ripetere l'analisi ogni settimana non produce falsi edge per caso.
   - Se nessuna finestra passa, non si applica nessun filtro.
+- **Validazione più severa nel refresher** (López de Prado, *Advances in Financial ML*; strumenti come Lacuna):
+  - **Deflated Sharpe Ratio** come criterio, al posto dello Sharpe grezzo. Tiene conto di quante varianti sono state provate nel tempo (lo stesso contatore dei test delle finestre temporali) e di asimmetria e curtosi dei rendimenti.
+  - **Walk-forward**: i bounds e le regole devono reggere su finestre successive, non solo sull'intero periodo.
+  - **Monte Carlo sull'ordine dei trade** per la distribuzione del max drawdown; il criterio usa il 95° percentile, non il valore singolo.
+- **Esponente di Hurst come candidato filtro di regime**: la strategia RSI/SMA segue il trend, quindi H > 0,5 dovrebbe aiutarla. Si adotta solo se la rivalidazione migliora.
 
 ### D. Frontend grafici con lightweight-charts
 
 - Candele per simbolo con ingressi, uscite e linee di stop/target, servite dall'API.
+- **Grafico del trade nella notifica**: alla chiusura di una posizione, un PNG con candele, ingresso, uscita e stop (mplfinance) allegato al messaggio Telegram/email.
 - La dashboard Streamlit resta finché il nuovo frontend non è alla pari.
 
 ### E. Manutenzione
@@ -117,6 +131,37 @@ Origine: post "framework dato a Claude" (video seb.ai, 2026-10-11). Delle sue 4 
 - #10: rigenerare la baseline CI dopo i merge.
 - `tests/test_audit_fixes.py`: 29 errori preesistenti dovuti a percorsi Windows assoluti (`c:/Users/...`). Vanno resi relativi al repo.
 - Rotazione delle credenziali Telegram al go-live (vedi `Task Board.md`).
+
+### F. Dati dei derivati Binance (via ccxt, già rate-limited)
+
+Origine: awesome-systematic-trading (2026-10-12), in particolare FundingRadar, ByKaranteli e 0xArchive come esempi. I dati però si prendono da Binance stesso.
+
+- **Funding storico reale**: sostituisce il tasso fisso `funding_rate_8h` nel backtest e in simulazione. Chiude un limite noto di #18.
+- **Open interest, rapporto long/short e liquidazioni**:
+  - Come input per Scout/Analyst, a indicare l'affollamento del mercato.
+  - Come filtri candidati, ad esempio niente long con funding molto alto. Un filtro si adotta solo se migliora la rivalidazione.
+
+### G. Validare le decisioni dell'LLM
+
+Origine: TraderHarness. Oggi la validazione copre solo il fallback a regole, perché l'LLM "conosce" la storia e un suo replay sarebbe contaminato.
+
+- **Replay a campione su dati anonimizzati**: simbolo e date nascosti, prezzi normalizzati.
+- **Obiettivo**: stimare l'edge dell'Analyst LLM rispetto alle regole.
+- **Costo**: budget fisso per run.
+- **Uso del risultato**: decide se l'LLM resta il decisore principale o diventa solo annotazione.
+
+### Ordine consigliato
+
+B → F → C → G → D, con E in parallelo quando serve.
+
+### Scartati dalla stessa lista (fuori dal perimetro di trdex)
+
+- Mercati predittivi (Polymarket, Kalshi).
+- Arbitraggio, market making e funding carry spot/perp. Il carry è una classe di strategia diversa e oggi è bloccato di proposito dalla guardia sui lati opposti.
+- Sostituire il motore con framework esterni (nautilus_trader, freqtrade, jesse): il nostro motore rigioca il live 1:1.
+- Vendor di dati a pagamento o via MCP/x402.
+- Framework RL/ML (FinRL e simili).
+- Ottimizzatori di portafoglio (HRP, Black-Litterman): con un rischio per trade dello 0,1% e il tetto per cluster non servono.
 
 ## 4. Limiti noti
 
