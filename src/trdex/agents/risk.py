@@ -61,6 +61,18 @@ async def _entry_stop_pct(
     settings: Any,
     position: Any = None,
 ) -> float:
+    """Stop-loss fraction for a new position (see ``_entry_exit_pcts``)."""
+    stop_pct, _ = await _entry_exit_pcts(state, cv, cfg, settings, position)
+    return stop_pct
+
+
+async def _entry_exit_pcts(
+    state: AgentState,
+    cv: float | None,
+    cfg: Any,
+    settings: Any,
+    position: Any = None,
+) -> tuple[float, float]:
     """Stop-loss fraction the StopLossMonitor will apply to a new position on
     ``state.symbol``: per-symbol override, else ``max(base, 2.5 x CV)``.
 
@@ -82,7 +94,7 @@ async def _entry_stop_pct(
         from trdex.storage.symbol_config_repo import SymbolConfigRepository
         async with state.session_factory() as session:
             override = await SymbolConfigRepository(session).get(state.symbol)
-    stop_pct, _, _ = effective_thresholds(
+    stop_pct, tp_pct, _ = effective_thresholds(
         position,
         override,
         cv if cv is not None else 0.0,
@@ -90,7 +102,7 @@ async def _entry_stop_pct(
         base_tp=base_tp or 0.0,
         base_trail=base_trail or 0.0,
     )
-    return float(stop_pct)
+    return float(stop_pct), float(tp_pct)
 
 
 async def risk_node(state: AgentState) -> AgentState:
@@ -234,6 +246,37 @@ async def risk_node(state: AgentState) -> AgentState:
             await _write_last_signal(state, approved=False, reason=reason)
             return state
 
+    # Portfolio rules (trdex.risk.portfolio_budget): loaded once for the
+    # cluster gate and the budget fit below. Fail-closed for entries.
+    from trdex.risk.open_risk import OpenRisk, load_open_risk
+    from trdex.risk.portfolio_budget import (
+        cluster_block,
+        fit_to_budget,
+        portfolio_rules,
+        reward_risk_block,
+    )
+
+    open_risk = OpenRisk(0.0, ())
+    if intent.is_open:
+        try:
+            rules = portfolio_rules(_cfg)
+            if state.session_factory is not None:
+                open_risk = await load_open_risk(state.session_factory, _cfg, settings)
+            # Gate 4e: correlated cluster — at most max_positions_per_cluster
+            # open positions among symbols that move together.
+            portfolio_block = cluster_block(
+                state.symbol, open_risk.symbols, rules.clusters, rules.max_per_cluster
+            )
+        except Exception as exc:
+            logger.exception("[Risk] portfolio rules unavailable")
+            portfolio_block = f"portfolio risk check failed (fail-closed): {exc}"
+        if portfolio_block is not None:
+            reason = f"Portfolio gate: {portfolio_block}."
+            state.risk = RiskDecision(approved=False, reason=reason)
+            logger.info("[Risk] BLOCKED — %s", reason)
+            await _write_last_signal(state, approved=False, reason=reason)
+            return state
+
     # Gate 5: Live mode requires passing simulation gate criteria — OPEN
     # intents only, like 4b/4c: a readiness failure (e.g. regime bounds
     # past regime_max_age_days) must stop new risk, never an exit.
@@ -297,7 +340,7 @@ async def risk_node(state: AgentState) -> AgentState:
             # llm-agents: the stop stored on the position is the LLM
             # suggestion (final_sl); the monitor applies max(floor, final_sl)
             # (effective_thresholds), so sizing must use the same stop.
-            stop_pct = await _entry_stop_pct(
+            stop_pct, tp_pct = await _entry_exit_pcts(
                 state,
                 cv,
                 _cfg,
@@ -306,6 +349,14 @@ async def risk_node(state: AgentState) -> AgentState:
                     stop_loss_pct=final_sl, take_profit_pct=final_tp, source="agent"
                 ),
             )
+            # Reward/risk on the exits the monitor will actually apply.
+            rr_block = reward_risk_block(stop_pct, tp_pct, rules.min_reward_risk)
+            if rr_block is not None:
+                reason = f"Reward/risk gate: {rr_block}."
+                state.risk = RiskDecision(approved=False, reason=reason)
+                logger.info("[Risk] BLOCKED — %s", reason)
+                await _write_last_signal(state, approved=False, reason=reason)
+                return state
             risk_per_trade = _cfg_float(_cfg, "risk_per_trade_pct", settings.risk_per_trade_pct) or 0.0
             position_size = risk_position_fraction(
                 risk_per_trade=risk_per_trade, stop_pct=stop_pct, max_fraction=max_fraction,
@@ -314,6 +365,21 @@ async def risk_node(state: AgentState) -> AgentState:
                 f" Size {position_size:.2%} of equity: risk {position_size * stop_pct:.3%}"
                 f" at stop {stop_pct:.2%} (cv={cv if cv is not None else 0.0:.4f})."
             )
+            # Portfolio risk budget: reduce to the room left, else reject.
+            fit = fit_to_budget(
+                planned_size=position_size,
+                stop_pct=stop_pct,
+                open_risk=open_risk.fraction(portfolio.equity),
+                cap=rules.risk_cap,
+            )
+            if fit.rejected is not None:
+                reason = f"Portfolio gate: {fit.rejected}."
+                state.risk = RiskDecision(approved=False, reason=reason)
+                logger.info("[Risk] BLOCKED — %s", reason)
+                await _write_last_signal(state, approved=False, reason=reason)
+                return state
+            position_size = fit.size
+            sizing_note += fit.note
     except Exception as exc:
         reason = f"Position sizing failed (fail-closed): {exc}"
         state.risk = RiskDecision(approved=False, reason=reason)

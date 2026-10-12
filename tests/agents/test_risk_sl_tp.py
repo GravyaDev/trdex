@@ -37,6 +37,17 @@ async def _run(state: AgentState) -> AgentState:
         return await risk_node(state)
 
 
+
+@pytest.fixture(autouse=True)
+def _reward_risk_off(monkeypatch):
+    """These tests isolate SL/TP handling and sizing; reward/risk has its own tests."""
+    from trdex.risk.portfolio_budget import PortfolioRules
+
+    monkeypatch.setattr(
+        "trdex.risk.portfolio_budget.portfolio_rules",
+        lambda cfg: PortfolioRules(min_reward_risk=0.0),
+    )
+
 @pytest.mark.asyncio
 async def test_no_llm_suggestion_leaves_sl_tp_unset():
     result = await _run(_state())

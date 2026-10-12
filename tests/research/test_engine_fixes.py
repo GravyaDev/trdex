@@ -6,6 +6,8 @@ different) than what the strategy would have done.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from trdex.agents.analyst import _rule_based_signal
@@ -293,3 +295,39 @@ def test_live_rule_engine_regime_gate_blocks_entries_but_not_exits():
 def test_live_rule_engine_defaults_to_the_live_risk_setting():
     assert LiveRuleEngine().risk_per_trade_pct_override == 0.001
     assert LiveRuleEngine(risk_per_trade_pct=None).risk_per_trade_pct_override is None
+
+
+# ── 13. portfolio rules, as in the live Risk node ─────────────────────────
+
+FOUR = {s: _flat(10) for s in ("A", "B", "C", "D")}
+
+
+def _notionals(params, strategy=None) -> dict[str, float]:
+    strategy = strategy or _BuyOnceWithStop(sl=0.02, risk=0.001)  # 5% notional, 0.1% risk
+    trades = run_backtest(strategy, FOUR, params).trades
+    return {t["symbol"]: t["qty"] * t["entry_price"] for t in trades}
+
+
+BASE = EngineParams(fee_pct=0.0, tp_pct=0.9, trail_pct=0.0)
+
+
+def test_portfolio_risk_budget_reduces_then_skips_entries():
+    got = _notionals(replace(BASE, portfolio_risk_max_pct=0.0025))
+    # 0.1% + 0.1% fit, the third gets the 0.05% left (half size), the fourth nothing
+    assert sorted(got.values()) == pytest.approx([250.0, 500.0, 500.0])
+
+
+def test_correlated_cluster_cap_skips_entries_beyond_the_limit():
+    params = replace(BASE, clusters=(frozenset({"A", "B", "C"}),), max_per_cluster=2)
+    got = _notionals(params)
+    assert len(got) == 3 and "D" in got  # D is outside the cluster
+
+
+def test_reward_risk_rule_skips_entries_whose_target_is_too_close():
+    params = replace(BASE, tp_pct=0.04, min_reward_risk=1.5)
+    assert _notionals(params, _BuyOnceWithStop(sl=0.03, risk=0.001)) == {}  # 1.33
+    assert len(_notionals(params, _BuyOnceWithStop(sl=0.02, risk=0.001))) == 4  # 2.0
+
+
+def test_portfolio_rules_off_by_default():
+    assert len(_notionals(BASE)) == 4
