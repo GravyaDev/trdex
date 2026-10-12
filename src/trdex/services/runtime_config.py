@@ -61,6 +61,11 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str | None, type]] = {
     ("thresholds", "regime_set_at"): (None, str),  # stamped when the regime gate turns on
     ("thresholds", "regime_last_refresh_at"): (None, str),  # regime refresher
     ("thresholds", "regime_last_refresh_status"): (None, str),
+    ("thresholds", "macro_gate_enabled"): (None, bool),  # trdex.market.macro_calendar
+    ("thresholds", "macro_gate_before_min"): (None, float),
+    ("thresholds", "macro_gate_after_min"): (None, float),
+    ("thresholds", "macro_gate_impacts"): (None, str),  # e.g. "High" or "High,Medium"
+    ("thresholds", "macro_gate_currencies"): (None, str),  # e.g. "USD,EUR" or "ALL"
     # Scheduler
     ("scheduler", "agent_scheduler_enabled"): ("agent_scheduler_enabled", bool),
     ("scheduler", "agent_scheduler_interval"): ("agent_scheduler_interval", int),
@@ -95,6 +100,7 @@ _KEY_REGISTRY: dict[tuple[str, str], tuple[str | None, type]] = {
     ("notifications", "route_regime_validation_failed"): (None, str),
     ("notifications", "route_regime_refresh_error"): (None, str),
     ("notifications", "route_regime_expiring"): (None, str),
+    ("notifications", "route_macro_calendar_stale"): (None, str),
     # Integration toggles — each one enables/disables a component at
     # boot independently of whether its API key is set. Changing any
     # toggle requires a container restart (no hot-reload yet: feed
