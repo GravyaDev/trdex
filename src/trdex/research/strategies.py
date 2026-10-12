@@ -1,6 +1,6 @@
 """Strategy implementations for the backtest suite.
 
-Each strategy implements the `Strategy` Protocol from scripts.backtest.core:
+Each strategy implements the `Strategy` Protocol from trdex.research.engine:
 it has `name` and `timeframe` attributes and a `generate_signal(...)` method.
 
 Conventions:

@@ -87,17 +87,17 @@ def test_max_age_is_configurable_and_non_positive_falls_back_to_default():
     assert REGIME_MAX_AGE_DAYS == 90
 
 
-def test_bounds_changed_inside_the_gate_window_warn_without_failing():
+def test_gate_switched_on_inside_the_gate_window_warns_without_failing():
     failures, warnings = _check(set_at=(NOW - timedelta(days=5)).isoformat())
     assert failures == []
     assert len(warnings) == 1
-    assert "changed 5 days ago (< 30 gate days)" in warnings[0]
+    assert "on for 5 days (< 30 gate days)" in warnings[0]
 
 
 def test_unknown_change_date_warns():
     failures, warnings = _check(set_at="")
     assert failures == []
-    assert any("change date unknown" in w for w in warnings)
+    assert any("activation date unknown" in w for w in warnings)
 
 
 # ── evaluate_readiness integration ────────────────────────────────────────
@@ -162,7 +162,7 @@ async def test_report_exposes_regime_criteria_and_warnings(monkeypatch):
     monkeypatch.setattr("trdex.services.runtime_config.get_config_service", lambda: cfg)
     report = await evaluate_readiness(_no_runs_session(), _settings())
     assert report.failures == ["No simulation data."]
-    assert len(report.warnings) == 1 and "changed 2 days ago" in report.warnings[0]
+    assert len(report.warnings) == 1 and "on for 2 days" in report.warnings[0]
     assert report.criteria["regime_cv_min"] == "0.002"
     assert report.criteria["regime_max_age_days"] == 60
 

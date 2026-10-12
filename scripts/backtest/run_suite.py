@@ -10,8 +10,8 @@ import csv
 from datetime import datetime, timezone
 from pathlib import Path
 
-from scripts.backtest.core import EngineParams, BacktestResult, run_backtest
-from scripts.backtest.strategies import (
+from trdex.research.engine import EngineParams, BacktestResult, run_backtest
+from trdex.research.strategies import (
     BaselineInverse,
     BaselineLive,
     LiveRuleEngine,

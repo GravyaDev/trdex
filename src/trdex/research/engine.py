@@ -129,7 +129,7 @@ def split_trades_by_quarter(trades: list[dict]) -> dict[str, list[dict]]:
 
 
 from typing import Literal, Protocol
-from scripts.backtest.indicators import (
+from trdex.research.indicators import (
     bollinger_bands,
     is_squeezing,
     sma,

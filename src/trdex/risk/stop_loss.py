@@ -46,6 +46,20 @@ class StopLossEvent:
     message: str = ""
 
 
+def _notify_kill_switch(reason: str) -> None:
+    """Push the activation to the operator (never raises)."""
+    try:
+        from trdex.notify import Event, notify_background
+
+        notify_background(
+            Event.KILL_SWITCH,
+            "Kill switch ACTIVATED — trading halted",
+            f"Reason: {reason}\nNo new orders until it is reset from the dashboard.",
+        )
+    except Exception:
+        logger.exception("[KillSwitch] activation notification failed")
+
+
 class KillSwitch:
     """Global trading halt. Once activated, blocks all new orders.
 
@@ -122,6 +136,7 @@ class KillSwitch:
                 self._activated_at = datetime.now(tz=timezone.utc)
                 logger.critical("[KillSwitch] ACTIVATED — %s", reason)
                 await self._persist()
+                _notify_kill_switch(reason)
 
     def activate(self, reason: str) -> None:
         """Synchronous activate for use outside async context (e.g. startup)."""
@@ -130,6 +145,7 @@ class KillSwitch:
             self._reason = reason
             self._activated_at = datetime.now(tz=timezone.utc)
             logger.critical("[KillSwitch] ACTIVATED — %s", reason)
+            _notify_kill_switch(reason)
 
     async def reset_async(self) -> None:
         async with self._lock:
