@@ -17,6 +17,15 @@ daily returns, and annualise the result with sqrt(252) — the standard
 finance convention. With <2 days of activity the Sharpe is left as
 ``None`` (insufficient data) and the gate is skipped, not failed.
 
+Volatility-regime bounds
+------------------------
+Live entries are gated on thresholds.regime_cv_min / regime_cv_max
+(Risk Gate 4c), produced by ``scripts/backtest/regime_range.py``. The
+gate is not ready until those bounds are set, coherent, and derived from
+data ending no more than ``regime_max_age_days`` ago (regime_data_end).
+If they changed within the last ``gate_min_days`` the report carries a
+warning: the simulation being judged did not run with them.
+
 Fail-closed: any data gap or computation error returns ``ready=False``.
 """
 
@@ -24,8 +33,9 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +47,12 @@ logger = logging.getLogger(__name__)
 
 MIN_TRADES_FOR_EVALUATION = 20  # Must have at least this many filled trades
 TRADING_DAYS_PER_YEAR = 252      # Standard equity-market annualisation factor
+REGIME_MAX_AGE_DAYS = 90         # default for thresholds.regime_max_age_days
+
+_REGIME_HOWTO = (
+    "run `python -m scripts.backtest.regime_range` and enter regime_cv_min, "
+    "regime_cv_max and regime_data_end in Risk Thresholds"
+)
 
 
 @dataclass
@@ -52,6 +68,7 @@ class ReadinessReport:
     kill_switch_events: int
     criteria: dict                   # the thresholds from config
     failures: list[str]             # human-readable list of unmet criteria
+    warnings: list[str] = field(default_factory=list)  # do not block, shown to the operator
 
 
 # ---------------------------------------------------------------------------
@@ -138,18 +155,150 @@ def _max_drawdown_from_equity(eod_equity: dict[date, float]) -> float:
     return max_dd
 
 
+def _parse_bound(name: str, raw: Any) -> tuple[float | None, str | None]:
+    """(value, error) for a regime bound. Blank or <= 0 means unset."""
+    if raw is None or str(raw).strip() == "":
+        return None, None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None, f"Regime bounds: {name} {raw!r} is not a number"
+    if not math.isfinite(value):
+        return None, f"Regime bounds: {name} {raw!r} is not a number"
+    return (value if value > 0 else None), None
+
+
+def _parse_timestamp(raw: Any) -> datetime | None:
+    """ISO date or datetime -> naive UTC datetime; None if blank or invalid."""
+    if raw is None or str(raw).strip() == "":
+        return None
+    try:
+        return _to_naive_utc(datetime.fromisoformat(str(raw).strip()))
+    except ValueError:
+        return None
+
+
+def regime_criteria(
+    *,
+    cv_min: Any,
+    cv_max: Any,
+    data_end: Any,
+    set_at: Any,
+    max_age_days: int,
+    min_days: int,
+    now: datetime,
+) -> tuple[list[str], list[str]]:
+    """Readiness failures and warnings for the volatility-regime bounds.
+
+    Takes the raw Runtime Config values (strings or None) and ``now`` as
+    naive UTC; pure so the rules are testable without a DB.
+
+    Failures: bounds unset, not numbers, min >= max; regime_data_end
+    missing, malformed, in the future, or older than ``max_age_days``.
+    Warnings: regime_set_at unknown, or more recent than ``min_days``
+    (the simulation being judged did not run with the current bounds).
+    """
+    failures: list[str] = []
+    warnings: list[str] = []
+    max_age = max_age_days if max_age_days and max_age_days > 0 else REGIME_MAX_AGE_DAYS
+
+    lo, lo_err = _parse_bound("regime_cv_min", cv_min)
+    hi, hi_err = _parse_bound("regime_cv_max", cv_max)
+    errors = [e for e in (lo_err, hi_err) if e]
+    if errors:
+        return errors, warnings
+    if lo is None or hi is None:
+        return [f"Regime bounds: not set — {_REGIME_HOWTO}"], warnings
+    if lo >= hi:
+        failures.append(f"Regime bounds: regime_cv_min {lo:g} >= regime_cv_max {hi:g}")
+
+    if data_end is None or str(data_end).strip() == "":
+        failures.append(f"Regime bounds: regime_data_end not set — {_REGIME_HOWTO}")
+    else:
+        end = _parse_timestamp(data_end)
+        if end is None:
+            failures.append(
+                f"Regime bounds: regime_data_end {data_end!r} is not a YYYY-MM-DD date"
+            )
+        else:
+            age = (now.date() - end.date()).days
+            if age < -1:  # one day of slack for time zones
+                failures.append(f"Regime bounds: regime_data_end {end.date()} is in the future")
+            elif age > max_age:
+                failures.append(
+                    f"Regime bounds: derived from data ending {end.date()} "
+                    f"({age} days ago > {max_age}) — refresh the OHLCV cache and re-run "
+                    "scripts/backtest/regime_range.py"
+                )
+
+    changed = _parse_timestamp(set_at)
+    if changed is None:
+        warnings.append(
+            "Regime bounds: change date unknown — cannot verify that the "
+            "simulation ran with them"
+        )
+    else:
+        days_with = (now - changed).days
+        if days_with < min_days:
+            warnings.append(
+                f"Regime bounds changed {days_with} days ago (< {min_days} gate days): "
+                "the simulation being judged did not run with the current bounds"
+            )
+    return failures, warnings
+
+
+def _regime_config(cfg: Any) -> dict[str, Any]:
+    """Raw regime values from Runtime Config, as ``regime_criteria`` kwargs."""
+    return {
+        "cv_min": cfg.get("thresholds", "regime_cv_min", ""),
+        "cv_max": cfg.get("thresholds", "regime_cv_max", ""),
+        "data_end": cfg.get("thresholds", "regime_data_end", ""),
+        "set_at": cfg.get("thresholds", "regime_set_at", ""),
+        "max_age_days": cfg.get_typed("thresholds", "regime_max_age_days", REGIME_MAX_AGE_DAYS),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
 
-async def evaluate_readiness(session: AsyncSession, settings) -> ReadinessReport:
+async def evaluate_readiness(
+    session: AsyncSession, settings, config: Any = None
+) -> ReadinessReport:
     """Evaluate whether simulation results meet the live-trading gate criteria.
 
-    Reads time coverage from ``agent_runs`` and trade P&L from
-    ``account_balance``. Fail-closed: missing data → not ready.
+    Reads time coverage from ``agent_runs``, trade P&L from
+    ``account_balance`` and the regime bounds from Runtime Config
+    (``config``, default: the process-wide service; CLIs pass one loaded
+    from the DB). Fail-closed: missing data → not ready.
     """
     failures: list[str] = []
+    now = datetime.now(tz=timezone.utc).replace(tzinfo=None)
+
+    # ---- 0. Runtime Config: gate days + regime bounds --------------------
+    # Read gate_min_days from Runtime Config if available, else fall back
+    # to the static settings value. This allows editing the gate from the
+    # dashboard without a redeploy. The regime criteria are evaluated even
+    # without simulation data, so the operator sees them from day one and
+    # sets the bounds before the simulation that will be judged.
+    if config is None:
+        from trdex.services.runtime_config import get_config_service
+        config = get_config_service()
+    _cfg = config
+    effective_min_days = (
+        _cfg.get_typed("thresholds", "gate_min_days", settings.gate_min_days)
+        if _cfg is not None else settings.gate_min_days
+    )
+    regime: dict[str, Any] = {}
+    if _cfg is None:
+        regime_failures = ["Regime bounds: Runtime Config unavailable (fail-closed)"]
+        regime_warnings: list[str] = []
+    else:
+        regime = _regime_config(_cfg)
+        regime_failures, regime_warnings = regime_criteria(
+            **regime, min_days=effective_min_days, now=now
+        )
 
     # ---- 1. Sim days from agent_runs.ran_at -----------------------------
     first_run = (
@@ -164,11 +313,11 @@ async def evaluate_readiness(session: AsyncSession, settings) -> ReadinessReport
             sharpe=None,
             max_drawdown_pct=0.0,
             kill_switch_events=0,
-            criteria=_criteria_dict(settings),
-            failures=["No simulation data."],
+            criteria=_criteria_dict(settings, effective_min_days, regime),
+            failures=["No simulation data.", *regime_failures],
+            warnings=regime_warnings,
         )
     first_run = _to_naive_utc(first_run)
-    now = datetime.now(tz=timezone.utc).replace(tzinfo=None)
     sim_days = (now - first_run).days
 
     # ---- 2. Trades + win rate from account_balance ----------------------
@@ -203,16 +352,6 @@ async def evaluate_readiness(session: AsyncSession, settings) -> ReadinessReport
     kill_switch_events = 0
 
     # ---- 5. Evaluate against gate criteria ------------------------------
-    # Read gate_min_days from Runtime Config if available, else fall back
-    # to the static settings value. This allows editing the gate from the
-    # dashboard without a redeploy.
-    from trdex.services.runtime_config import get_config_service
-    _cfg = get_config_service()
-    effective_min_days = (
-        _cfg.get_typed("thresholds", "gate_min_days", settings.gate_min_days)
-        if _cfg is not None else settings.gate_min_days
-    )
-
     if sim_days < effective_min_days:
         failures.append(
             f"Simulation days: {sim_days} < {effective_min_days} required"
@@ -245,6 +384,7 @@ async def evaluate_readiness(session: AsyncSession, settings) -> ReadinessReport
             f"Sharpe: {sharpe:.2f} < {settings.gate_min_sharpe:.2f} required"
         )
 
+    failures.extend(regime_failures)
     ready = len(failures) == 0
 
     return ReadinessReport(
@@ -255,16 +395,25 @@ async def evaluate_readiness(session: AsyncSession, settings) -> ReadinessReport
         sharpe=sharpe,
         max_drawdown_pct=max_drawdown_pct,
         kill_switch_events=kill_switch_events,
-        criteria=_criteria_dict(settings, effective_min_days),
+        criteria=_criteria_dict(settings, effective_min_days, regime),
         failures=failures,
+        warnings=regime_warnings,
     )
 
 
-def _criteria_dict(settings, effective_min_days: int | None = None) -> dict:
+def _criteria_dict(
+    settings, effective_min_days: int | None = None, regime: dict[str, Any] | None = None
+) -> dict:
+    regime = regime or {}
     return {
         "min_days": effective_min_days if effective_min_days is not None else settings.gate_min_days,
         "min_sharpe": settings.gate_min_sharpe,
         "max_drawdown": settings.gate_max_drawdown,
         "min_win_rate": settings.gate_min_win_rate,
         "min_trades": MIN_TRADES_FOR_EVALUATION,
+        "regime_cv_min": regime.get("cv_min") or None,
+        "regime_cv_max": regime.get("cv_max") or None,
+        "regime_data_end": regime.get("data_end") or None,
+        "regime_set_at": regime.get("set_at") or None,
+        "regime_max_age_days": regime.get("max_age_days") or REGIME_MAX_AGE_DAYS,
     }

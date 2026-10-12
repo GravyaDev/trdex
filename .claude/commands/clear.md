@@ -6,6 +6,7 @@ allowed-tools:
   - Edit
   - Write
   - Bash(date:*)
+  - Bash(bash:*)
 ---
 
 Save session state to a handoff and **stop**. Return control to the user.
@@ -27,7 +28,7 @@ Skip Step 1 reads. Distill from in-context memory only. Go directly to Step 3.
 ### Step 0: Reset gate files + get date
 
 ```bash
-date +"%Y-%m-%d %H:%M" && rm -f ".claude/logs/.quality-gate-active" ".claude/logs/.session-blocks-$(date +"%Y-%m-%d-%H")" ".claude/logs/.tool-call-count" ".claude/logs/.compaction-occurred"
+date +"%Y-%m-%d %H:%M" && rm -f ".claude/logs/.quality-gate-active" ".claude/logs/.stuck-detected" ".claude/logs/.tool-call-count" ".claude/logs/.compaction-occurred"
 ```
 
 ### Step 1: Read state (parallel, SKIP in emergency mode)
@@ -97,6 +98,22 @@ Format: `- [YYYY-MM-DD] /clear: [learning] | Evidence: [source]`
 **Rule of thumb**: when in doubt, nominate rather than promote. The auditor
 will review nominations on the next `/audit` or `/wrap-up`.
 
+### Step 5b: Stop session timer
+
+Stop the session timer so the elapsed time is recorded accurately:
+
+```bash
+bash "$CLAUDE_PROJECT_DIR/.claude/hooks/session-timer.sh" stop
+```
+
+If the output is a duration (e.g., "1h 23m"), include it in the handoff
+section of the daily note by appending to the Session Handoff block:
+```
+**Session duration:** [elapsed time]
+```
+
+If the timer was not running, skip silently.
+
 ### Step 6: Stop and report
 
 Output a **short** message to the user and **do not continue working**.
@@ -113,10 +130,8 @@ Location: Daily Notes/YYYY-MM-DD.md § Session Handoff HH:MM
 
 Next action recorded: [one-line summary of the Next field from the handoff]
 
-To continue this work, close this session and open a fresh one. In the
-new session, read the handoff section of the daily note and pick up from
-the Next action. Kloudify's post-compact and session-start hooks will
-orient you automatically.
+To continue this work, open a fresh session and run /resume.
+It will load the handoff, restart the timer, and pick up where you left off.
 ```
 
 Then **stop**. Wait for the user to close the session or give a new

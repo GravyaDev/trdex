@@ -507,10 +507,13 @@ async def step4_readiness(engine):
 
     from trdex.config import get_settings
     from trdex.risk.readiness import evaluate_readiness
+    from trdex.services.runtime_config import RuntimeConfigService
 
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    cfg = RuntimeConfigService(session_factory)
+    await cfg.load(categories={"thresholds"})
     async with session_factory() as session:
-        return await evaluate_readiness(session, get_settings())
+        return await evaluate_readiness(session, get_settings(), cfg)
 
 
 # ---------------------------------------------------------------------------
@@ -740,6 +743,8 @@ def print_final_report(
     print(f"  VERDICT (readiness gate): {readiness_verdict}")
     if readiness_report.failures:
         print(f"  failures: {readiness_report.failures}")
+    if readiness_report.warnings:
+        print(f"  warnings: {readiness_report.warnings}")
 
     # ---- step 5 ---------------------------------------------------------
     print("\n[5/5] Coherence checks")

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from sqlalchemy import select
+from sqlalchemy import Integer, select
 
 from trdex.api.app import verify_api_key
 from trdex.api.validators import (
@@ -219,3 +219,212 @@ async def update_feed_selection(
         raise HTTPException(status_code=400, detail=f"No valid feeds. Available: {sorted(available)}")
     set_selected_feeds(valid)
     return await get_feed_selection(_key)
+
+
+# ── Agent LLM config CRUD ───────────────────────────────────────────────
+
+
+class AgentConfigResponse(BaseModel):
+    agent_name: str
+    provider: str
+    model_id: str
+    temperature: float
+    max_tokens: int
+    top_p: float
+    system_prompt: str
+    llm_enabled: bool
+    base_url: str = ""
+
+
+class AgentConfigUpdateBody(BaseModel):
+    provider: str | None = None
+    model_id: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    top_p: float | None = None
+    system_prompt: str | None = None
+    llm_enabled: bool | None = None
+    base_url: str | None = None
+
+
+@router.get("/config")
+async def get_all_agent_configs(
+    _key: str = Depends(verify_api_key),
+) -> list[AgentConfigResponse]:
+    """Return LLM configuration for all agents."""
+    if _session_factory is None:
+        raise HTTPException(status_code=503, detail="Not initialised.")
+
+    from trdex.storage.agent_config_repo import AgentConfigRepository
+
+    async with _session_factory() as session:
+        repo = AgentConfigRepository(session)
+        rows = await repo.get_all()
+
+    return [
+        AgentConfigResponse(
+            agent_name=r.agent_name,
+            provider=r.provider,
+            model_id=r.model_id,
+            temperature=float(r.temperature),
+            max_tokens=r.max_tokens,
+            top_p=float(r.top_p),
+            system_prompt=r.system_prompt,
+            llm_enabled=r.llm_enabled,
+            base_url=r.base_url or "",
+        )
+        for r in rows
+    ]
+
+
+@router.get("/config/{agent_name}")
+async def get_agent_config(
+    agent_name: str,
+    _key: str = Depends(verify_api_key),
+) -> AgentConfigResponse:
+    """Return LLM configuration for a single agent."""
+    if _session_factory is None:
+        raise HTTPException(status_code=503, detail="Not initialised.")
+
+    from trdex.storage.agent_config_repo import AgentConfigRepository
+
+    async with _session_factory() as session:
+        repo = AgentConfigRepository(session)
+        r = await repo.get(agent_name)
+    if r is None:
+        raise HTTPException(status_code=404, detail=f"No config for agent '{agent_name}'")
+    return AgentConfigResponse(
+        agent_name=r.agent_name,
+        provider=r.provider,
+        model_id=r.model_id,
+        temperature=float(r.temperature),
+        max_tokens=r.max_tokens,
+        top_p=float(r.top_p),
+        system_prompt=r.system_prompt,
+        llm_enabled=r.llm_enabled,
+    )
+
+
+@router.put("/config/{agent_name}")
+async def update_agent_config(
+    agent_name: str,
+    body: AgentConfigUpdateBody,
+    _key: str = Depends(verify_api_key),
+) -> AgentConfigResponse:
+    """Update LLM configuration for an agent. Only provided fields are changed."""
+    if _session_factory is None:
+        raise HTTPException(status_code=503, detail="Not initialised.")
+
+    # Validate prompt contains required keywords if being updated
+    if body.system_prompt is not None and body.system_prompt.strip():
+        prompt_lower = body.system_prompt.lower()
+        if "confidence" not in prompt_lower or "hold" not in prompt_lower:
+            raise HTTPException(
+                status_code=400,
+                detail="System prompt must contain 'confidence' and 'HOLD' keywords (safety requirement).",
+            )
+
+    from trdex.storage.agent_config_repo import AgentConfigRepository
+
+    async with _session_factory() as session:
+        repo = AgentConfigRepository(session)
+        r = await repo.update_config(
+            agent_name,
+            provider=body.provider,
+            model_id=body.model_id,
+            temperature=body.temperature,
+            max_tokens=body.max_tokens,
+            top_p=body.top_p,
+            system_prompt=body.system_prompt,
+            llm_enabled=body.llm_enabled,
+            base_url=body.base_url,
+        )
+    if r is None:
+        raise HTTPException(status_code=404, detail=f"No config for agent '{agent_name}'")
+    return AgentConfigResponse(
+        agent_name=r.agent_name,
+        provider=r.provider,
+        model_id=r.model_id,
+        temperature=float(r.temperature),
+        max_tokens=r.max_tokens,
+        top_p=float(r.top_p),
+        system_prompt=r.system_prompt,
+        llm_enabled=r.llm_enabled,
+    )
+
+
+class LLMUsageSummary(BaseModel):
+    period: str
+    total_calls: int
+    total_input_tokens: int
+    total_output_tokens: int
+    total_cost_usd: float
+    fallback_count: int
+    by_agent: dict[str, dict]
+
+
+@router.get("/llm-usage")
+async def get_llm_usage(
+    period: str = "today",
+    _key: str = Depends(verify_api_key),
+) -> LLMUsageSummary:
+    """Return LLM usage stats for today or this month."""
+    if _session_factory is None:
+        raise HTTPException(status_code=503, detail="Not initialised.")
+
+    from datetime import datetime, timezone
+    from sqlalchemy import func
+
+    from trdex.storage.agent_config_models import AgentLLMUsageRecord
+
+    now = datetime.now(tz=timezone.utc).replace(tzinfo=None)
+    if period == "month":
+        since = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        since = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    async with _session_factory() as session:
+        q = (
+            select(
+                AgentLLMUsageRecord.agent_name,
+                func.count().label("calls"),
+                func.sum(AgentLLMUsageRecord.input_tokens).label("input_tokens"),
+                func.sum(AgentLLMUsageRecord.output_tokens).label("output_tokens"),
+                func.sum(AgentLLMUsageRecord.cost_usd).label("cost_usd"),
+                func.sum(func.cast(AgentLLMUsageRecord.fallback_used, Integer)).label("fallbacks"),
+            )
+            .where(AgentLLMUsageRecord.created_at >= since)
+            .group_by(AgentLLMUsageRecord.agent_name)
+        )
+        result = await session.execute(q)
+        rows = result.all()
+
+    by_agent: dict[str, dict] = {}
+    total_calls = 0
+    total_in = 0
+    total_out = 0
+    total_cost = 0.0
+    total_fb = 0
+    for r in rows:
+        by_agent[r.agent_name] = {
+            "calls": r.calls,
+            "input_tokens": int(r.input_tokens or 0),
+            "output_tokens": int(r.output_tokens or 0),
+            "cost_usd": float(r.cost_usd or 0),
+            "fallbacks": int(r.fallbacks or 0),
+        }
+        total_calls += r.calls
+        total_in += int(r.input_tokens or 0)
+        total_out += int(r.output_tokens or 0)
+        total_cost += float(r.cost_usd or 0)
+        total_fb += int(r.fallbacks or 0)
+
+    return LLMUsageSummary(
+        period=period,
+        total_calls=total_calls,
+        total_input_tokens=total_in,
+        total_output_tokens=total_out,
+        total_cost_usd=total_cost,
+        fallback_count=total_fb,
+        by_agent=by_agent,
+    )

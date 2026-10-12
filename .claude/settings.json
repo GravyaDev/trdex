@@ -7,6 +7,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/check-quality-gate.sh\"",
+            "statusMessage": "Checking quality gate..."
+          },
+          {
+            "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-bash.sh\"",
             "statusMessage": "Checking command safety..."
           },
@@ -20,6 +25,11 @@
       {
         "matcher": "Write|Edit|NotebookEdit",
         "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/check-quality-gate.sh\"",
+            "statusMessage": "Checking quality gate..."
+          },
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/backup-before-write.sh\"",
@@ -68,6 +78,44 @@
             "statusMessage": "Checking config drift..."
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/success-streak.sh\"",
+            "async": true,
+            "statusMessage": "Tracking success streak..."
+          }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{ cozempic checkpoint 2>/dev/null || python3 -m cozempic checkpoint 2>/dev/null; } || true # cozempic-hook-schema=v5"
+          }
+        ]
+      },
+      {
+        "matcher": "TaskCreate|TaskUpdate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{ cozempic checkpoint 2>/dev/null || python3 -m cozempic checkpoint 2>/dev/null; } || true # cozempic-hook-schema=v5"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{ cozempic remind 2>/dev/null || python3 -m cozempic remind 2>/dev/null; } || true # cozempic-hook-schema=v5"
+          }
+        ]
       }
     ],
     "PostToolUseFailure": [
@@ -98,6 +146,15 @@
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-compact-handoff.sh\"",
             "timeout": 5,
             "statusMessage": "Saving state before compaction..."
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "TRANSCRIPT=$(cat | PYTHONIOENCODING=utf-8 python3 -c \"import sys,json; print(json.load(sys.stdin).get('transcript_path',''))\" 2>/dev/null); { cozempic checkpoint 2>/dev/null || python3 -m cozempic checkpoint 2>/dev/null; } || true; { cozempic digest flush ${TRANSCRIPT:+--session \"$TRANSCRIPT\"} 2>/dev/null || python3 -m cozempic digest flush ${TRANSCRIPT:+--session \"$TRANSCRIPT\"} 2>/dev/null; } || true; echo 'Cozempic: context checkpointed' # cozempic-hook-schema=v5"
           }
         ]
       }
@@ -142,22 +199,35 @@
             "statusMessage": "Restoring context after compaction..."
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HOOK_DATA=$(cat); SESSION_ID=$(echo \"$HOOK_DATA\" | PYTHONIOENCODING=utf-8 python3 -c \"import sys,json,re; s=json.load(sys.stdin).get('session_id',''); print(re.sub(r'[^A-Za-z0-9_-]','_',s))\" 2>/dev/null); TRANSCRIPT=$(echo \"$HOOK_DATA\" | PYTHONIOENCODING=utf-8 python3 -c \"import sys,json; print(json.load(sys.stdin).get('transcript_path',''))\" 2>/dev/null); { cozempic guard --daemon ${TRANSCRIPT:+--session \"$TRANSCRIPT\"} 2>/dev/null || python3 -m cozempic guard --daemon ${TRANSCRIPT:+--session \"$TRANSCRIPT\"} 2>/dev/null; } || true; { cozempic digest inject ${TRANSCRIPT:+--session \"$TRANSCRIPT\"} 2>/dev/null || python3 -m cozempic digest inject ${TRANSCRIPT:+--session \"$TRANSCRIPT\"} 2>/dev/null; } || true; [ -n \"$SESSION_ID\" ] && (export COZEMPIC_NO_GLOBAL_INIT=1; if command -v flock >/dev/null 2>&1; then flock -n 9 || exit 0; fi; PRE=$(cozempic --version 2>/dev/null | awk '/^cozempic /{print $2; exit}'); { uv pip install --upgrade cozempic --quiet 2>/dev/null || pip install --upgrade cozempic --quiet --disable-pip-version-check 2>/dev/null || python3 -m pip install --upgrade cozempic --quiet --disable-pip-version-check 2>/dev/null; } && POST=$(cozempic --version 2>/dev/null | awk '/^cozempic /{print $2; exit}') && [ -n \"$POST\" ] && [ \"$PRE\" != \"$POST\" ] && { cozempic guard --reload-self ${TRANSCRIPT:+--session \"$TRANSCRIPT\"} 2>/dev/null || python3 -m cozempic guard --reload-self ${TRANSCRIPT:+--session \"$TRANSCRIPT\"} 2>/dev/null; }; { cozempic guard --daemon ${TRANSCRIPT:+--session \"$TRANSCRIPT\"} 2>/dev/null || python3 -m cozempic guard --daemon ${TRANSCRIPT:+--session \"$TRANSCRIPT\"} 2>/dev/null; } || true; ) 9>\"/tmp/cozempic_hook_${SESSION_ID:0:12}.lock\" >/dev/null 2>&1 & echo 'Cozempic: guard active' # cozempic-hook-schema=v5"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{ cozempic post-compact 2>/dev/null || python3 -m cozempic post-compact 2>/dev/null; } || true; { cozempic digest inject 2>/dev/null || python3 -m cozempic digest inject 2>/dev/null; } || true; echo 'Cozempic: context recovered' # cozempic-hook-schema=v5"
+          }
+        ]
       }
     ],
     "Stop": [
       {
+        "matcher": "",
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "You are a JSON-only response bot. Output raw JSON with no markdown, no code fences, no prose. Review this conversation and return exactly one JSON object: {\"decision\":\"allow\",\"learning\":null,\"task_type\":\"other\"} — decision is \"allow\" if all user-requested tasks were completed, \"block\" if something was missed (add \"reason\" field). learning is a one-sentence lesson if errors were resolved (root cause + fix), otherwise null. task_type is one of: build, debug, refactor, test, docs, research, deploy, admin, setup, other. RESPOND WITH ONLY THE JSON OBJECT. NO OTHER TEXT.",
-            "model": "haiku",
-            "timeout": 15
-          },
-          {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/log-stop-verdict.sh\"",
-            "async": true,
-            "statusMessage": "Logging session verdict..."
+            "command": "TRANSCRIPT=$(cat | PYTHONIOENCODING=utf-8 python3 -c \"import sys,json; print(json.load(sys.stdin).get('transcript_path',''))\" 2>/dev/null); { cozempic checkpoint 2>/dev/null || python3 -m cozempic checkpoint 2>/dev/null; } || true; { cozempic digest flush ${TRANSCRIPT:+--session \"$TRANSCRIPT\"} 2>/dev/null || python3 -m cozempic digest flush ${TRANSCRIPT:+--session \"$TRANSCRIPT\"} 2>/dev/null; } || true # cozempic-hook-schema=v5"
           }
         ]
       }

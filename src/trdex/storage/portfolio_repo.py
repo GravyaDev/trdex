@@ -72,6 +72,27 @@ class PortfolioRepository:
         )
         return list(result.scalars().all())
 
+    async def get_open_by_symbol_side(
+        self,
+        symbol: str,
+        side: str,
+    ) -> PositionRecord | None:
+        """Return the single open position matching (symbol, side), or None.
+
+        Used by the Telegram signal dedup gate to enforce
+        "max 1 open position per (symbol, direction)" cheaply
+        (indexed lookup rather than Python-side filter).
+        """
+        stmt = (
+            select(PositionRecord)
+            .where(PositionRecord.symbol == symbol)
+            .where(PositionRecord.side == side)
+            .where(PositionRecord.status == "open")
+            .limit(1)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def get_closed_positions(
         self,
         since: datetime | None = None,

@@ -7,6 +7,7 @@ allowed-tools:
   - Write
   - Bash(date:*)
   - Bash(git:*)
+  - Bash(bash:*)
 ---
 
 Begin a working session. Load context, create today's daily note, review tasks.
@@ -17,6 +18,28 @@ Begin a working session. Load context, create today's daily note, review tasks.
 
 ```bash
 date +"%Y-%m-%d %H:%M %A"
+```
+
+### Step 1b: Session timer
+
+**Guard check** — detect if a previous session was never closed:
+
+```bash
+bash "$CLAUDE_PROJECT_DIR/.claude/hooks/session-timer.sh" guard
+```
+
+If the output contains `STALE_SESSION`, a previous session was not properly
+wrapped up. Extract the stale session's start time and elapsed duration from
+the output. Log it in today's daily note under Notes:
+```
+- Previous session (started STARTED_AT) was not wrapped up. Elapsed: FORMATTED.
+```
+Then proceed — the new timer start below will overwrite the stale state.
+
+**Start the timer:**
+
+```bash
+bash "$CLAUDE_PROJECT_DIR/.claude/hooks/session-timer.sh" start
 ```
 
 ### Step 2: Load memory (parallel reads)
@@ -129,10 +152,21 @@ Type "yes" to update, or "skip" to continue without updating.
 
 **5e. If the user says yes**, execute the upgrade:
 
-1. Run `bash <kloudify-source>/install.sh <project-dir> --upgrade`
-   (the source path is NOT in the version marker — the agent must
-   ask the user where the Kloudify repo is cloned, or check if it
-   is a known path from memory.md or the user's environment).
+1. Run the upgrade using `--from-remote` so the installer fetches the
+   latest tagged release directly from GitHub instead of relying on a
+   local clone that may be stale:
+
+   ```bash
+   curl -sL https://raw.githubusercontent.com/GravyaDev/Kloudify/main/install.sh -o /tmp/kloudify-install.sh
+   bash /tmp/kloudify-install.sh "$CLAUDE_PROJECT_DIR" --upgrade --from-remote
+   rm -f /tmp/kloudify-install.sh
+   ```
+
+   The installer will shallow-clone Kloudify, checkout the latest tag,
+   and apply the upgrade. No local clone is needed in the target
+   project. If the user has a local clone they prefer to upgrade from
+   (for testing unreleased work), they can say so and the agent should
+   instead run `bash <local-clone>/install.sh "$CLAUDE_PROJECT_DIR" --upgrade`.
 
 2. After install.sh finishes, perform **knowledge-base migration**:
    - Read `.claude/universal-rules.md` (the new version just installed)
@@ -193,7 +227,7 @@ sections of project-stack.md and derive which audit tools to run:
 - "Node.js (npm)" or Node dependency sections present → `npm audit`
 - "Node.js (pnpm)" → `pnpm audit`
 - "Node.js (yarn)" → `yarn audit`
-- "Python (pip)" or Python dependency sections present → `pip-audit`
+- "Python (pip)" or Python dependency sections present → `pip-audit -r <service>/requirements.lock` if a `requirements.lock` file exists alongside `requirements.txt` (lockfile-based audit — audits exact container pins, not the current interpreter); otherwise fall back to `pip-audit -r <service>/requirements.txt`
 - "Python (pyproject)" → `pip-audit` (via pyproject.toml)
 - "Rust (cargo)" → `cargo audit`
 - "Go (modules)" → `govulncheck`

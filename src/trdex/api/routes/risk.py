@@ -90,6 +90,7 @@ class ThresholdsBody(BaseModel):
     position_tp_pct: float | None = None
     trailing_stop_pct: float | None = None
     daily_drawdown_pct: float | None = None
+    open_positions_loss_pct: float | None = None
     max_drawdown_pct: float | None = None
 
 
@@ -121,6 +122,10 @@ async def update_thresholds(
         if not 0.01 <= body.daily_drawdown_pct <= 0.50:
             raise HTTPException(status_code=400, detail="daily_drawdown_pct must be 1%-50%")
         _monitor._daily_dd_pct = body.daily_drawdown_pct
+    if body.open_positions_loss_pct is not None:
+        if not 0.01 <= body.open_positions_loss_pct <= 0.50:
+            raise HTTPException(status_code=400, detail="open_positions_loss_pct must be 1%-50%")
+        _monitor._open_loss_pct = body.open_positions_loss_pct
     if body.max_drawdown_pct is not None:
         if not 0.05 <= body.max_drawdown_pct <= 1.0:
             raise HTTPException(status_code=400, detail="max_drawdown_pct must be 5%-100%")

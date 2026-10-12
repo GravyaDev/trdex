@@ -7,6 +7,7 @@ allowed-tools:
   - Write
   - Bash(date:*)
   - Bash(git:*)
+  - Bash(bash:*)
   - Agent
 ---
 
@@ -197,10 +198,41 @@ Keeps project docs in sync with the week's changes. Output goes to the daily not
 
 Read `.claude/logs/incident-log.md`. Summarize any notable events.
 
+### Step 7b: Append deterministic daily digest
+
+Generate a deterministic digest of today's activity (commits, tool failures by
+category, incidents by severity) and append it to today's daily note under
+**Notes**. Zero LLM calls — pure aggregation over local logs.
+
+```bash
+bash "$CLAUDE_PROJECT_DIR/.claude/hooks/wrap-up-digest.sh" >> "Daily Notes/$(date +%Y-%m-%d).md"
+```
+
+This replaces the old `verdicts.jsonl` analysis that was deprecated along with
+the Stop-hook LLM verdict system. Signal sources are `failure-log.md`,
+`incident-log.md`, and git.
+
 ### Step 8: Preview tomorrow
 
 Based on Task Board and Open Threads, suggest 1-3 priorities for tomorrow.
 Add them to Task Board → Today.
+
+### Step 8b: Stop session timer
+
+Stop the session timer and record the total working time:
+
+```bash
+bash "$CLAUDE_PROJECT_DIR/.claude/hooks/session-timer.sh" stop
+```
+
+The output is the formatted elapsed time (e.g., "2h 34m").
+Add it to today's daily note under End of Day Summary as the first line:
+```
+- **Session duration**: [elapsed time]
+```
+
+If the timer was not running (e.g., /start was never called), note
+"Session duration: unknown (timer was not started)" instead.
 
 ### Step 9: Update daily note
 
@@ -210,6 +242,31 @@ Add to `Daily Notes/YYYY-MM-DD.md` → End of Day Summary:
 - Open items carried forward
 - Tomorrow's priorities
 
-### Step 10: Sign off
+### Step 10: Push day's work (user confirmation required)
+
+Check if there are unpushed commits on the current branch:
+
+```bash
+git log @{upstream}..HEAD --oneline 2>/dev/null
+```
+
+If there are **no unpushed commits**, skip this step silently.
+
+If there **are** unpushed commits, show the user a summary:
+
+```
+Unpushed commits (N):
+<list of one-line commit summaries>
+
+Push to origin/<branch>?
+```
+
+- **User says yes**: run `git push` and report the result.
+- **User says no/skip**: note "Push skipped by user" in the daily note
+  under Notes, and move on.
+
+Do NOT push without explicit user confirmation. Do NOT use `--force`.
+
+### Step 11: Sign off
 
 Brief message: what was accomplished today, what's next tomorrow.

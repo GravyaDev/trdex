@@ -1,10 +1,9 @@
-# Kloudify — repo base MUST stay pure.
-# A fresh `git clone kloudify` must yield the PRODUCT only: no session
-# state, no personal notes, no project-specific data. Everything that
-# accumulates during use of Kloudify lives outside the versioned tree.
-#
-# Rule of thumb: if a file grows or changes just because you *used*
-# Kloudify (instead of *developed* it), it belongs here.
+# trdex-llm — gitignore adattato al repo di progetto.
+# NB: il .gitignore originale veniva dal repo base di Kloudify e
+# ignorava pezzi di infrastruttura di progetto (CLAUDE.md, Task Board.md,
+# Riferimenti/, .github/, .mcp.json, interi .claude/commands|hooks|agents|skills).
+# Qui teniamo tracciati gli asset di progetto e ignoriamo solo
+# runtime/volatili/secret.
 
 # ═══════════════════════════════════════════════════════
 # Personal / environment overrides
@@ -13,34 +12,42 @@
 CLAUDE.local.md
 
 # ═══════════════════════════════════════════════════════
-# Runtime state (never versioned — volatile, per-session, per-project)
+# Kloudify runtime state (per-session, volatile)
+# Tenere tracciati:
+#   .claude/commands/  .claude/hooks/  .claude/agents/
+#   .claude/skills/    .claude/universal-rules.md
+#   .claude/knowledge-base.md.template  .claude/command-index.md
+# Ignorare solo lo state che cambia ad ogni sessione:
 # ═══════════════════════════════════════════════════════
+.claude/memory.md
+.claude/session-timer.json
+.claude/project-stack.md
+.claude/project-structure.md
+.claude/knowledge-base.md
+.claude/settings.local.json
+.claude/kloudify-version.json
 .claude/logs/
 .claude/agent-memory/
-.claude/backups/
-.claude/hooks/__counter
-
-# ═══════════════════════════════════════════════════════
-# Session context & personal working notes
-# ═══════════════════════════════════════════════════════
-# These are "the developer's mind during a session" — they must never
-# leak from one clone to another. The base repo must be empty of them.
-.claude/memory.md
-.claude/knowledge-base.md
-.claude/knowledge-nominations.md
 .claude/reports/
-.claude/plans/
+.claude/backups/
+.claude/knowledge-nominations.md
+.claude/.cozempic-init.lock
+.claude/settings.*.bak
+
+# Gossipcat runtime state
+.gossip/
 
 # ═══════════════════════════════════════════════════════
-# Project workspace (local to whichever project uses Kloudify)
+# Project workspace (per-user notes, non versionato)
 # ═══════════════════════════════════════════════════════
-# These files exist only in real project deployments of Kloudify,
-# never in the base repo. Their presence in a clone of the base would
-# contaminate the fresh deployment with stale notes from development.
 Daily Notes/
 Scratchpad.md
-Task Board.md
 __NEEDS_ONBOARD
+
+# ═══════════════════════════════════════════════════════
+# Legacy design docs (non più versionati)
+# ═══════════════════════════════════════════════════════
+Riferimenti/
 
 # ═══════════════════════════════════════════════════════
 # Python
@@ -91,21 +98,26 @@ htmlcov/
 pgdata/
 
 # ═══════════════════════════════════════════════════════
-# Playwright MCP artefacts (screenshots, console logs, yaml snapshots)
-# left behind by browser automation sessions during dashboard testing.
+# Playwright MCP artefacts
 # ═══════════════════════════════════════════════════════
 .playwright-mcp/
 dashboard-*.png
-# package.json is created by the Playwright MCP server on first run
-# for its own JS environment — it does not belong to trdex.
 package.json
 package-lock.json
 
+# ═══════════════════════════════════════════════════════
 # Telegram operational data (dumps, channel lists)
+# ═══════════════════════════════════════════════════════
 telegram_*_dump.json
 telegram_channel_dump.json
 channels_to_join.txt
 channels_failed_lookup.md
+
+# ═══════════════════════════════════════════════════════
+# Emergent reports + stray composer dir
+# ═══════════════════════════════════════════════════════
+docs/Report TrdeX LLM di Emergent.md
+trdex composer/
 
 # Backtest OHLCV cache (regenerable from Binance, ~50MB)
 scripts/data/ohlcv_5y/

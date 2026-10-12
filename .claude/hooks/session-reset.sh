@@ -12,11 +12,10 @@ mkdir -p "$LOG_DIR"
 # 1. Reset stale gate files (prevents cross-session deadlocks)
 # ═══════════════════════════════════════════════════════
 rm -f "$LOG_DIR/.quality-gate-active" \
+      "$LOG_DIR/.stuck-detected" \
+      "$LOG_DIR/.gate-warning-acknowledged" \
       "$LOG_DIR/.tool-call-count" \
       "$LOG_DIR/.compaction-occurred" 2>/dev/null
-
-# Clean up stale session-blocks files (older than current hour)
-find "$LOG_DIR" -name ".session-blocks-*" -mmin +120 -delete 2>/dev/null
 
 # ═══════════════════════════════════════════════════════
 # 2. Validate hook scripts are executable

@@ -1,6 +1,13 @@
-"""Technical indicators computed on polars DataFrames."""
+"""Technical indicators computed on polars DataFrames.
+
+Also exposes lightweight list-based helpers (``sma_from_list``,
+``classify_volatility``, ``volume_ratio``) used by agents and the
+market-episode generator — no Polars dependency for those.
+"""
 
 from __future__ import annotations
+
+import statistics
 
 import polars as pl
 
@@ -86,6 +93,64 @@ def bollinger_bands(
     lower = (rolling_mean - std_dev * rolling_std).alias("bb_lower")
 
     return pl.DataFrame([upper, rolling_mean, lower])
+
+
+# ---------------------------------------------------------------------------
+# List-based helpers (no Polars needed — used by agents & episode generator)
+# ---------------------------------------------------------------------------
+
+
+def sma_from_list(closes: list[float], period: int) -> float | None:
+    """Simple Moving Average over the last *period* values.
+
+    Returns ``None`` if there are fewer than ``period`` data points.
+    """
+    if len(closes) < period:
+        return None
+    return statistics.mean(closes[-period:])
+
+
+def classify_volatility(closes: list[float], window: int = 20) -> tuple[str, float | None]:
+    """Classify recent volatility regime from close prices.
+
+    Returns ``(label, cv)`` where *label* is one of ``"low"``, ``"medium"``,
+    ``"high"``, ``"unknown"`` and *cv* is the coefficient of variation
+    (``stdev / mean``) or ``None`` when data is insufficient.
+
+    Thresholds: <1% low, 1–3% medium, >3% high.
+    """
+    segment = closes[-window:] if len(closes) >= window else closes
+    if len(segment) < 3:
+        return "unknown", None
+    mean = statistics.mean(segment)
+    if mean == 0:
+        return "unknown", None
+    cv = statistics.stdev(segment) / mean
+    if cv < 0.01:
+        return "low", cv
+    if cv < 0.03:
+        return "medium", cv
+    return "high", cv
+
+
+def volume_ratio(volumes: list[float], window: int = 20) -> float | None:
+    """Ratio of most-recent volume to the trailing *window* average.
+
+    Returns ``None`` when there are fewer than ``window + 1`` data points
+    (the baseline needs at least *window* values and the current bar is
+    compared against it).
+    """
+    if len(volumes) < window + 1:
+        return None
+    baseline = statistics.mean(volumes[-(window + 1):-1])
+    if baseline == 0:
+        return None
+    return volumes[-1] / baseline
+
+
+# ---------------------------------------------------------------------------
+# DataFrame-level composite helper
+# ---------------------------------------------------------------------------
 
 
 def add_indicators(

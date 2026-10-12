@@ -69,21 +69,29 @@ For every task reviewed, check:
 
 ### 5. Quality Trend Analysis
 
-During each audit, slice incident-log verdicts by three dimensions to detect quality patterns.
-Verdicts are tagged: `[session:YYYY-MM-DD-HH] [task:TYPE] [model:NAME]`
+During each audit, scan `.claude/logs/failure-log.md` and `.claude/logs/incident-log.md` for
+quality patterns. These are the two authoritative sources — failure-log captures real tool
+failures categorised by stuck-detector, incident-log captures hook blocks and severity events.
 
-**Three dimensions to check:**
+**Signals to check:**
 
-1. **Session trend**: grep for current session ID in incident-log. If 2+ BLOCKED verdicts in the same session = QUALITY-WARN. Recommend `/clear` immediately — this is context degradation.
-2. **Task-type trend**: grep last 20 verdicts by task type. If any task type has >30% block rate = flag as SOP gap. The procedure needs fixing, not the context. Propose SOP revision.
-3. **Model trend**: grep last 20 verdicts by model. If one model has significantly higher block rate than others = flag as routing issue.
+1. **Same-session clustering** — if the current session has 3+ entries of the same failure
+   category in failure-log (the threshold that activates the quality gate), flag as
+   QUALITY-WARN. Context degradation suspected — recommend `/clear`.
+2. **Cross-session recurring category** — if the same failure category appears in 3+ distinct
+   sessions over the last 7 days, flag as SOP gap. The procedure or tool needs fixing, not
+   the session.
+3. **HIGH/CRITICAL incident frequency** — if incident-log shows 2+ HIGH or any CRITICAL event
+   unresolved for >24h, escalate to INCIDENT verdict regardless of the task under audit.
 
 **Report format** (append to audit verdict):
 ```
-Quality: [session: OK 0/5 blocks | task: export WARN 2/6 blocks | model: sonnet OK 1/12 blocks]
+Quality: [session: OK 0/N failures | recurring: none | incidents: 0 HIGH unresolved]
 ```
 
-**Critical distinction:** Same-session clustering = context degradation (run /clear). Cross-session task-type clustering = SOP gap (fix the procedure). Model-specific clustering = routing problem (switch models).
+**Critical distinction:** Same-session clustering = context degradation (run /clear).
+Cross-session category clustering = SOP gap (fix the procedure). Unresolved HIGH/CRITICAL
+incidents = escalate regardless of task.
 </responsibilities>
 
 <output_format>

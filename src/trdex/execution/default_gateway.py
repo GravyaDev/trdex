@@ -113,11 +113,15 @@ class DefaultExecutionGateway(ExecutionGateway):
         qty: float,
         price: float,
         idempotency_key: str | None = None,
+        reduce_only: bool = False,
     ) -> OrderResult:
         """Entry point for the executor agent node.
 
         1. Idempotency check — reject duplicate orders within TTL
-        2. Kill-switch check — hard block before any I/O
+        2. Kill-switch check — hard block before any I/O, except for
+           ``reduce_only`` orders (closing an existing position). The kill
+           switch halts new risk; it must never trap the system in the
+           positions it already holds.
         3. Build Order from agent-domain params
         4. Route to Simulator or LiveExecutor
         5. Convert result to OrderResult
@@ -130,8 +134,13 @@ class DefaultExecutionGateway(ExecutionGateway):
         # Gate: kill switch
         if self._kill_switch.active:
             reason = self._kill_switch.status.get("reason", "kill switch active")
-            logger.warning("[Gateway] order blocked by kill switch: %s", reason)
-            return OrderResult(status="rejected", message=f"Kill switch: {reason}")
+            if not reduce_only:
+                logger.warning("[Gateway] order blocked by kill switch: %s", reason)
+                return OrderResult(status="rejected", message=f"Kill switch: {reason}")
+            logger.warning(
+                "[Gateway] kill switch active (%s) — allowing reduce-only close %s %s",
+                reason, direction, symbol,
+            )
 
         order = Order(
             symbol=symbol,

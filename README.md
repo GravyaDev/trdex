@@ -55,7 +55,7 @@ trdex runs a continuous trading loop that monitors multiple symbols on Binance, 
 ## Stack
 
 - **Runtime**: Python 3.12+, asyncio
-- **AI framework**: LangGraph + LangChain Core (today: deterministic rule engine; branch `llm-agents`: real LLM agents)
+- **AI framework**: LangGraph + LangChain Core — LLM agents (Analyst, Risk annotation) with the deterministic rule engine as fallback when the LLM is disabled, over budget or failing
 - **Database**: PostgreSQL + TimescaleDB 2.17 (via asyncpg + SQLAlchemy 2.x async)
 - **Vector store**: Qdrant 1.13 (news/sentiment context for agent decisions)
 - **Embeddings**: Jina v3 (1024-dim, via httpx — no SDK dependency)
@@ -137,6 +137,20 @@ This prevents whipsaw stop-outs on volatile altcoins (e.g., ENJ with CV=13% gets
 
 Per-symbol overrides are available via the `/v1/risk/symbol-config` API and the dashboard "Per-Symbol Risk Thresholds" expander.
 
+**Position size** is risk-based: `size = min(max_position_pct, risk_per_trade_pct / effective_sl)`, so a wider adaptive stop means a smaller position, not more risk per trade.
+
+**Volatility-regime gate** (Risk Gate 4c): new entries are blocked when the CV of the last 20 closes is outside `thresholds.regime_cv_min` / `regime_cv_max`, the range the strategy was backtested on (`scripts/backtest/regime_range.py`). In simulation unset bounds disable the gate; in live they block every entry. Telegram signal entries go through the same gate (last of the executor gates); in live they also require the bounds to be fresh, as the readiness gate does for agent entries.
+
+## Go-live checklist
+
+Live mode is enforced by the readiness gate (`GET /v1/system/readiness`, dashboard banner, Risk Gate 5 on every live entry). Each step below is a readiness criterion unless marked otherwise.
+
+1. **Refresh data and derive regime bounds — at the start of the simulation that will be judged.** `python scripts/backtest/fetch_ohlcv.py`, then `python -m scripts.backtest.regime_range`; enter `regime_cv_min`, `regime_cv_max` and `regime_data_end` in dashboard → Risk Thresholds. The change date (`regime_set_at`) is stamped automatically; if it is more recent than `gate_min_days` the readiness report shows a warning (the simulation did not run with these bounds).
+2. **Run the simulation** for `gate_min_days` with the bounds in place: ≥ 20 trades, win rate, Sharpe and max drawdown within the configured limits.
+3. **Check the readiness banner**: READY and no warnings.
+4. **Switch `TRDEX_MODE=live`** (not a readiness criterion: operator decision).
+5. **Keep the bounds fresh**: readiness fails once `regime_data_end` is older than `regime_max_age_days` (default 90). In live that blocks new entries (exits and the StopLossMonitor keep working) until step 1 is repeated.
+
 ## Observability
 
 - **Dashboard**: `https://trdex.gravya.it/dashboard/` (basic auth)
@@ -149,7 +163,7 @@ Per-symbol overrides are available via the `/v1/risk/symbol-config` API and the 
 |---|---|---|
 | Phase 1 | ✅ Done | Core scaffold, data layer, market feeds |
 | Phase 2 | 🟡 Active | Production observation in simulation mode |
-| Phase 2 LLM | 📝 Design | Real LLM agents (branch `llm-agents`) |
+| Phase 2 LLM | 🟡 Active | LLM agents unified into the main app (former `llm-agents` branch); rule engine is the fallback |
 | Phase 3 | ⏳ Pending | Strategy iteration (multi-SMA, RSI, MACD) |
 | Phase 4 | ⏳ Pending | Live mode with real capital |
 

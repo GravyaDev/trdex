@@ -16,7 +16,8 @@
 #
 # This hook runs AFTER guard-bash.sh in the PreToolUse(Bash) chain.
 
-INPUT=$(cat)
+# Limit stdin to 64KB to prevent OOM on pathological input
+INPUT=$(head -c 65536)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 KB="$CLAUDE_PROJECT_DIR/.claude/knowledge-base.md"
 LOG_DIR="$CLAUDE_PROJECT_DIR/.claude/logs"

@@ -131,6 +131,8 @@ if readiness:
     else:
         failures = readiness.get("failures", [])
         st.warning(f"Simulation gate: NOT READY — {'; '.join(failures)}")
+    for _w in readiness.get("warnings", []):
+        st.info(f"Readiness warning: {_w}")
     with st.expander("Readiness details"):
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Sim days", readiness.get("sim_days", 0))
@@ -143,6 +145,13 @@ if readiness:
             f"{criteria.get('min_trades', '?')} trades, "
             f">{criteria.get('min_win_rate', '?'):.0%} win rate, "
             f"<{criteria.get('max_drawdown', '?'):.0%} drawdown"
+        )
+        st.caption(
+            f"Regime bounds: CV {criteria.get('regime_cv_min') or 'unset'}"
+            f" to {criteria.get('regime_cv_max') or 'unset'}, "
+            f"data end {criteria.get('regime_data_end') or 'unset'} "
+            f"(max age {criteria.get('regime_max_age_days', '?')} days), "
+            f"changed {criteria.get('regime_set_at') or 'unknown'}"
         )
 
 # ── Portfolio snapshot ──────────────────────────────────────────��─────────────
@@ -169,6 +178,16 @@ if positions_data and positions_data.get("positions"):
     for col in ["entry_price", "current_price", "amount", "unrealized_pnl", "unrealized_pnl_pct"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
+    # Provenance chip: render `source` as a short tag so a glance at the
+    # table tells you whether the position came from an agent decision,
+    # a telegram signal, or a manual open.
+    if "source" in df.columns:
+        _chip = {
+            "telegram": "🟣 telegram",
+            "agent": "🤖 agent",
+            "manual": "✋ manual",
+        }
+        df["source"] = df["source"].map(lambda s: _chip.get(s, s or ""))
     # Format prices with enough decimals for microcap coins (e.g. ENJ $0.03077)
     for col in ["entry_price", "current_price"]:
         if col in df.columns:
@@ -331,6 +350,200 @@ if history:
         st.info("No agent runs yet. Click 'Run Agent Now' above.")
 else:
     st.info("No agent runs yet.")
+
+# ── LLM Agent Configuration ──────────────────────────────────────────────────
+
+st.header("🧠 LLM Agent Configuration")
+
+# Fallback banner (Rev 1 — U3)
+llm_usage_data = get("/v1/agent/llm-usage?period=today")
+if llm_usage_data and llm_usage_data.get("total_calls", 0) > 0:
+    fb_count = llm_usage_data.get("fallback_count", 0)
+    total = llm_usage_data.get("total_calls", 1)
+    if fb_count / max(total, 1) > 0.5:
+        st.warning(f"⚠ LLM fallback active — {fb_count}/{total} calls used rule engine today")
+
+# Cost forecast + usage (Rev 1 — U4)
+if llm_usage_data:
+    cost_today = llm_usage_data.get("total_cost_usd", 0)
+    calls_today = llm_usage_data.get("total_calls", 0)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("LLM calls today", calls_today)
+    c2.metric("Cost today", f"${cost_today:.2f}")
+    if calls_today > 0:
+        avg_cost = cost_today / calls_today
+        # Estimate: symbols × ticks/day × 30 days
+        sched_data = get("/v1/agent/scheduler/symbols")
+        n_symbols = sched_data.get("count", 5) if sched_data else 5
+        est_monthly = avg_cost * n_symbols * 168 * 30  # 168 ticks/day at 5min interval, 14h
+        c3.metric("Est. monthly", f"${est_monthly:.0f}")
+    else:
+        c3.metric("Est. monthly", "—")
+
+# Model recommended badges
+_MODEL_RECOMMENDATIONS = {
+    "scout": ("Haiku", "Fast, cheap — context summarization"),
+    "analyst": ("Sonnet", "Best reasoning — the decision that counts"),
+    "risk": ("N/A", "Deterministic — LLM optional annotation only"),
+    "executor": ("N/A", "Deterministic — no LLM needed"),
+}
+
+all_configs = get("/v1/agent/config")
+if all_configs:
+    for cfg in all_configs:
+        agent = cfg["agent_name"]
+        rec_model, rec_tip = _MODEL_RECOMMENDATIONS.get(agent, ("—", ""))
+
+        with st.expander(f"**{agent.title()}** — {'🟢 LLM enabled' if cfg['llm_enabled'] else '⚪ Deterministic'}"):
+            st.caption(f"Recommended: {rec_model} — {rec_tip}")
+
+            col_toggle, col_provider, col_model = st.columns([1, 1, 2])
+            with col_toggle:
+                new_enabled = st.toggle(
+                    "LLM enabled",
+                    value=cfg["llm_enabled"],
+                    key=f"llm_en_{agent}",
+                )
+            with col_provider:
+                providers = [
+                    "anthropic", "openai", "google",
+                    "groq", "together", "deepseek", "xai", "mistral", "ollama",
+                ]
+                new_provider = st.selectbox(
+                    "Provider",
+                    providers,
+                    index=providers.index(cfg["provider"]) if cfg["provider"] in providers else 0,
+                    key=f"prov_{agent}",
+                )
+            with col_model:
+                models_by_provider = {
+                    "anthropic": ["claude-haiku-4-5-20251001", "claude-sonnet-4-6-20250514", "claude-opus-4-6-20250514"],
+                    "openai": ["gpt-4o-mini", "gpt-4o"],
+                    "google": ["gemini-2.0-flash", "gemini-2.0-pro"],
+                    "groq": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
+                    "together": ["meta-llama/Llama-3.3-70B-Instruct-Turbo"],
+                    "deepseek": ["deepseek-chat", "deepseek-reasoner"],
+                    "xai": ["grok-3-mini"],
+                    "mistral": ["mistral-small-latest", "mistral-large-latest"],
+                    "ollama": ["llama3.2", "qwen2.5", "mistral"],
+                }
+                model_options = models_by_provider.get(new_provider, [cfg["model_id"]])
+                current_idx = model_options.index(cfg["model_id"]) if cfg["model_id"] in model_options else 0
+                new_model = st.selectbox("Model", model_options, index=current_idx, key=f"model_{agent}")
+
+            col_temp, col_maxtok, col_topp = st.columns(3)
+            with col_temp:
+                new_temp = st.slider("Temperature", 0.0, 2.0, float(cfg["temperature"]), 0.05, key=f"temp_{agent}")
+            with col_maxtok:
+                new_maxtok = st.number_input("Max tokens", 64, 8192, cfg["max_tokens"], key=f"maxtok_{agent}")
+            with col_topp:
+                new_topp = st.slider("Top P", 0.0, 1.0, float(cfg["top_p"]), 0.05, key=f"topp_{agent}")
+
+            # Custom base URL for OpenAI-compatible providers
+            _needs_base_url = new_provider not in ("anthropic", "openai", "google")
+            new_base_url = st.text_input(
+                "Base URL (custom endpoint, leave empty for default)",
+                value=cfg.get("base_url", ""),
+                key=f"baseurl_{agent}",
+                disabled=not _needs_base_url,
+            ) if _needs_base_url else cfg.get("base_url", "")
+
+            # System prompt editor — show the default when custom is empty
+            _DEFAULT_PROMPTS = {
+                "analyst": (
+                    "You are the Analyst Agent for trdex, an AI crypto trading platform.\n\n"
+                    "Your job is to analyze technical indicators and market context, then produce a trading signal with confidence.\n\n"
+                    "## Your Personality\n"
+                    "- You think probabilistically. Every trade has uncertain outcome.\n"
+                    "- You never abandon a strategy based on a few losses.\n"
+                    "- You respect the math of your indicators and never override them with intuition.\n"
+                    "- You are measured and conservative. When in doubt, you say HOLD.\n\n"
+                    "## Hard Constraints (INVIOLABLE)\n"
+                    "- Never emit BUY or SELL with confidence below 0.40. If unsure, output HOLD.\n"
+                    "- You do NOT decide execution. The Risk Manager gates your signal independently.\n\n"
+                    "## Indicator Reference (what the numbers mean — NOT prescriptive rules)\n"
+                    "- **RSI(14)**: momentum oscillator, 0-100. Below 30 = oversold, above 70 = overbought.\n"
+                    "- **SMA(9) vs SMA(21)**: short crosses above long = bullish shift; below = bearish. Lagging signal.\n"
+                    "- **Volatility regime (CV)**: Low (<1%) = range-bound, medium (1-3%) = trending, high (>3%) = volatile.\n"
+                    "- **Sentiment score (-1 to +1)**: Scout's news assessment. Complements but should not override technical signals.\n\n"
+                    "## Reasoning Guidelines\n"
+                    "- Weigh ALL inputs together — indicators, sentiment, memory, entity facts.\n"
+                    "- Your reflection memory shows recent performance. If a pattern has been consistently unprofitable, factor that in.\n"
+                    "- Explain your reasoning in 2-3 sentences. Be specific about which inputs drove the decision.\n"
+                    "- Calibrate confidence honestly: 0.40-0.55 = marginal edge, 0.55-0.70 = moderate, 0.70-0.85 = strong, >0.85 = exceptional (rare)."
+                ),
+                "scout": (
+                    "You are the Scout Agent for trdex, an AI trading platform.\n\n"
+                    "Your sole job is to SUMMARIZE market context for the given symbol. You do NOT make trading decisions.\n\n"
+                    "## Rules\n"
+                    "- Report ONLY facts and computed sentiment. No opinions, no recommendations.\n"
+                    "- Never output BUY/SELL/HOLD signals.\n"
+                    "- Extract a single numeric sentiment score from -1.0 (bearish) to +1.0 (bullish).\n"
+                    "- If documents conflict, note the contradiction explicitly.\n"
+                    "- If no meaningful context is available, say so honestly."
+                ),
+            }
+            _current_prompt = cfg["system_prompt"]
+            _is_default = not _current_prompt.strip()
+            _display_prompt = _current_prompt if not _is_default else _DEFAULT_PROMPTS.get(agent, "")
+            if _is_default and _display_prompt:
+                st.caption("Showing default prompt (edit to customize)")
+            new_prompt = st.text_area(
+                "System prompt",
+                value=_display_prompt,
+                height=150,
+                key=f"prompt_{agent}",
+            )
+            # If user didn't change the default text, keep it empty (= use default)
+            if _is_default and new_prompt == _DEFAULT_PROMPTS.get(agent, ""):
+                new_prompt = ""
+
+            col_save, col_restore = st.columns([1, 1])
+            with col_save:
+                if st.button("💾 Save", key=f"save_{agent}"):
+                    import httpx as _httpx
+                    headers = {"X-API-Key": api_key} if api_key else {}
+                    body = {
+                        "llm_enabled": new_enabled,
+                        "provider": new_provider,
+                        "model_id": new_model,
+                        "temperature": new_temp,
+                        "max_tokens": new_maxtok,
+                        "top_p": new_topp,
+                        "system_prompt": new_prompt,
+                        "base_url": new_base_url if isinstance(new_base_url, str) else "",
+                    }
+                    try:
+                        r = _httpx.put(
+                            f"{base_url}/v1/agent/config/{agent}",
+                            json=body,
+                            headers=headers,
+                            timeout=10,
+                        )
+                        r.raise_for_status()
+                        st.success(f"Saved {agent} config")
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(_format_http_error(f"/v1/agent/config/{agent}", "PUT", e))
+            with col_restore:
+                if st.button("↩ Restore default", key=f"restore_{agent}"):
+                    import httpx as _httpx
+                    headers = {"X-API-Key": api_key} if api_key else {}
+                    body = {"system_prompt": ""}  # empty = use hardcoded default
+                    try:
+                        r = _httpx.put(
+                            f"{base_url}/v1/agent/config/{agent}",
+                            json=body,
+                            headers=headers,
+                            timeout=10,
+                        )
+                        r.raise_for_status()
+                        st.success(f"Restored default prompt for {agent}")
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(_format_http_error(f"/v1/agent/config/{agent}", "PUT", e))
 
 # ── Risk / Stop-Loss ──────────────────────────────────────────────────────────
 
@@ -1009,6 +1222,11 @@ with st.expander("Risk Thresholds"):
             ("sl_daily_drawdown_pct", "Daily Drawdown Limit %", "0.10"),
             ("gate_max_drawdown", "Max Drawdown Limit %", "0.20"),
             ("max_position_pct", "Max Position Size %", "0.02"),
+            ("risk_per_trade_pct", "Risk per Trade % (size = risk / stop)", "0.001"),
+            ("regime_cv_min", "Regime CV min (from regime_range.py)", ""),
+            ("regime_cv_max", "Regime CV max (from regime_range.py)", ""),
+            ("regime_data_end", "Regime data end YYYY-MM-DD (from regime_range.py)", ""),
+            ("regime_max_age_days", "Regime bounds max age (days, readiness)", "90"),
             ("gate_min_days", "Gate Min Simulation Days", "20"),
         ]:
             _thr_inputs[thr_key] = st.text_input(
@@ -1016,6 +1234,10 @@ with st.expander("Risk Thresholds"):
                 value=_thr.get(thr_key, default),
                 key=f"thr_{thr_key}",
             )
+        st.caption(
+            "Regime bounds last changed: "
+            f"{_thr.get('regime_set_at') or 'unknown'} (stamped automatically)"
+        )
         if st.form_submit_button("Save Thresholds"):
             pairs = {k: v for k, v in _thr_inputs.items() if v}
             if pairs:

@@ -37,6 +37,7 @@ class AgentRunner:
         session_factory=None,
         gateway=None,
         memory_loader=None,
+        llm_caller=None,
     ) -> None:
         self._session = session
         self._feeds = feed_manager
@@ -44,6 +45,7 @@ class AgentRunner:
         self._session_factory = session_factory
         self._gateway = gateway
         self._memory_loader = memory_loader
+        self._llm_caller = llm_caller
 
     async def _load_portfolio_context(self) -> PortfolioContext:
         """Load live portfolio state from DB for risk gate decisions."""
@@ -155,6 +157,7 @@ class AgentRunner:
             session_factory=self._session_factory,
             gateway=self._gateway,
             memory_loader=self._memory_loader,
+            llm_caller=self._llm_caller,
         )
 
         # 5. Persist the agent run row (audit trail)
@@ -163,7 +166,12 @@ class AgentRunner:
         # 6. Dispatch the fill side effect to the portfolio persistence
         # layer. OPEN intents create a new position row; CLOSE intents
         # update the existing one and write a trade_fill ledger entry.
+        # Runs BEFORE usage persistence: a fill must never depend on
+        # telemetry succeeding.
         await self._dispatch_fill(state)
+
+        # 7. Persist LLM usage records (if any)
+        await self._persist_llm_usage(state)
 
         return state
 
@@ -247,6 +255,8 @@ class AgentRunner:
             fee=fee,
             source="agent",
             signal_id=state.run_id,
+            stop_loss_pct=state.risk.stop_loss_pct,
+            take_profit_pct=state.risk.take_profit_pct,
         )
 
     async def _record_close_long(self, state: AgentState) -> None:
@@ -312,13 +322,19 @@ class AgentRunner:
                 risk_approved=state.risk.approved,
                 risk_reason=state.risk.reason,
                 position_size=state.risk.position_size,
-                stop_loss_pct=state.risk.stop_loss_pct,
-                take_profit_pct=state.risk.take_profit_pct,
+                # Column is NOT NULL DEFAULT 0: 0 means "monitor thresholds".
+                stop_loss_pct=state.risk.stop_loss_pct or 0.0,
+                take_profit_pct=state.risk.take_profit_pct or 0.0,
                 order_status=state.order.status,
                 filled_price=state.order.filled_price,
                 filled_qty=state.order.filled_qty,
                 order_message=state.order.message,
                 error=state.error,
+                # LLM fields (migration 011)
+                llm_used=state.analysis.llm_used,
+                suggested_sl=state.analysis.suggested_stop_loss,
+                suggested_tp=state.analysis.suggested_take_profit,
+                risk_annotation=state.risk.annotation,
             )
             self._session.add(record)
             await self._session.commit()
@@ -326,3 +342,37 @@ class AgentRunner:
                         state.run_id, intent_value, state.order.status)
         except Exception:
             logger.exception("[runner] failed to persist agent run for %s", state.symbol)
+
+    async def _persist_llm_usage(self, state: AgentState) -> None:
+        """Save LLM usage records from LLMCaller to agent_llm_usage table."""
+        if state.llm_caller is None:
+            return
+        from trdex.storage.agent_config_models import AgentLLMUsageRecord
+
+        records = getattr(state.llm_caller, "usage_records", [])
+        if not records:
+            return
+        try:
+            for rec in records:
+                row = AgentLLMUsageRecord(
+                    run_id=state.run_id,  # UUID column; records belong to this cycle
+                    agent_name=rec.agent_name,
+                    provider=rec.provider,
+                    model_id=rec.model_id,
+                    input_tokens=rec.input_tokens,
+                    output_tokens=rec.output_tokens,
+                    cost_usd=rec.cost_usd,
+                    latency_ms=rec.latency_ms,
+                    fallback_used=rec.fallback_used,
+                    error=rec.error,
+                )
+                self._session.add(row)
+            await self._session.commit()
+            logger.info("[runner] persisted %d LLM usage records", len(records))
+        except Exception:
+            logger.exception("[runner] failed to persist LLM usage records")
+            # Leave the shared session usable for whatever runs next.
+            try:
+                await self._session.rollback()
+            except Exception:
+                logger.exception("[runner] rollback after usage persistence failure failed")

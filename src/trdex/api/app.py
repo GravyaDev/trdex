@@ -102,6 +102,9 @@ async def _telegram_background(
     monitor: TelegramMonitor,
     channels: list[str],
     session_factory,
+    *,
+    feed_manager: PriceFeedManager,
+    gateway,
 ) -> None:
     """Background task: stream ALL messages from Telegram channels.
 
@@ -111,6 +114,9 @@ async def _telegram_background(
     2. If parse_signal() returns None (not a trading signal) → ingest
        the raw text as news context into Qdrant so Scout/Analyst agents
        can read market commentary, breaking news, and macro analysis.
+    3. If integrations.telegram_executor_enabled is true, AND the signal
+       was persisted with an entry price, hand the (signal, outcome.id)
+       pair to TelegramSignalExecutor. Fail-closed default: disabled.
 
     This dual flow means every channel contributes either signals OR
     context — nothing is wasted.
@@ -119,6 +125,107 @@ async def _telegram_background(
     from decimal import Decimal
     from trdex.telegram.parser import parse_signal
     from trdex.telegram.tracker import SignalOutcome
+
+    async def _maybe_execute(sig, outcome_id: int, session) -> None:
+        """Hand a just-saved observe-only signal to TelegramSignalExecutor
+        iff the feature flag is on. No-op when disabled — observe-only
+        path is unaffected. Uses the SAME session the outcome was written
+        into so balance reads are consistent with the save we just did.
+        """
+        from trdex.services.runtime_config import get_config_service
+        svc = get_config_service()
+        if svc is None or not svc.get_typed(
+            "integrations", "telegram_executor_enabled", False
+        ):
+            return
+        try:
+            from trdex.config import get_settings as _get_settings
+            from trdex.execution.telegram_gates import GateConfig
+            from trdex.execution.telegram_executor import TelegramSignalExecutor
+            from trdex.storage.portfolio_repo import PortfolioRepository
+            from trdex.storage.signal_outcome_repo import SignalOutcomeRepository
+            from trdex.storage.balance_repo import BalanceRepository
+            from trdex.portfolio.service import PortfolioService
+            from types import SimpleNamespace
+
+            _settings = _get_settings()
+            from trdex.execution.telegram_gates import regime_gate_settings
+
+            regime, regime_blocker = regime_gate_settings(
+                svc, live=_settings.mode.value == "live", now=datetime.now(tz=UTC)
+            )
+            config = GateConfig(
+                asset_class_cap=int(svc.get_typed(
+                    "telegram", "asset_class_cap", 3,
+                )),
+                reliability_min_samples=int(svc.get_typed(
+                    "telegram", "reliability_min_samples", 20,
+                )),
+                reliability_win_rate_min=float(svc.get_typed(
+                    "telegram", "reliability_win_rate_min", 0.5,
+                )),
+                entry_drift_tolerance=float(svc.get_typed(
+                    "telegram", "entry_drift_tolerance", 0.005,
+                )),
+                max_stop_distance=float(svc.get_typed(
+                    "telegram", "max_stop_distance", 0.10,
+                )),
+                budget=Decimal(str(_settings.telegram_signal_budget)),
+                regime=regime,
+                regime_blocker=regime_blocker,
+            )
+            portfolio_repo = PortfolioRepository(session)
+            outcome_repo = SignalOutcomeRepository(session)
+            balance_repo = BalanceRepository(session)
+            # Ledger-backed balance snapshot. BalanceRepository.current_balance()
+            # returns the running balance after the last event; wrap in a
+            # SimpleNamespace to match the executor's _BalanceLike protocol.
+            current = await balance_repo.current_balance()
+            balance = SimpleNamespace(available=current)
+            portfolio_service = PortfolioService(portfolio_repo, feed_manager)
+
+            # Feed adapter: the executor's _FeedLike protocol expects
+            # `.name: str` + `async get_current_price(symbol) -> float`.
+            # PriceFeedManager instead exposes `get_ticker(symbol) -> Ticker`
+            # with a Decimal price. Adapt inline — one tiny class, no new
+            # public surface — rather than widening the executor's contract.
+            class _FeedAdapter:
+                name = "price-feed-manager"
+
+                def __init__(self, mgr):
+                    self._mgr = mgr
+
+                async def get_current_price(self, symbol: str) -> float:
+                    ticker = await self._mgr.get_ticker(symbol)
+                    return float(ticker.price)
+
+                async def get_recent_closes(self, symbol: str, limit: int) -> list[float]:
+                    # 1h, like the agent runner's candles: the regime gate
+                    # must see the same CV as the Analyst / Risk Gate 4c.
+                    candles = await self._mgr.get_ohlcv(symbol, timeframe="1h", limit=limit)
+                    return [float(c.close) for c in candles]
+
+            executor = TelegramSignalExecutor(
+                gateway=gateway,
+                feed=_FeedAdapter(feed_manager),
+                portfolio_repo=portfolio_repo,
+                portfolio_service=portfolio_service,
+                outcome_repo=outcome_repo,
+                balance_provider=lambda: balance,
+                config=config,
+            )
+            result = await executor.execute(sig, outcome_id=outcome_id)
+            logger.info(
+                "[telegram-exec] %s %s from %s -> %s (%s)",
+                sig.direction, sig.symbol, sig.source,
+                result.status, result.reason or "ok",
+            )
+        except Exception:
+            logger.exception(
+                "[telegram-exec] executor crashed for %s %s from %s — "
+                "observe-only record unaffected",
+                sig.direction, sig.symbol, sig.source,
+            )
 
     # Dedup: skip signals with the same (source, symbol, direction)
     # within a 60-second window. Prevents a spammy channel from
@@ -184,7 +291,7 @@ async def _telegram_background(
                         )
                         async with session_factory() as session:
                             repo = SignalOutcomeRepository(session)
-                            await repo.save(
+                            record = await repo.save(
                                 source=outcome.source,
                                 symbol=outcome.symbol,
                                 direction=outcome.direction,
@@ -194,6 +301,15 @@ async def _telegram_background(
                                 executed_at=outcome.executed_at,
                                 closed_at=None,
                                 note=note_payload,
+                            )
+                            # Executor bridge: observe-only record is in the
+                            # ledger, hand it off to the executor iff the
+                            # feature flag is on. Same session → balance
+                            # read sees the observe-only save consistently.
+                            await _maybe_execute(
+                                signal,
+                                outcome_id=record.id,
+                                session=session,
                             )
                         _tracker.record(outcome)
                     except Exception:
@@ -274,8 +390,16 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     # --- Security checks ---
     if not settings.api_key:
+        if settings.mode != TrdexMode.SIMULATION:
+            logger.critical(
+                "[security] REFUSING TO START in %s mode with TRDEX_API_KEY unset. "
+                "Dev-mode fallback exposes every /v1/* endpoint without authentication, "
+                "including /v1/debug/*. Set TRDEX_API_KEY in .env / Coolify before boot.",
+                settings.mode.value,
+            )
+            raise RuntimeError("TRDEX_API_KEY is required outside simulation mode")
         logger.warning(
-            "[security] TRDEX_API_KEY is not set — API is unauthenticated. "
+            "[security] TRDEX_API_KEY is not set — API is unauthenticated (simulation mode only). "
             "Set TRDEX_API_KEY before deploying to production."
         )
     if settings.mode != TrdexMode.SIMULATION and settings._uses_default_db_creds:
@@ -381,7 +505,13 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             )
             await monitor.start()
             _telegram_task = asyncio.create_task(
-                _telegram_background(monitor, channels, session_factory),
+                _telegram_background(
+                    monitor,
+                    channels,
+                    session_factory,
+                    feed_manager=feed_manager,
+                    gateway=gateway,
+                ),
                 name="telegram-stream",
             )
             logger.info("[telegram] streaming %d channels", len(channels))
@@ -448,6 +578,9 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         trailing_stop_pct=config_svc.get_typed("thresholds", "sl_trailing_stop_pct", settings.sl_trailing_stop_pct),
         daily_drawdown_pct=config_svc.get_typed("thresholds", "sl_daily_drawdown_pct", settings.sl_daily_drawdown_pct),
         max_drawdown_pct=config_svc.get_typed("thresholds", "gate_max_drawdown", settings.gate_max_drawdown),
+        open_positions_loss_pct=config_svc.get_typed(
+            "thresholds", "sl_open_positions_loss_pct", settings.sl_open_positions_loss_pct,
+        ),
     )
     risk_routes.set_monitor(sl_monitor)
     risk_routes.set_session_factory(session_factory)
@@ -461,6 +594,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             "sl_take_profit_pct": "_tp_pct",
             "sl_trailing_stop_pct": "_trailing_pct",
             "sl_daily_drawdown_pct": "_daily_dd_pct",
+            "sl_open_positions_loss_pct": "_open_loss_pct",
             "gate_max_drawdown": "_max_dd_pct",
         }
         if attr := attr_map.get(key):
@@ -767,6 +901,78 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     config_svc.register_listener("telegram", _on_telegram_change)
     config_svc.register_listener("integrations", _on_integrations_change)
 
+    # --- Memory context loader (7-tier stack for agent prompts) ---
+    from pathlib import Path
+
+    from trdex.memory.context import MemoryContextLoader
+    from trdex.memory.kb_loader import KBLoader
+    from trdex.memory.market_episodes import MarketEpisodeService
+    from trdex.memory.trade_narratives import TradeNarrativeService
+
+    kb_dir = Path(__file__).resolve().parents[2] / "Riferimenti" / "agents"
+    kb_loader = KBLoader.from_directory(kb_dir) if kb_dir.is_dir() else None
+    trade_svc = TradeNarrativeService()
+    episode_svc = MarketEpisodeService()
+
+    try:
+        await trade_svc.setup()
+        await episode_svc.setup()
+        logger.info("[lifespan] Qdrant narrative + episode collections ensured")
+    except Exception as exc:
+        logger.warning("[lifespan] Qdrant memory collections setup failed: %s", exc)
+        trade_svc = None
+        episode_svc = None
+
+    memory_loader = MemoryContextLoader(
+        kb_loader=kb_loader,
+        session_factory=session_factory,
+        trade_narrative_service=trade_svc,
+        market_episode_service=episode_svc,
+    )
+
+    # --- Build LLMCaller from DB configs + env var API keys ---
+    from trdex.agents.llm_caller import LLMCaller
+    from trdex.storage.agent_config_repo import AgentConfigRepository
+
+    llm_caller = None
+    try:
+        async with session_factory() as _cfg_session:
+            _cfg_repo = AgentConfigRepository(_cfg_session)
+            _agent_configs = await _cfg_repo.get_all_as_dict()
+        if _agent_configs:
+            _api_keys = {}
+            if settings.anthropic_api_key:
+                _api_keys["anthropic"] = settings.anthropic_api_key
+            if settings.openai_api_key:
+                _api_keys["openai"] = settings.openai_api_key
+            if settings.google_api_key:
+                _api_keys["google"] = settings.google_api_key
+            # OpenAI-compatible providers
+            for _prov, _key in [
+                ("groq", settings.groq_api_key),
+                ("together", settings.together_api_key),
+                ("deepseek", settings.deepseek_api_key),
+                ("xai", settings.xai_api_key),
+                ("mistral", settings.mistral_api_key),
+            ]:
+                if _key:
+                    _api_keys[_prov] = _key
+            llm_caller = LLMCaller(
+                configs=_agent_configs,
+                run_id="lifespan",
+                api_keys=_api_keys,
+                daily_budget=settings.llm_daily_budget,
+                timeout_seconds=30.0,
+            )
+            _enabled = [n for n, c in _agent_configs.items() if c.llm_enabled]
+            logger.info("[LLMCaller] built — %d configs, %d enabled (%s), %d API keys",
+                        len(_agent_configs), len(_enabled), ", ".join(_enabled) or "none",
+                        len(_api_keys))
+        else:
+            logger.info("[LLMCaller] no agent configs in DB — LLM disabled")
+    except Exception:
+        logger.exception("[LLMCaller] failed to build — agents will use deterministic fallback")
+
     # --- Agent scheduler ---
     _sched_syms_csv = config_svc.get("symbols", "agent_scheduler_symbols")
     agent_symbols = [s.strip() for s in _sched_syms_csv.split(",") if s.strip()] if _sched_syms_csv else settings.agent_scheduler_symbols_list
@@ -783,6 +989,8 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 agent_symbols,
                 _sched_interval,
                 gateway=gateway,
+                memory_loader=memory_loader,
+                llm_caller=llm_caller,
                 active_hours=_sched_hours,
             ),
             name="agent-scheduler",
@@ -818,12 +1026,26 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 async def verify_api_key(api_key: str | None = Security(API_KEY_HEADER)) -> str:
     """Verify API key for authenticated endpoints.
 
-    If TRDEX_API_KEY is not set, authentication is disabled (dev mode).
-    WARNING: running without an API key exposes all endpoints to unauthenticated access.
+    Outside SIMULATION mode, an unset ``TRDEX_API_KEY`` is a fatal
+    configuration error — the lifespan guard refuses startup, but this
+    function also raises 503 as defense-in-depth in case the guard is
+    ever bypassed (e.g. ASGI reuse across modes at runtime). In
+    SIMULATION mode an unset key is tolerated for dev convenience but
+    logged on every call.
     """
     if not settings.api_key:
+        if settings.mode != TrdexMode.SIMULATION:
+            # Defense-in-depth: the lifespan guard should have prevented
+            # boot, but we must never fail-open on a production endpoint.
+            logger.critical(
+                "[security] TRDEX_API_KEY unset outside simulation mode — rejecting request"
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Service misconfigured: authentication not initialised",
+            )
         logger.warning(
-            "[security] TRDEX_API_KEY is not set — all endpoints are unauthenticated (dev mode). "
+            "[security] TRDEX_API_KEY is not set — all endpoints are unauthenticated (simulation mode). "
             "Set TRDEX_API_KEY in production."
         )
         return "dev-mode"
@@ -1030,6 +1252,7 @@ def create_app() -> FastAPI:
             "kill_switch_events": report.kill_switch_events,
             "criteria": report.criteria,
             "failures": report.failures,
+            "warnings": report.warnings,
         }
 
     # --- Debug endpoints ---

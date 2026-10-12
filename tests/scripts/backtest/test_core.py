@@ -164,8 +164,13 @@ def _flat_bars(n: int = 50, price: float = 100.0) -> list[list]:
 def test_long_opens_at_signal_bar_and_stays_open() -> None:
     bars = _flat_bars(30)
     result = run_backtest(OpenLongOnceStrategy(), {"BTC/USDT": bars}, EngineParams())
-    # No exit trigger (price is flat, no SL/TP/trail hit, no CLOSE signal) → 0 closed trades.
-    assert result.trades_count == 0
+    # No exit trigger (price is flat, no SL/TP/trail hit, no CLOSE signal):
+    # the position stays open until the end of the data, where it is closed
+    # at the last close so its budget is accounted for.
+    assert result.trades_count == 1
+    t = result.trades[0]
+    assert t["reason"] == "EOD"
+    assert t["entry_ts"] == 5 * 3_600_000
 
 
 def test_long_tp_hit_registers_trade() -> None:
@@ -308,10 +313,11 @@ def test_flip_long_to_short_records_two_trades() -> None:
     result = run_backtest(
         FlipLongToShortStrategy(), {"BTC/USDT": bars}, EngineParams()
     )
-    # Expect 1 closed long (flip) + 1 still-open short → 1 trade in log,
-    # unless the short also closes (depends on bars after 15). With flat bars
-    # there are no triggers, so only the long exits via FLIP.
-    assert result.trades_count == 1
+    # Expect 1 closed long (flip) + the short, which no trigger closes on
+    # flat bars, closed at the end of the data.
+    assert result.trades_count == 2
+    assert result.trades[1]["side"] == "short"
+    assert result.trades[1]["reason"] == "EOD"
     t = result.trades[0]
     assert t["side"] == "long"
     assert t["reason"] == "FLIP"

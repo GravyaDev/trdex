@@ -106,6 +106,26 @@ class Settings(BaseSettings):
     perplexity_api_key: str = ""    # https://perplexity.ai — sonar search API
     qdrant_url: str = "http://localhost:6333"
 
+    # LLM provider API keys (Task 1 — llm-agents branch)
+    anthropic_api_key: str = ""     # sk-ant-... — required for Claude models
+    openai_api_key: str = ""        # sk-... — required for GPT models
+    google_api_key: str = ""        # AIza... — required for Gemini models
+    groq_api_key: str = ""          # gsk_... — required for Groq (Llama/Mixtral)
+    together_api_key: str = ""      # required for Together.ai
+    deepseek_api_key: str = ""      # required for DeepSeek
+    xai_api_key: str = ""           # required for xAI (Grok)
+    mistral_api_key: str = ""       # required for Mistral
+
+    # LLM cost guardrails
+    llm_daily_budget: float = Field(default=20.0, description="Hard cap $/day for LLM calls")
+    llm_monthly_budget: float = Field(default=500.0, description="Hard cap $/month for LLM calls")
+
+    # LLM prompt assembly
+    llm_max_prompt_tokens: int = Field(
+        default=4096,
+        description="Max input tokens for prompt assembly — memory tiers truncated LIFO if exceeded",
+    )
+
     # Telegram signal following (my.telegram.org)
     telegram_api_id: int = 0
     telegram_api_hash: str = ""
@@ -128,13 +148,18 @@ class Settings(BaseSettings):
 
     # Risk defaults
     max_position_pct: float = Field(default=0.05, description="Max % of portfolio per trade")
+    risk_per_trade_pct: float = Field(
+        default=0.001,
+        description="Equity fraction lost if the stop is hit (risk-based sizing, capped by max_position_pct)",
+    )
 
     # Stop-loss monitor (external, independent of AI agents)
     sl_check_interval: float = Field(default=30.0, description="Seconds between stop-loss checks")
     sl_position_pct: float = Field(default=0.02, description="Per-position stop-loss (2% = close at -2%)")
     sl_take_profit_pct: float = Field(default=0.04, description="Per-position take-profit (4%)")
     sl_trailing_stop_pct: float = Field(default=0.015, description="Trailing stop: close if price retraces 1.5% from peak")
-    sl_daily_drawdown_pct: float = Field(default=0.10, description="Daily portfolio drawdown → kill switch")
+    sl_daily_drawdown_pct: float = Field(default=0.10, description="Equity loss since 00:00 UTC (realised + unrealised) → kill switch")
+    sl_open_positions_loss_pct: float = Field(default=0.10, description="Unrealised loss as fraction of open-positions cost → kill switch")
 
     # Agent scheduler
     agent_scheduler_enabled: bool = Field(default=False, description="Auto-run agent cycle on interval")

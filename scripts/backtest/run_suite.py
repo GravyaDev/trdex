@@ -14,6 +14,7 @@ from scripts.backtest.core import EngineParams, BacktestResult, run_backtest
 from scripts.backtest.strategies import (
     BaselineInverse,
     BaselineLive,
+    LiveRuleEngine,
     BollingerSqueezeBreakout,
     BreakoutVolume,
     MeanReversionRSI,
@@ -50,6 +51,7 @@ def _format_quarter_cell(q_data: dict | None) -> str:
 
 
 def _print_table(results: list[BacktestResult]) -> None:
+    # Q1..Q4 = four equal sub-periods of the tested sample, not calendar quarters.
     print(f"\n{'Strategy':24} {'Trades':>7} {'Win%':>6} {'P&L':>11} {'Sharpe':>7} {'MaxDD':>7}  {'Q1':>9} {'Q2':>9} {'Q3':>9} {'Q4':>9}")
     print("-" * 120)
     for r in results:
@@ -98,6 +100,7 @@ def main() -> None:
     print(f"Loaded {total_bars} bars across {len(SYMBOLS)} symbols")
 
     strategies = [
+        LiveRuleEngine(),
         BaselineLive(),
         BaselineInverse(),
         MeanReversionRSI(),

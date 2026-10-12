@@ -22,6 +22,10 @@ dependencies = [
     "numpy>=1.26",
     # Phase 2 — AI Agent System
     "langgraph>=0.2",
+    # LLM provider adapters (Task 1 — llm-agents branch)
+    "langchain-anthropic>=0.3",
+    "langchain-openai>=0.3",
+    "langchain-google-genai>=2.0",
     # Telegram signal following
     "telethon>=1.36",
     "langchain-core>=0.2",
@@ -89,13 +93,19 @@ warn_unused_configs = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["ccxt.*", "redis.*", "langgraph.*", "langchain_core.*", "qdrant_client.*", "polars.*"]
+module = ["ccxt.*", "redis.*", "langgraph.*", "langchain_core.*", "langchain_anthropic.*", "langchain_openai.*", "langchain_google_genai.*", "qdrant_client.*", "polars.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "-v --tb=short"
+# -m "not integration" keeps the default suite free of DB-backed tests.
+# Integration tests require docker-compose.test.yaml up (see conftest.py
+# and docs for TRDEX_TEST_DATABASE_URL).
+addopts = "-v --tb=short -m 'not integration'"
+markers = [
+    "integration: tests that need a live Postgres/TimescaleDB instance (see docker-compose.test.yaml)",
+]
 
 [tool.coverage.run]
 source = ["src/trdex"]

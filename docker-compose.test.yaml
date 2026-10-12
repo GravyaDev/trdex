@@ -1,0 +1,42 @@
+# Test-only TimescaleDB instance.
+#
+# Usage:
+#   docker compose -f docker-compose.test.yaml up -d db-test
+#   TRDEX_TEST_DATABASE_URL=postgresql+asyncpg://test:test@localhost:5434/trdex_test \
+#       .venv/Scripts/python.exe -m pytest -m integration
+#   docker compose -f docker-compose.test.yaml down -v
+#
+# Isolated from dev:
+#   - Different host port (5434 vs 5433) so both can run side by side.
+#   - Container name "trdex-db-test" so you can see it in `docker ps`.
+#   - No persistent volume: the DB is wiped whenever the container restarts,
+#     which is exactly what you want for tests — every suite run starts
+#     from a known clean schema with migrations freshly applied by the
+#     session-scoped conftest fixture.
+#   - tmpfs on /var/lib/postgresql/data keeps the DB in RAM for speed AND
+#     makes "docker compose down" drop all data with zero disk residue.
+#
+# The test suite itself applies migrations via trdex.scripts.apply_migrations
+# (same code path as the prod lifespan). So this compose file only has to
+# provide a reachable, healthy TimescaleDB — not a pre-migrated one.
+
+services:
+  db-test:
+    image: timescale/timescaledb:2.17.2-pg16
+    container_name: trdex-db-test
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: trdex_test
+    ports:
+      - "5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d trdex_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 10s
+    # No restart policy: this container is ephemeral. If it dies the next
+    # `docker compose up` recreates it from scratch, which is the intent.

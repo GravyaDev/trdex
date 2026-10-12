@@ -22,7 +22,6 @@ If user specified a time period, use that. Otherwise default to "this week."
 
 Read simultaneously:
 - Recent daily notes (last 5-7 days)
-- `.claude/logs/verdicts.jsonl` (session quality trends)
 - `.claude/logs/incident-log.md` (issues and blocks)
 - `.claude/logs/failure-log.md` (tool failures)
 - `.claude/knowledge-nominations.md` (pending learnings)
@@ -34,14 +33,12 @@ Read simultaneously:
 - Tasks completed on time
 - Smooth workflows (no blocks)
 - Learnings successfully captured
-- Quality verdicts trending positive
 
 **What didn't go well?**
 - Repeated failures (same error type)
 - Blocked commands that should have been allowed
 - Tasks that took much longer than expected
 - Context flushes (/clear) needed frequently
-- Quality verdict blocks
 
 **What to change?**
 - Are there process bottlenecks?
@@ -75,7 +72,7 @@ Add to daily note:
 
 ### Metrics
 - Tasks completed: [X]
-- Quality verdict pass rate: [X]%
+- Tool failures: [X] (top category: [name])
 - Incidents: [X] (CRITICAL: [X], HIGH: [X])
 - Context flushes: [X]
 ```

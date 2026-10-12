@@ -1,15 +1,16 @@
-"""MemoryContext aggregator — single entry point across the 6-tier stack.
+"""MemoryContext aggregator — single entry point across the 7-tier stack.
 
 Given an agent name and a target symbol, builds a structured snapshot pulling
 from every persistent memory tier:
 
     Tier 1 — KB blocks (HARD/PARAM/HEUR/PROMPT) for the agent
     Tier 2 — operational memories from trdex_agent_memory for the agent
+    Tier 4a — semantically similar past trades (Qdrant trade_narratives)
+    Tier 4b — semantically similar historical market episodes (Qdrant market_episodes)
     Tier 5 — currently active facts about the symbol from the entity graph
     Tier 6 — narrative recap of the last N agent_runs for the symbol
 
-Tier 3 (nominations) is write-only. Tier 4 (Qdrant trade narratives) is not
-yet implemented and is left out — it can be added without breaking callers.
+Tier 3 (nominations) is write-only.
 
 Design notes:
 - All tier reads are independent: a failure or missing dependency in one tier
@@ -28,6 +29,7 @@ from typing import Any
 
 from trdex.memory.kb_loader import KBBlock, KBLoader
 from trdex.memory.predicates import SUBJECT_SYMBOL
+from trdex.memory.market_episodes import MarketEpisodeHit, MarketEpisodeService
 from trdex.memory.trade_narratives import TradeNarrativeHit, TradeNarrativeService
 from trdex.storage.agent_memory_repo import AgentMemoryRepository
 from trdex.storage.agent_run_repo import AgentRunRepository, RunNarrative
@@ -49,7 +51,9 @@ class MemoryContext:
     # predicate -> object_value (from entity graph bundle)
     narrative: RunNarrative | None = None
     similar_trades: list[TradeNarrativeHit] = field(default_factory=list)
-    # Tier 4 — semantically similar past closed trades
+    # Tier 4a — semantically similar past closed trades
+    similar_episodes: list[MarketEpisodeHit] = field(default_factory=list)
+    # Tier 4b — semantically similar historical market episodes
 
     def is_empty(self) -> bool:
         return (
@@ -58,6 +62,7 @@ class MemoryContext:
             and not self.entity_facts
             and (self.narrative is None or self.narrative.count == 0)
             and not self.similar_trades
+            and not self.similar_episodes
         )
 
     def to_prompt_text(self, *, max_kb_blocks: int = 8) -> str:
@@ -96,7 +101,7 @@ class MemoryContext:
             sections.append("\n**Recent runs (Tier 6):**\n" + self.narrative.text)
 
         if self.similar_trades:
-            lines = ["", "**Similar past trades (Tier 4):**"]
+            lines = ["", "**Similar past trades (Tier 4a):**"]
             for h in self.similar_trades:
                 pnl = (
                     f"{'+' if (h.pnl_pct or 0) >= 0 else ''}{h.pnl_pct:.2f}%"
@@ -105,6 +110,15 @@ class MemoryContext:
                 )
                 lines.append(
                     f"- score={h.score:.2f} {h.signal} {h.outcome} pnl={pnl} — {h.text}"
+                )
+            sections.append("\n".join(lines))
+
+        if self.similar_episodes:
+            lines = ["", "**Similar historical episodes (Tier 4b):**"]
+            for h in self.similar_episodes:
+                lines.append(
+                    f"- score={h.score:.2f} {h.episode_type} "
+                    f"pct={h.price_change_pct:+.1f}% vol={h.volatility_regime} — {h.text}"
                 )
             sections.append("\n".join(lines))
 
@@ -129,10 +143,12 @@ class MemoryContextLoader:
         kb_loader: KBLoader | None,
         session_factory: Any | None,
         trade_narrative_service: TradeNarrativeService | None = None,
+        market_episode_service: MarketEpisodeService | None = None,
     ) -> None:
         self._kb = kb_loader
         self._session_factory = session_factory
         self._narratives = trade_narrative_service
+        self._episodes = market_episode_service
 
     async def build(
         self,
@@ -143,6 +159,9 @@ class MemoryContextLoader:
         operational_kinds: list[str] | None = None,
         similarity_query: str | None = None,
         similar_trades_limit: int = 5,
+        recent_closes: list[float] | None = None,
+        recent_volumes: list[float] | None = None,
+        similar_episodes_limit: int = 3,
     ) -> MemoryContext:
         """Aggregate every tier into a single MemoryContext.
 
@@ -205,7 +224,7 @@ class MemoryContextLoader:
         except Exception:
             logger.exception("[memory_context] tier6 agent_runs lookup failed")
 
-        # Tier 4 — semantically similar past trades (best-effort, optional service)
+        # Tier 4a — semantically similar past trades (best-effort, optional service)
         if self._narratives is not None:
             query = similarity_query or self._default_similarity_query(ctx)
             if query:
@@ -214,7 +233,19 @@ class MemoryContextLoader:
                         query, symbol=symbol, limit=similar_trades_limit
                     )
                 except Exception:
-                    logger.exception("[memory_context] tier4 narrative search failed")
+                    logger.exception("[memory_context] tier4a narrative search failed")
+
+        # Tier 4b — similar historical market episodes (best-effort, optional service)
+        if self._episodes is not None and recent_closes and recent_volumes:
+            try:
+                ctx.similar_episodes = await self._episodes.search_similar_context(
+                    symbol,
+                    recent_closes,
+                    recent_volumes,
+                    limit=similar_episodes_limit,
+                )
+            except Exception:
+                logger.exception("[memory_context] tier4b episode search failed")
 
         return ctx
 
